@@ -1,0 +1,92 @@
+# Room layout data for Project Yozora
+# Format: ROOM <id> <name>
+#         SPAWN <x> <y>
+#         COLLIDER <x> <y> <w> <h>
+#         TRIGGER <x> <y> <w> <h> <type> <dest_id_or_interaction_id>
+#         END
+#
+# Visual room geometry is generated procedurally in world.c (world_setup_rooms).
+# This file documents the intended layout for reference.
+
+ROOM 0 Entrance Hall
+SPAWN 300 580
+# Left wall, right wall, staircase block
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+COLLIDER 2200 0 360 580
+# Exit right -> Dark Corridor
+TRIGGER 2500 480 60 120 exit 1
+# Exit via staircase -> Library
+TRIGGER 2190 270 60 80 exit 2
+END
+
+ROOM 1 Dark Corridor
+SPAWN 200 580
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+COLLIDER 2380 380 100 200
+# Exit left -> Entrance Hall
+TRIGGER 0 480 60 120 exit 0
+# Locked basement door interaction
+TRIGGER 2300 460 150 130 interact 10
+# Exit right -> Child's Room
+TRIGGER 2500 480 60 120 exit 4
+END
+
+ROOM 2 The Library
+SPAWN 500 580
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+# Bookshelf colliders (8 shelves)
+COLLIDER 100 80 270 450
+COLLIDER 390 80 270 450
+COLLIDER 680 80 270 450
+COLLIDER 970 80 270 450
+# Reading desk
+COLLIDER 1100 460 300 120
+# Exit left -> Entrance Hall  
+TRIGGER 0 480 60 120 exit 0
+# Diary interaction
+TRIGGER 1160 425 120 60 interact 1
+END
+
+ROOM 3 Basement
+SPAWN 400 580
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+# Pillar colliders
+COLLIDER 300 200 60 380
+COLLIDER 800 200 60 380
+COLLIDER 1300 200 60 380
+COLLIDER 1800 200 60 380
+# Crates
+COLLIDER 600 490 90 90
+COLLIDER 700 510 70 70
+# Exit left -> Corridor
+TRIGGER 0 480 60 120 exit 1
+# Exit right -> Ritual Room
+TRIGGER 2500 400 60 180 exit 5
+END
+
+ROOM 4 Child's Room
+SPAWN 500 580
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+COLLIDER 200 480 300 100
+COLLIDER 700 500 120 80
+# Exit left -> Corridor
+TRIGGER 0 480 60 120 exit 1
+# Key interaction
+TRIGGER 710 470 90 40 interact 10
+END
+
+ROOM 5 Ritual Room
+SPAWN 400 580
+COLLIDER 0 0 40 720
+COLLIDER 2520 0 40 720
+COLLIDER 1200 320 200 260
+# Exit left -> Basement
+TRIGGER 0 480 60 120 exit 3
+# Ritual circle interaction
+TRIGGER 1040 480 480 110 interact 20
+END

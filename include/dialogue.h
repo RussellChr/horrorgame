@@ -1,63 +1,90 @@
 #ifndef DIALOGUE_H
 #define DIALOGUE_H
 
-#define DIALOGUE_TEXT_MAX   512
-#define CHOICE_TEXT_MAX     128
-#define MAX_CHOICES         8
-#define NPC_NAME_MAX        64
+#include <SDL3/SDL.h>
 
-/* ── DialogueChoice ────────────────────────────────────────────────────── */
+#define MAX_DIALOGUE_NODES 128
+#define MAX_CHOICES         8
+#define NPC_NAME_MAX       64
+#define DIALOGUE_TEXT_MAX  512
+
+/* ── Dialogue choice ──────────────────────────────────────────────────── */
 
 typedef struct {
     int  id;
-    char text[CHOICE_TEXT_MAX];
-    int  next_node_id;          /* ID of the DialogueNode reached        */
-    int  requires_courage;      /* minimum courage needed (0 = always)   */
-    int  requires_item_id;      /* item required to show this choice (0) */
-    int  sanity_delta;          /* sanity change on selection            */
-    int  courage_delta;         /* courage change on selection           */
-    int  story_flag;            /* flag set when this choice is made     */
+    char text[DIALOGUE_TEXT_MAX];
+    int  next_node_id;
+    int  requires_courage;    /* minimum courage needed          */
+    int  requires_item_id;    /* 0 = no item required            */
+    int  sanity_delta;        /* change to sanity when chosen    */
+    int  courage_delta;       /* change to courage when chosen   */
+    int  story_flag;          /* flag to set on this choice      */
 } DialogueChoice;
 
-/* ── DialogueNode ──────────────────────────────────────────────────────── */
+/* ── Dialogue node ────────────────────────────────────────────────────── */
 
 typedef struct {
-    int            id;
-    char           speaker[NPC_NAME_MAX];
-    char           text[DIALOGUE_TEXT_MAX];
-    int            choice_count;
+    int           id;
+    char          speaker[NPC_NAME_MAX];
+    char          text[DIALOGUE_TEXT_MAX];
     DialogueChoice choices[MAX_CHOICES];
-    int            is_terminal;    /* 1 = conversation ends here         */
+    int           choice_count;
+    int           is_terminal;
 } DialogueNode;
 
-/* ── Dialogue tree ─────────────────────────────────────────────────────── */
-
-#define MAX_DIALOGUE_NODES 128
+/* ── Dialogue tree ────────────────────────────────────────────────────── */
 
 typedef struct {
     DialogueNode nodes[MAX_DIALOGUE_NODES];
     int          node_count;
 } DialogueTree;
 
-/* ── API ───────────────────────────────────────────────────────────────── */
+/* ── Visual dialogue state ───────────────────────────────────────────── */
 
-DialogueTree *dialogue_tree_create(void);
-void          dialogue_tree_destroy(DialogueTree *tree);
+typedef struct {
+    DialogueTree *tree;
+    int           current_node_id;
+    float         text_timer;       /* seconds accumulated           */
+    int           chars_visible;    /* how many chars to show now    */
+    int           text_complete;    /* 1 when all chars are shown    */
+} DialogueState;
 
-DialogueNode *dialogue_get_node(DialogueTree *tree, int node_id);
-DialogueNode *dialogue_add_node(DialogueTree *tree, int id,
-                                const char *speaker, const char *text,
-                                int is_terminal);
-void          dialogue_add_choice(DialogueNode *node,
-                                  const DialogueChoice *choice);
+/* ── Tree management ──────────────────────────────────────────────────── */
 
-/* Run an interactive conversation; returns the story_flag of the last
-   chosen option (0 if no flag was set).                                 */
-int dialogue_run(DialogueTree *tree, int start_node_id,
-                 int player_courage, int player_item_id);
+DialogueTree  *dialogue_tree_create(void);
+void           dialogue_tree_destroy(DialogueTree *tree);
 
-/* Print a single node's text and choices (for testing / replay).        */
+DialogueNode  *dialogue_get_node(DialogueTree *tree, int node_id);
+DialogueNode  *dialogue_add_node(DialogueTree *tree, int id,
+                                 const char *speaker, const char *text,
+                                 int is_terminal);
+void           dialogue_add_choice(DialogueNode *node,
+                                   const DialogueChoice *choice);
+
+/* Console output (for debugging / text mode) */
 void dialogue_print_node(const DialogueNode *node,
                          int player_courage, int player_item_id);
+int  dialogue_run(DialogueTree *tree, int start_node_id,
+                  int player_courage, int player_item_id);
+
+/* ── Visual dialogue API ─────────────────────────────────────────────── */
+
+void dialogue_state_init(DialogueState *ds,
+                         DialogueTree *tree, int start_node_id);
+
+/* Update typewriter effect; dt in seconds. */
+void dialogue_state_update(DialogueState *ds, float dt);
+
+/* Advance to next node (or terminate); returns 0 when dialogue ends. */
+int dialogue_state_advance(DialogueState *ds,
+                           int player_courage, int player_item_id);
+
+/* Draw the visual dialogue box at the bottom of the screen. */
+void dialogue_render(const DialogueState *ds,
+                     SDL_Renderer *renderer,
+                     int screen_w, int screen_h);
+
+/* Build a default dialogue tree for a given location / NPC. */
+DialogueTree *dialogue_build_for_location(int location_id);
 
 #endif /* DIALOGUE_H */

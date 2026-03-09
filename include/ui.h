@@ -2,18 +2,36 @@
 #define UI_H
 
 #include <SDL3/SDL.h>
+#include "player.h"
+
+/* ── Button ───────────────────────────────────────────────────────────── */
 
 typedef struct {
-    SDL_FRect rect;
+    SDL_FRect   rect;
     const char *text;
-    int is_hovered;
+    int         is_hovered;
 } Button;
 
-void draw_text(SDL_Renderer *renderer, const char *text, int x, int y, int size);
-void draw_text_highlighted(SDL_Renderer *renderer, const char *text, int x, int y, int size);
-void draw_dialogue_box(SDL_Renderer *renderer, const char *character, const char *dialogue);
-void draw_button(SDL_Renderer *renderer, Button *button);
-int button_is_clicked(Button *button, int mouse_x, int mouse_y);
-void button_update_hover(Button *button, int mouse_x, int mouse_y);
+void button_update_hover(Button *button, float mouse_x, float mouse_y);
+int  button_is_clicked(Button *button, float mouse_x, float mouse_y);
+void draw_button(SDL_Renderer *renderer, const Button *button);
 
-#endif
+/* ── HUD (heads-up display drawn over the game scene) ────────────────── */
+
+void ui_draw_hud(SDL_Renderer *renderer, const Player *player);
+
+/* ── Stat bar ─────────────────────────────────────────────────────────── */
+
+void ui_draw_stat_bar(SDL_Renderer *renderer,
+                      int x, int y, int w, int h,
+                      int value, int max_value,
+                      Uint8 r, Uint8 g, Uint8 b,
+                      const char *label);
+
+/* ── Interaction prompt ───────────────────────────────────────────────── */
+
+void ui_draw_interact_prompt(SDL_Renderer *renderer,
+                             const char *label,
+                             int screen_x, int screen_y);
+
+#endif /* UI_H */

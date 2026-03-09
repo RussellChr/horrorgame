@@ -1,57 +1,108 @@
 #ifndef WORLD_H
 #define WORLD_H
 
+#include <SDL3/SDL.h>
+#include "collision.h"
+#include "camera.h"
+
+#define MAX_LOCATIONS      16
+#define MAX_EXITS           8
+#define MAX_DECOR          32
+
 #define LOCATION_NAME_MAX  64
 #define LOCATION_DESC_MAX  512
-#define MAX_LOCATIONS      64
-#define MAX_EXITS          8
 
-/* ── Exit ──────────────────────────────────────────────────────────────── */
+/* ── Room dimensions ──────────────────────────────────────────────────── */
+
+#define ROOM_W  2560   /* world-space width  (2 × viewport)         */
+#define ROOM_H   720   /* world-space height (== viewport)          */
+#define FLOOR_Y  580   /* y of the walkable floor surface           */
+
+/* ── Exit (logical, for text-game movement) ──────────────────────────── */
 
 typedef struct {
-    char direction[16];     /* "north", "south", "east", "west", "up", … */
-    int  target_id;         /* ID of the destination Location             */
-    int  locked;            /* 1 = requires an item to unlock             */
-    int  required_item_id;  /* item that unlocks this exit (0 = none)     */
+    char direction[16];
+    int  target_id;
+    int  locked;
+    int  required_item_id;
 } Exit;
 
-/* ── Location ──────────────────────────────────────────────────────────── */
+/* ── Decorative element (drawn as a coloured rectangle) ──────────────── */
 
 typedef struct {
+    int   x, y, w, h;
+    Uint8 r, g, b;
+    char  label[32];   /* optional label painted on/above the object */
+} Decor;
+
+/* ── Location ─────────────────────────────────────────────────────────── */
+
+typedef struct {
+    /* Logical data */
     int  id;
     char name[LOCATION_NAME_MAX];
     char description[LOCATION_DESC_MAX];
-    char atmosphere[LOCATION_DESC_MAX]; /* extra flavour shown on revisit  */
-    int  visited;           /* 1 after the player has been here           */
-    int  exit_count;
+    char atmosphere[LOCATION_DESC_MAX];
+    int  visited;
+    int  item_id;
+    int  item_taken;
+    int  is_danger_zone;
+
+    /* Exits (logical navigation) */
     Exit exits[MAX_EXITS];
-    int  item_id;           /* item found in this room (0 = none)         */
-    int  item_taken;        /* 1 once the player picks it up              */
-    int  is_danger_zone;    /* 1 triggers a sanity/health event           */
+    int  exit_count;
+
+    /* Visual: background colours */
+    Uint8 wall_r, wall_g, wall_b;
+    Uint8 floor_r, floor_g, floor_b;
+    Uint8 ceil_r,  ceil_g,  ceil_b;
+
+    /* Visual decorations */
+    Decor decor[MAX_DECOR];
+    int   decor_count;
+
+    /* Collision rectangles */
+    Rect  colliders[MAX_COLLISION_RECTS];
+    int   collider_count;
+
+    /* Interactive trigger zones */
+    TriggerZone triggers[MAX_TRIGGER_ZONES];
+    int          trigger_count;
+
+    /* Player spawn position when entering this location */
+    float spawn_x, spawn_y;
 } Location;
 
-/* ── World ─────────────────────────────────────────────────────────────── */
+/* ── World ────────────────────────────────────────────────────────────── */
 
 typedef struct {
     Location locations[MAX_LOCATIONS];
     int      location_count;
 } World;
 
-/* ── API ───────────────────────────────────────────────────────────────── */
+/* ── API ──────────────────────────────────────────────────────────────── */
 
 World    *world_create(void);
 void      world_destroy(World *world);
 
-int       world_load_locations(World *world, const char *filepath);
-
 Location *world_get_location(World *world, int id);
 Location *world_get_location_by_name(World *world, const char *name);
 
-void      world_describe_location(const Location *loc);
-int       world_move(World *world, int current_id,
-                     const char *direction, int *new_id);
+/* Text-game movement (kept for story logic) */
+void world_describe_location(const Location *loc);
+int  world_move(World *world, int current_id,
+                const char *direction, int *new_id);
+void world_add_exit(Location *loc, const char *direction,
+                    int target_id, int locked, int required_item_id);
 
-void      world_add_exit(Location *loc, const char *direction,
-                         int target_id, int locked, int required_item_id);
+/* File loading (logical data only) */
+int world_load_locations(World *world, const char *filepath);
+
+/* Visual room setup – builds decor, colliders and triggers procedurally. */
+void world_setup_rooms(World *world);
+
+/* Draw the current room. */
+void world_render_room(const Location *loc, SDL_Renderer *renderer,
+                       const Camera *cam);
 
 #endif /* WORLD_H */

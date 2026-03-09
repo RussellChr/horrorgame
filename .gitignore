@@ -16,6 +16,8 @@ _CPack_Packages/
 # Compiled binaries
 paper_lily
 paper_lily.exe
+horrorgame
+horrorgame.exe
 *.o
 *.a
 *.so

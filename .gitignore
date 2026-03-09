@@ -1,0 +1,39 @@
+# Build output directories
+build/
+cmake-build-*/
+out/
+
+# CMake-generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+CPackConfig.cmake
+CPackSourceConfig.cmake
+_CPack_Packages/
+
+# Compiled binaries
+paper_lily
+paper_lily.exe
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Dependency managers
+vcpkg_installed/
+conan_cache/
+
+# Save files
+*.save
+saves/

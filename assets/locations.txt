@@ -1,0 +1,54 @@
+# Paper Lily – Location Definitions
+# Format:
+#   LOCATION <id> <name>
+#   DESC <one-line description>
+#   ATMO <revisit atmosphere text>
+#   EXIT <direction> <target_id> [locked=0] [required_item_id=0]
+#   ITEM <item_id>
+#   DANGER
+#   END
+
+LOCATION 0 Entrance Hall
+DESC A grand entrance hall draped in cobwebs. A faded portrait watches you from the far wall. Dust motes hang in the air.
+ATMO The entrance hall. The portrait still watches.
+EXIT north 1 0 0
+EXIT east 2 0 0
+END
+
+LOCATION 1 Dark Corridor
+DESC A long corridor with peeling wallpaper. Doors line both sides, all locked except the one at the far end.
+ATMO The dark corridor stretches ahead.
+EXIT south 0 0 0
+EXIT north 3 1 10
+DANGER
+END
+
+LOCATION 2 The Library
+DESC Shelves of rotting books reach the ceiling. A single candle burns on the reading table – yet you lit none.
+ATMO The library, silent except for the candle flame.
+EXIT west 0 0 0
+EXIT north 4 0 0
+ITEM 1
+END
+
+LOCATION 3 Basement
+DESC Stone steps descend into impenetrable darkness. Something shifts below. The air tastes of iron.
+ATMO The basement. Cold. Dark. Waiting.
+EXIT south 1 0 0
+EXIT east 5 0 0
+DANGER
+END
+
+LOCATION 4 Child's Room
+DESC A small room with a single bed and a music box on the dresser. The music box plays a lullaby on its own.
+ATMO The child's room. The music box still plays.
+EXIT south 2 0 0
+ITEM 10
+END
+
+LOCATION 5 The Ritual Room
+DESC Candles arranged in a circle illuminate strange symbols on the floor. At the centre lies an open book written in a language you should not be able to read – yet you can.
+ATMO The ritual room. The circle still glows.
+EXIT west 3 0 0
+DANGER
+END

@@ -155,6 +155,22 @@ void game_trigger_ending(Game *game)
 
 /* ── Interaction handler ───────────────────────────────────────────────── */
 
+/* Apply sanity/courage changes from the currently selected dialogue choice. */
+static void apply_dialogue_choice_stats(Game *game)
+{
+    if (!game || !game->player || !game->dialogue_state.text_complete) return;
+
+    const DialogueChoice *ch = dialogue_state_get_selected(
+        &game->dialogue_state,
+        game->player->courage, 0);
+    if (!ch) return;
+
+    player_modify_sanity (game->player, ch->sanity_delta);
+    player_modify_courage(game->player, ch->courage_delta);
+    if (ch->story_flag)
+        game->player->flags |= (uint32_t)ch->story_flag;
+}
+
 static void handle_interaction(Game *game)
 {
     if (!game || !game->player || !game->world) return;
@@ -243,9 +259,9 @@ static void handle_interaction(Game *game)
             game->ending_type = -1; /* signal to trigger ending on dialogue end */
         }
     }
-    /* Portrait in Entrance Hall – dialogue options test (trigger 30) */
+    /* Portrait interaction (Entrance Hall, trigger 30) */
     else if (tid == 30 && loc_id == 0) {
-        game->dialogue_tree = dialogue_build_for_location(10);
+        game->dialogue_tree = dialogue_build_for_location(30);
     }
     /* Default interaction */
     else {
@@ -325,9 +341,25 @@ void game_handle_event(Game *game, SDL_Event *event)
 
     case GAME_STATE_DIALOGUE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
+            /* Navigate choices with UP / DOWN */
+            if (event->key.key == SDLK_UP &&
+                game->dialogue_state.text_complete) {
+                if (game->dialogue_state.selected_choice > 0)
+                    game->dialogue_state.selected_choice--;
+            }
+            if (event->key.key == SDLK_DOWN &&
+                game->dialogue_state.text_complete) {
+                const DialogueNode *_n = dialogue_get_node(
+                    game->dialogue_state.tree,
+                    game->dialogue_state.current_node_id);
+                if (_n && game->dialogue_state.selected_choice < _n->choice_count - 1)
+                    game->dialogue_state.selected_choice++;
+            }
             if (event->key.key == SDLK_RETURN ||
                 event->key.key == SDLK_SPACE  ||
                 event->key.key == SDLK_E) {
+                /* Apply stat changes from the chosen option before advancing */
+                apply_dialogue_choice_stats(game);
                 int cont = dialogue_state_advance(&game->dialogue_state,
                     game->player ? game->player->courage : 50, 0);
                 if (!cont) {
@@ -341,6 +373,8 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game_end_dialogue(game);
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Apply stat changes before advancing on mouse click too */
+            apply_dialogue_choice_stats(game);
             int cont = dialogue_state_advance(&game->dialogue_state,
                 game->player ? game->player->courage : 50, 0);
             if (!cont) {

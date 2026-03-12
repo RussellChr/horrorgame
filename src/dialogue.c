@@ -118,11 +118,12 @@ void dialogue_state_init(DialogueState *ds,
                          DialogueTree *tree, int start_node_id)
 {
     if (!ds) return;
-    ds->tree           = tree;
+    ds->tree            = tree;
     ds->current_node_id = start_node_id;
     ds->text_timer      = 0.0f;
     ds->chars_visible   = 0;
     ds->text_complete   = 0;
+    ds->selected_choice = 0;
 }
 
 void dialogue_state_update(DialogueState *ds, float dt)
@@ -161,22 +162,59 @@ int dialogue_state_advance(DialogueState *ds,
     if (!node) return 0;
     if (node->is_terminal) return 0;
 
-    /* For linear (no-choice) nodes, go to first available choice's next node. */
     if (node->choice_count == 0) return 0;
 
-    /* Pick first available choice (linear VN style). */
+    /* Build list of available choices (filtered by requirements). */
+    int available[MAX_CHOICES];
+    int count = 0;
     for (int i = 0; i < node->choice_count; i++) {
         const DialogueChoice *c = &node->choices[i];
-        if (c->requires_courage > player_courage) continue;
+        if (c->requires_courage > player_courage)                   continue;
         if (c->requires_item_id && c->requires_item_id != player_item_id) continue;
-        ds->current_node_id = c->next_node_id;
-        ds->text_timer      = 0.0f;
-        ds->chars_visible   = 0;
-        ds->text_complete   = 0;
-        return 1;
+        available[count++] = i;
     }
+    if (count == 0) return 0;
 
-    return 0; /* no available choice: end dialogue */
+    /* Use the player-selected index, clamped to available range. */
+    int sel = ds->selected_choice;
+    if (sel >= count) sel = count - 1;
+    if (sel < 0)      sel = 0;
+
+    const DialogueChoice *chosen = &node->choices[available[sel]];
+    ds->current_node_id = chosen->next_node_id;
+    ds->text_timer      = 0.0f;
+    ds->chars_visible   = 0;
+    ds->text_complete   = 0;
+    ds->selected_choice = 0;
+    return 1;
+}
+
+/* Return the choice that will be taken on the next advance, or NULL. */
+const DialogueChoice *dialogue_state_get_selected(const DialogueState *ds,
+                                                   int player_courage,
+                                                   int player_item_id)
+{
+    if (!ds || !ds->text_complete) return NULL;
+
+    const DialogueNode *node = dialogue_get_node(
+        (DialogueTree *)ds->tree, ds->current_node_id);
+    if (!node || node->is_terminal || node->choice_count == 0) return NULL;
+
+    int available[MAX_CHOICES];
+    int count = 0;
+    for (int i = 0; i < node->choice_count; i++) {
+        const DialogueChoice *c = &node->choices[i];
+        if (c->requires_courage > player_courage)                   continue;
+        if (c->requires_item_id && c->requires_item_id != player_item_id) continue;
+        available[count++] = i;
+    }
+    if (count == 0) return NULL;
+
+    int sel = ds->selected_choice;
+    if (sel >= count) sel = count - 1;
+    if (sel < 0)      sel = 0;
+
+    return &node->choices[available[sel]];
 }
 
 /* ── Texture management ────────────────────────────────────────────────── */
@@ -271,18 +309,49 @@ void dialogue_render(const DialogueState *ds,
     memcpy(visible, node->text, (size_t)len);
     visible[len] = '\0';
 
-    int text_x      = DLGBOX_MARGIN + DLGBOX_PAD;
-    int text_y      = box_y + DLGBOX_PAD;
-    int text_max_w  = box_w - DLGBOX_PAD * 2;
-    int line_h      = 8 * FONT_SCALE + 6;
+    int text_x     = DLGBOX_MARGIN + DLGBOX_PAD;
+    int text_y     = box_y + DLGBOX_PAD;
+    int text_max_w = box_w - DLGBOX_PAD * 2;
+    int line_h     = 8 * FONT_SCALE + 6;
 
     render_text_wrapped(renderer, visible,
                         text_x, text_y,
                         text_max_w, FONT_SCALE, line_h,
                         220, 210, 230);
 
-    /* "Press ENTER to continue" prompt (blinks when text is complete) */
-    if (ds->text_complete) {
+    /* ── Choice menu (shown when text is complete and >1 choice exists) ── */
+    if (ds->text_complete && node->choice_count > 1) {
+        int choice_x    = text_x + 8;
+        int choice_start_y = box_y + DLGBOX_H / 2;
+        int choice_line_h  = 8 * FONT_SCALE + 8;
+
+        for (int i = 0; i < node->choice_count; i++) {
+            const DialogueChoice *c = &node->choices[i];
+            int cy = choice_start_y + i * choice_line_h;
+
+            if (i == ds->selected_choice) {
+                /* Highlighted row background */
+                render_filled_rect(renderer,
+                    DLGBOX_MARGIN + 4, cy - 4,
+                    box_w - 8, choice_line_h,
+                    60, 40, 90, 200);
+                /* Arrow indicator */
+                render_text(renderer, ">",
+                            DLGBOX_MARGIN + DLGBOX_PAD, cy,
+                            FONT_SCALE, 255, 220, 100);
+                render_text(renderer, c->text,
+                            choice_x + 12, cy,
+                            FONT_SCALE, 255, 240, 180);
+            } else {
+                render_text(renderer, c->text,
+                            choice_x + 12, cy,
+                            FONT_SCALE, 160, 150, 170);
+            }
+        }
+    }
+
+    /* "Press ENTER to continue" prompt (blinks; hidden when choices shown) */
+    if (ds->text_complete && node->choice_count <= 1) {
         static Uint64 blink_tick = 0;
         Uint64 now = SDL_GetTicks();
         if (!blink_tick) blink_tick = now;
@@ -328,48 +397,56 @@ DialogueTree *dialogue_build_for_location(int location_id)
             "I have no choice but to go deeper.", 1);
         break;
 
-    case 10: /* Entrance Hall – portrait interaction (test dialogue options) */
+    case 30: /* Entrance Hall – mysterious portrait */
         dialogue_add_node(tree, 0, "You",
-            "A portrait of a stern-faced man in Victorian clothing hangs on "
-            "the wall. The painted eyes seem to follow your every move.", 0);
+            "A portrait hangs on the wall. The face in the painting stares "
+            "back at me, its eyes following my every movement. "
+            "Something about it feels deeply wrong.", 0);
 
-        strncpy(next.text, "Stare back defiantly.", DIALOGUE_TEXT_MAX-1);
-        next.next_node_id    = 1;
-        next.requires_courage = 0;
-        next.requires_item_id = 0;
-        next.courage_delta   = 5;
-        next.sanity_delta    = -5;
-        next.story_flag      = 0;
+        /* Choice 1: Stare back intently */
+        strncpy(next.text, "Stare back at the portrait intently.",
+                DIALOGUE_TEXT_MAX - 1);
+        next.next_node_id  = 1;
+        next.sanity_delta  = -5;
+        next.courage_delta = 10;
+        next.story_flag    = 0;
         dialogue_add_choice(dialogue_get_node(tree, 0), &next);
 
-        strncpy(next.text, "Look away quickly.", DIALOGUE_TEXT_MAX-1);
-        next.next_node_id    = 2;
-        next.requires_courage = 0;
-        next.requires_item_id = 0;
-        next.courage_delta   = -5;
-        next.sanity_delta    = 5;
-        next.story_flag      = 0;
+        /* Choice 2: Look away quickly */
+        strncpy(next.text, "Look away quickly — this is unsettling.",
+                DIALOGUE_TEXT_MAX - 1);
+        next.next_node_id  = 2;
+        next.sanity_delta  = 5;
+        next.courage_delta = -10;
+        next.story_flag    = 0;
         dialogue_add_choice(dialogue_get_node(tree, 0), &next);
 
-        strncpy(next.text, "...", DIALOGUE_TEXT_MAX-1);
-        next.next_node_id    = 3;
-        next.requires_courage = 0;
-        next.requires_item_id = 0;
-        next.courage_delta   = 0;
-        next.sanity_delta    = 0;
-        next.story_flag      = 0;
+        /* Choice 3: Ignore it */
+        strncpy(next.text, "Ignore it and move on.",
+                DIALOGUE_TEXT_MAX - 1);
+        next.next_node_id  = 3;
+        next.sanity_delta  = 0;
+        next.courage_delta = 0;
+        next.story_flag    = 0;
         dialogue_add_choice(dialogue_get_node(tree, 0), &next);
 
+        /* Node 1: Brave path */
         dialogue_add_node(tree, 1, "You",
-            "The portrait's eyes burn into your mind. You feel a strange "
-            "resonance with the figure in the painting.", 1);
+            "The portrait's painted eyes bore into mine. "
+            "A chill runs down my spine, yet I hold my gaze. "
+            "Whatever is in this house, I will face it.", 1);
 
+        /* Node 2: Afraid path */
         dialogue_add_node(tree, 2, "You",
-            "As you look away, you catch the faint whisper of a name. "
-            "It might have been the house settling. Or something else.", 1);
+            "As I look away, I catch a faint whisper — or perhaps "
+            "just the house settling. I tell myself it's nothing. "
+            "I'm not sure I believe it.", 1);
 
+        /* Node 3: Indifferent path */
         dialogue_add_node(tree, 3, "You",
-            "You move on, feeling uneasy under the painted gaze.", 1);
+            "I walk past without a second glance. "
+            "If I stop to examine every strange thing in this place, "
+            "I'll never get out.", 1);
         break;
 
     case 1: /* Dark Corridor – basement door */

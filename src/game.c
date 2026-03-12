@@ -529,9 +529,9 @@ void game_update(Game *game)
                     if (rect_overlaps(&pr, &near_zone)) {
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        if (loc->name[0])
-                            strncpy(game->interact_label, loc->name,
-                                    sizeof(game->interact_label) - 1);
+                        strncpy(game->interact_label, "Press E to talk",
+                                sizeof(game->interact_label) - 1);
+                        game->interact_label[sizeof(game->interact_label) - 1] = '\0';
                         break;
                     }
                 }

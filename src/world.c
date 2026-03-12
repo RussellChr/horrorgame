@@ -214,9 +214,9 @@ void world_setup_rooms(World *world)
             /* Portraits */
             ADD_DECOR(loc, 600,  200, 80, 110, 50,40,30,  "portrait");
             ADD_DECOR(loc, 900,  200, 80, 110, 50,40,30,  "portrait");
-            /* Stranger - a shadowy figure standing in the hall */
-            ADD_DECOR(loc, 1100, FLOOR_Y-110, 30,  60, 30,25,35, "");
-            ADD_DECOR(loc, 1093, FLOOR_Y-150, 44,  44, 35,28,40, "Stranger");
+            /* Stranger - interactive NPC, bright yellow so player can spot it */
+            ADD_DECOR(loc, 1100, FLOOR_Y-110, 30,  60, 230,200,30, "");
+            ADD_DECOR(loc, 1093, FLOOR_Y-150, 44,  44, 240,210,40, "Stranger");
             /* Staircase (right wall) */
             for (int s = 0; s < 10; s++) {
                 ADD_DECOR(loc, 2200 + s*30, FLOOR_Y - s*30, 120, 20,

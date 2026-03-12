@@ -263,6 +263,10 @@ static void handle_interaction(Game *game)
     else if (tid == 30 && loc_id == 0) {
         game->dialogue_tree = dialogue_build_for_location(30);
     }
+    /* Stranger NPC interaction (Entrance Hall, trigger 40) */
+    else if (tid == 40 && loc_id == 0) {
+        game->dialogue_tree = dialogue_build_for_location(40);
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);

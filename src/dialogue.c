@@ -507,6 +507,29 @@ DialogueTree *dialogue_build_for_location(int location_id)
             "don't open that door.", 1);
         break;
 
+    case 40: /* Entrance Hall - mysterious stranger */
+        dialogue_add_node(tree, 0, "Stranger",
+            "You shouldn't be in this house. No one should.", 0);
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        next.next_node_id = 1;
+        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
+
+        dialogue_add_node(tree, 1, "You",
+            "Who are you? How did you get in here?", 0);
+        next.next_node_id = 2;
+        dialogue_add_choice(dialogue_get_node(tree, 1), &next);
+
+        dialogue_add_node(tree, 2, "Stranger",
+            "I have always been here. Long before you. Long before Ashwood. "
+            "The house remembers everything.", 0);
+        next.next_node_id = 3;
+        dialogue_add_choice(dialogue_get_node(tree, 2), &next);
+
+        dialogue_add_node(tree, 3, "Stranger",
+            "Leave while you still can. Or stay — and learn what the house "
+            "does to those who stay too long.", 1);
+        break;
+
     case 5: /* Ritual Room */
         dialogue_add_node(tree, 0, "You",
             "The symbols carved into the floor pulse with a dull red light. "

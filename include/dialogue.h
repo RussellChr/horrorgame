@@ -47,6 +47,7 @@ typedef struct {
     float         text_timer;       /* seconds accumulated           */
     int           chars_visible;    /* how many chars to show now    */
     int           text_complete;    /* 1 when all chars are shown    */
+    int           selected_choice;  /* highlighted choice index (0-based) */
 } DialogueState;
 
 /* ── Tree management ──────────────────────────────────────────────────── */
@@ -78,6 +79,12 @@ void dialogue_state_update(DialogueState *ds, float dt);
 /* Advance to next node (or terminate); returns 0 when dialogue ends. */
 int dialogue_state_advance(DialogueState *ds,
                            int player_courage, int player_item_id);
+
+/* Return the choice that will be taken on the next advance, or NULL.
+ * Used by the game to read sanity_delta / courage_delta before advancing. */
+const DialogueChoice *dialogue_state_get_selected(const DialogueState *ds,
+                                                  int player_courage,
+                                                  int player_item_id);
 
 /* Draw the visual dialogue box at the bottom of the screen. */
 void dialogue_render(const DialogueState *ds,

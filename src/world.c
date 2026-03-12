@@ -229,6 +229,8 @@ void world_setup_rooms(World *world)
             /* Library exit (upper right via staircase) → location 2 */
             ADD_EXIT_TRIGGER(loc, 2190, FLOOR_Y-310, 60, 80, 2,
                              300.0f, (float)FLOOR_Y);
+            /* Portrait interaction (left-side wall portrait, trigger id=30) */
+            ADD_TRIGGER(loc, 580, FLOOR_Y-120, 120, 130, 30, 0.0f, 0.0f);
             break;
 
         /* ── 1: Dark Corridor ─────────────────────────────────────── */

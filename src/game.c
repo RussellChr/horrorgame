@@ -644,6 +644,22 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
+    /* Stranger NPC: draw a bright yellow exclamation mark above its head
+     * when in the Entrance Hall (location 0) so the player can spot it.
+     * The body/head are already drawn by world_render_room() via decor,
+     * so we only add the visual indicator here. */
+    if (game->player->current_location_id == 0) {
+        /* Centre of the 30-px body, above the 44-px head (FLOOR_Y-150). */
+        int npc_sx = camera_to_screen_x(&game->camera,
+                                        STRANGER_NPC_X + 15);  /* half body width */
+        int npc_sy = camera_to_screen_y(&game->camera, FLOOR_Y - 190);
+        /* Bright yellow "!" above the NPC head */
+        render_text(game->renderer, "!",
+                    npc_sx - 4,  /* half of "!" glyph width at scale 2 */
+                    npc_sy,
+                    2, 255, 230, 0);
+    }
+
     /* Interaction prompt */
     if (game->near_interactive) {
         int px = camera_to_screen_x(&game->camera, game->player->x);

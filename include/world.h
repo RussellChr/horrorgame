@@ -18,6 +18,10 @@
 #define ROOM_H   720   /* world-space height (== viewport)          */
 #define FLOOR_Y  580   /* y of the walkable floor surface           */
 
+/* ── Entrance Hall interactive Stranger NPC world position ───────────── */
+
+#define STRANGER_NPC_X  820  /* centre-left x of the 30-px body    */
+
 /* ── Exit (logical, for text-game movement) ──────────────────────────── */
 
 typedef struct {

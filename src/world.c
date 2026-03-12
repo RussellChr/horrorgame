@@ -215,8 +215,8 @@ void world_setup_rooms(World *world)
             ADD_DECOR(loc, 600,  200, 80, 110, 50,40,30,  "portrait");
             ADD_DECOR(loc, 900,  200, 80, 110, 50,40,30,  "portrait");
             /* Stranger - interactive NPC, bright yellow so player can spot it */
-            ADD_DECOR(loc, 1100, FLOOR_Y-110, 30,  60, 230,200,30, "");
-            ADD_DECOR(loc, 1093, FLOOR_Y-150, 44,  44, 240,210,40, "Stranger");
+            ADD_DECOR(loc,  STRANGER_NPC_X,        FLOOR_Y-110, 30,  60, 230,200,30, "");
+            ADD_DECOR(loc,  STRANGER_NPC_X - 7,    FLOOR_Y-150, 44,  44, 240,210,40, "Stranger");
             /* Staircase (right wall) */
             for (int s = 0; s < 10; s++) {
                 ADD_DECOR(loc, 2200 + s*30, FLOOR_Y - s*30, 120, 20,
@@ -235,7 +235,7 @@ void world_setup_rooms(World *world)
             /* Portrait interaction (left-side wall portrait, trigger id=30) */
             ADD_TRIGGER(loc, 580, FLOOR_Y-120, 120, 130, 30, 0.0f, 0.0f);
             /* Stranger NPC interaction (trigger id=40) */
-            ADD_TRIGGER(loc, 1070, FLOOR_Y-150, 90, 160, 40, 0.0f, 0.0f);
+            ADD_TRIGGER(loc,  STRANGER_NPC_X - 30, FLOOR_Y-150, 90, 160, 40, 0.0f, 0.0f);
             break;
 
         /* ── 1: Dark Corridor ─────────────────────────────────────── */

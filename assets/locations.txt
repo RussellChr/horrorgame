@@ -1,3 +1,33 @@
-LOCATION 0 Big Square Room
-DESC A big empty square room.
-EXIT north 0 0 0
+LOCATION 0 Entrance Hall
+DESC A large, dimly-lit hall. Dusty portraits line the walls. A stranger stands in the shadows.
+ATMO The candlelight flickers. The stranger watches you.
+EXIT east 1 0 0
+
+LOCATION 1 Corridor
+DESC A narrow corridor with dark wooden panels. A heavy door looms at the far end.
+ATMO The floorboards creak beneath your feet. The locked door at the end seems to pulse.
+EXIT west 2 0 0
+
+LOCATION 2 Library
+DESC Walls of towering bookshelves line every wall. A desk sits in the centre, buried under papers.
+ATMO The smell of old paper and candle wax fills the air.
+EXIT east 1 0 0
+
+LOCATION 3 Basement
+DESC The air is cold and damp. Darkness presses in from every corner.
+ATMO Something moves in the dark.
+DANGER
+EXIT west 1 0 0
+EXIT east 4 0 0
+
+LOCATION 4 Child's Room
+DESC A small, dusty room. A broken crib sits in the corner. Something glints on the floor.
+ATMO A cold breath touches the back of your neck.
+EXIT west 3 0 0
+EXIT east 5 0 0
+
+LOCATION 5 Ritual Room
+DESC Strange symbols are carved into the stone floor. Candles burn at each point of a circle.
+ATMO The air hums with an energy you cannot name.
+DANGER
+EXIT west 4 0 0

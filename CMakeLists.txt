@@ -5,11 +5,13 @@ set(CMAKE_C_STANDARD 11)
 
 # Allow finding SDL3 installed in /usr/local
 list(APPEND CMAKE_PREFIX_PATH "/usr/local")
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/opt/sdl3_image")
 
 find_package(SDL3 REQUIRED CONFIG)
 
+
 # SDL3_image is optional; enables PNG loading for the dialogue background
-find_package(SDL3_image QUIET CONFIG)
+find_package(SDL3_image CONFIG)
 
 include_directories(include)
 

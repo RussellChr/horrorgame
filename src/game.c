@@ -51,7 +51,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
-
+    
     return g;
 }
 

@@ -1,6 +1,10 @@
 #include "render.h"
 #include <string.h>
 
+#ifdef HAVE_SDL3_IMAGE
+#include <SDL3_image/SDL_image.h>
+#endif
+
 /* ────────────────────────────────────────────────────────────────────────
  * 8×8 bitmap font – public-domain CP437 / IBM PC BIOS character set.
  * Each character is stored as 8 bytes: one byte per row, MSB = left pixel.
@@ -228,4 +232,33 @@ int render_text_wrapped(SDL_Renderer *r, const char *text,
         p = word_end;
     }
     return lines;
+}
+
+/* ── Texture helpers ──────────────────────────────────────────────────── */
+
+SDL_Texture *render_load_texture(SDL_Renderer *r, const char *path)
+{
+    if (!r || !path) return NULL;
+#ifdef HAVE_SDL3_IMAGE
+    SDL_Texture *tex = IMG_LoadTexture(r, path);
+    if (!tex)
+        SDL_Log("render: failed to load texture '%s': %s", path, SDL_GetError());
+    return tex;
+#else
+    (void)r; (void)path;
+    return NULL;
+#endif
+}
+
+void render_texture(SDL_Renderer *r, SDL_Texture *texture,
+                    int x, int y, int w, int h)
+{
+    if (!r || !texture) return;
+    SDL_FRect rect = { (float)x, (float)y, (float)w, (float)h };
+    SDL_RenderTexture(r, texture, NULL, &rect);
+}
+
+void render_texture_destroy(SDL_Texture *texture)
+{
+    if (texture) SDL_DestroyTexture(texture);
 }

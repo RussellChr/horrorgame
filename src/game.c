@@ -51,7 +51,13 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
-    
+
+    /* Load inventory UI textures */
+    g->inventory_bg_texture   = render_load_texture(renderer,
+                                                    "assets/inventory_bg.png");
+    g->inventory_slot_texture = render_load_texture(renderer,
+                                                    "assets/inventory_slot.png");
+
     return g;
 }
 
@@ -63,6 +69,8 @@ void game_cleanup(Game *game)
     if (game->story)         story_destroy(game->story);
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
+    render_texture_destroy(game->inventory_bg_texture);
+    render_texture_destroy(game->inventory_slot_texture);
     free(game);
 }
 
@@ -713,9 +721,14 @@ void game_render_inventory(Game *game)
 
     int px = 180, py = 70, pw = WINDOW_W - 360, ph = WINDOW_H - 140;
 
-    render_filled_rect(r, px, py, pw, ph, 15, 10, 25, 235);
-    render_rect_outline(r, px, py, pw, ph, 80, 60, 100, 255);
-    render_rect_outline(r, px+2, py+2, pw-4, ph-4, 45, 33, 62, 180);
+    /* Inventory panel background: PNG if available, otherwise solid rect */
+    if (game->inventory_bg_texture) {
+        render_texture(r, game->inventory_bg_texture, px, py, pw, ph);
+    } else {
+        render_filled_rect(r, px, py, pw, ph, 15, 10, 25, 235);
+        render_rect_outline(r, px, py, pw, ph, 80, 60, 100, 255);
+        render_rect_outline(r, px+2, py+2, pw-4, ph-4, 45, 33, 62, 180);
+    }
 
     render_text_centered(r, "INVENTORY", WINDOW_W/2, py + 18, 2, 175, 145, 200);
     render_filled_rect(r, px+18, py+46, pw-36, 2, 55, 42, 70, 190);
@@ -729,14 +742,28 @@ void game_render_inventory(Game *game)
             int sy2   = iy + i * 62;
             int is_sel = (i == game->selected_inventory_slot);
 
-            render_filled_rect(r, px+18, sy2, pw-36, 54,
-                               is_sel ? 38 : 18,
-                               is_sel ? 22 : 12,
-                               is_sel ? 55 : 32, 210);
-            render_rect_outline(r, px+18, sy2, pw-36, 54,
-                                is_sel ? 110 : 45,
-                                is_sel ? 72  : 30,
-                                is_sel ? 140 : 65, 200);
+            /* Item slot: PNG if available, otherwise solid rect */
+            if (game->inventory_slot_texture) {
+                render_texture(r, game->inventory_slot_texture,
+                               px+18, sy2, pw-36, 54);
+            } else {
+                render_filled_rect(r, px+18, sy2, pw-36, 54,
+                                   is_sel ? 38 : 18,
+                                   is_sel ? 22 : 12,
+                                   is_sel ? 55 : 32, 210);
+                render_rect_outline(r, px+18, sy2, pw-36, 54,
+                                    is_sel ? 110 : 45,
+                                    is_sel ? 72  : 30,
+                                    is_sel ? 140 : 65, 200);
+            }
+
+            /* Selection highlight overlay when slot texture is in use */
+            if (game->inventory_slot_texture && is_sel) {
+                render_filled_rect(r, px+18, sy2, pw-36, 54,
+                                   200, 180, 255, 40);
+                render_rect_outline(r, px+18, sy2, pw-36, 54,
+                                    180, 140, 220, 160);
+            }
 
             render_filled_rect(r, px+28, sy2+9, 36, 36, 90,70,120,220);
             render_rect_outline(r, px+28, sy2+9, 36, 36, 130,100,155,200);

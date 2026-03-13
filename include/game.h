@@ -61,6 +61,8 @@ typedef struct {
 
     /* Inventory */
     int selected_inventory_slot;
+    SDL_Texture *inventory_bg_texture;
+    SDL_Texture *inventory_slot_texture;
 
     /* Ending */
     int   ending_type;               /* Ending enum value            */

@@ -103,7 +103,7 @@
    - On Linux (Ubuntu): `sudo apt-get install libsdl3-dev`
    - On Windows: Download prebuilt binaries or compile from source
    
-2. **SDL3_image** (optional but recommended)
+2. **SDL3_image** 
    - Enables PNG loading for dialogue background texture
    - On macOS (Homebrew): `brew install sdl3_image`
    - On Linux: `sudo apt-get install libsdl3-image-dev`

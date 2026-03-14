@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  SDL3_VERSION: "3.2.4"
+
 jobs:
   build-windows:
     name: Windows (MSVC)
@@ -15,16 +21,16 @@ jobs:
       - name: Download SDL3 (VC prebuilt)
         shell: pwsh
         run: |
-          $SDL3_VERSION = "3.2.4"
-          $ZIP = "SDL3-devel-${SDL3_VERSION}-VC.zip"
+          $ZIP = "SDL3-devel-${{ env.SDL3_VERSION }}-VC.zip"
           Invoke-WebRequest `
-            -Uri "https://github.com/libsdl-org/SDL/releases/download/release-${SDL3_VERSION}/${ZIP}" `
+            -Uri "https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL3_VERSION }}/${ZIP}" `
             -OutFile $ZIP
           Expand-Archive $ZIP -DestinationPath .
-          echo "SDL3_VERSION=${SDL3_VERSION}" >> $env:GITHUB_ENV
-          echo "SDL3_DIR=${{ github.workspace }}\SDL3-${SDL3_VERSION}\cmake" >> $env:GITHUB_ENV
+          echo "SDL3_DIR=${{ github.workspace }}\SDL3-${{ env.SDL3_VERSION }}\cmake" >> $env:GITHUB_ENV
 
       - name: Configure CMake
+        # SDL3_DIR is required on Windows because SDL3 is not installed system-wide;
+        # macOS and Linux find it automatically via system paths.
         run: cmake -B build -DSDL3_DIR="${{ env.SDL3_DIR }}"
 
       - name: Build
@@ -79,7 +85,7 @@ jobs:
 
       - name: Build SDL3 from source
         run: |
-          git clone --depth 1 --branch release-3.2.4 \
+          git clone --depth 1 --branch release-${{ env.SDL3_VERSION }} \
             https://github.com/libsdl-org/SDL.git /tmp/SDL3
           cmake -S /tmp/SDL3 -B /tmp/SDL3/build \
             -DCMAKE_BUILD_TYPE=Release \

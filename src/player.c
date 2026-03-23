@@ -41,6 +41,21 @@ void player_destroy(Player *player)
         render_texture_destroy(player->sprite_texture);
     if (player->backwards_texture)
         render_texture_destroy(player->backwards_texture);
+
+    /* Destroy idle textures */
+    if (player->idle_texture_north) render_texture_destroy(player->idle_texture_north);
+    if (player->idle_texture_south) render_texture_destroy(player->idle_texture_south);
+    if (player->idle_texture_east)  render_texture_destroy(player->idle_texture_east);
+    if (player->idle_texture_west)  render_texture_destroy(player->idle_texture_west);
+
+    /* Destroy walking textures */
+    for (int i = 0; i < 2; i++) {
+        if (player->walk_frames_north[i]) render_texture_destroy(player->walk_frames_north[i]);
+        if (player->walk_frames_south[i]) render_texture_destroy(player->walk_frames_south[i]);
+        if (player->walk_frames_east[i])  render_texture_destroy(player->walk_frames_east[i]);
+        if (player->walk_frames_west[i])  render_texture_destroy(player->walk_frames_west[i]);
+    }
+
     free(player);
 }
 
@@ -148,23 +163,38 @@ void player_update(Player *player, float dt)
 {
     if (!player) return;
 
-    /* Advance animation */
+    /* Determine direction from velocity; on diagonal use the dominant axis */
+    float abs_vx = player->vx < 0 ? -player->vx : player->vx;
+    float abs_vy = player->vy < 0 ? -player->vy : player->vy;
+    if (abs_vx >= abs_vy) {
+        if (player->vx < 0)
+            player->current_direction = DIRECTION_WEST;
+        else if (player->vx > 0)
+            player->current_direction = DIRECTION_EAST;
+    } else {
+        if (player->vy < 0)
+            player->current_direction = DIRECTION_NORTH;
+        else if (player->vy > 0)
+            player->current_direction = DIRECTION_SOUTH;
+    }
+
+    /* Animate only when moving */
     if (player->is_moving) {
-        if (player->is_moving_backwards) {
-            animation_update(&player->backwards_anim, dt);
-        } else {
-            animation_update(&player->walk_anim, dt);
+        player->frame_timer += dt;
+        if (player->frame_timer >= player->frame_duration) {
+            player->frame_timer = 0.0f;
+            player->frame_index = (player->frame_index + 1) % 2;
         }
     } else {
-        animation_update(&player->idle_anim, dt);
+        player->frame_index = 0;
+        player->frame_timer = 0.0f;
     }
 }
 
 /* ── Visual render ─────────────────────────────────────────────────────── */
 /*
- * The player is drawn using a sprite texture if one is set.
- * When moving backwards the character turns around, achieved by inverting
- * the horizontal flip relative to the normal facing direction.
+ * The player is drawn using the directional texture that matches the current
+ * movement state and direction (north/south/east/west).
  *
  *   screen_x / screen_y = top-left corner of the player sprite on screen.
  */
@@ -173,31 +203,50 @@ void player_render(Player *player, SDL_Renderer *renderer,
 {
     if (!player || !renderer) return;
 
-    int w = 32;  /* sprite frame width  */
-    int h = 64;  /* sprite frame height */
+    SDL_Texture *current_texture = NULL;
 
-    /* When moving backwards the character turns around, so invert the flip. */
-    int effective_right = player->is_moving_backwards
-                          ? !player->facing_right
-                          : player->facing_right;
-    SDL_FlipMode flip = effective_right ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-
-    SDL_Texture *tex  = NULL;
-    int          frame = 0;
-
-    if (player->is_moving_backwards && player->backwards_texture) {
-        tex   = player->backwards_texture;
-        frame = animation_get_frame(&player->backwards_anim);
-    } else if (player->sprite_texture) {
-        tex   = player->sprite_texture;
-        frame = player->is_moving
-                ? animation_get_frame(&player->walk_anim)
-                : animation_get_frame(&player->idle_anim);
+    /* Select texture based on movement state and direction */
+    if (player->is_moving) {
+        /* Walking animation */
+        switch (player->current_direction) {
+            case DIRECTION_NORTH:
+                current_texture = player->walk_frames_north[player->frame_index];
+                break;
+            case DIRECTION_SOUTH:
+                current_texture = player->walk_frames_south[player->frame_index];
+                break;
+            case DIRECTION_EAST:
+                current_texture = player->walk_frames_east[player->frame_index];
+                break;
+            case DIRECTION_WEST:
+                current_texture = player->walk_frames_west[player->frame_index];
+                break;
+        }
+    } else {
+        /* Idle pose */
+        switch (player->current_direction) {
+            case DIRECTION_NORTH:
+                current_texture = player->idle_texture_north;
+                break;
+            case DIRECTION_SOUTH:
+                current_texture = player->idle_texture_south;
+                break;
+            case DIRECTION_EAST:
+                current_texture = player->idle_texture_east;
+                break;
+            case DIRECTION_WEST:
+                current_texture = player->idle_texture_west;
+                break;
+        }
     }
 
-    if (tex) {
-        SDL_FRect src = {(float)(frame * w), 0.0f, (float)w, (float)h};
-        SDL_FRect dst = {(float)screen_x, (float)screen_y, (float)w, (float)h};
-        SDL_RenderTextureRotated(renderer, tex, &src, &dst, 0, NULL, flip);
+    if (current_texture) {
+        SDL_FRect dst = {
+            (float)screen_x,
+            (float)screen_y,
+            (float)PLAYER_W,
+            (float)PLAYER_SPRITE_H
+        };
+        SDL_RenderTexture(renderer, current_texture, NULL, &dst);
     }
 }

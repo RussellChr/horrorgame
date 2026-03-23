@@ -17,6 +17,12 @@
 /* Movement speed in pixels per second. */
 #define PLAYER_SPEED 220.0f
 
+/* Direction constants for current_direction field. */
+#define DIRECTION_NORTH 0
+#define DIRECTION_SOUTH 1
+#define DIRECTION_EAST  2
+#define DIRECTION_WEST  3
+
 /* ── Item ──────────────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -58,6 +64,24 @@ typedef struct {
     int          sprite_w;
     int          sprite_h;
     SDL_Texture *backwards_texture; /* backward movement sprite sheet */
+
+    /* Idle textures for each direction */
+    SDL_Texture *idle_texture_north;
+    SDL_Texture *idle_texture_south;
+    SDL_Texture *idle_texture_east;
+    SDL_Texture *idle_texture_west;
+
+    /* Walking textures for each direction (2 frames) */
+    SDL_Texture *walk_frames_north[2];
+    SDL_Texture *walk_frames_south[2];
+    SDL_Texture *walk_frames_east[2];
+    SDL_Texture *walk_frames_west[2];
+
+    /* Animation state */
+    int   current_direction; /* NORTH=0, SOUTH=1, EAST=2, WEST=3 */
+    int   frame_index;
+    float frame_timer;
+    float frame_duration;
 } Player;
 
 /* ── API ───────────────────────────────────────────────────────────────── */

@@ -460,6 +460,7 @@ void game_update(Game *game)
         /* ── Movement input ── */
         p->vx = 0.0f; p->vy = 0.0f;
         p->is_moving = 0;
+        p->is_moving_backwards = 0;
 
         if (game->keys[SDL_SCANCODE_A] || game->keys[SDL_SCANCODE_LEFT]) {
             p->vx = -PLAYER_SPEED; p->facing_right = 0; p->is_moving = 1;

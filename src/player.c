@@ -24,10 +24,12 @@ Player *player_create(const char *name)
 
     animation_init(&p->idle_anim, 2, 1.5f, 1);
     animation_init(&p->walk_anim, 4, 8.0f, 1);
+    animation_init(&p->backwards_anim, 2, 8.0f, 1);
 
-    p->sprite_texture = NULL;
-    p->sprite_w       = PLAYER_W;
-    p->sprite_h       = PLAYER_SPRITE_H;
+    p->sprite_texture    = NULL;
+    p->sprite_w          = PLAYER_W;
+    p->sprite_h          = PLAYER_SPRITE_H;
+    p->backwards_texture = NULL;
 
     return p;
 }
@@ -37,6 +39,8 @@ void player_destroy(Player *player)
     if (!player) return;
     if (player->sprite_texture)
         render_texture_destroy(player->sprite_texture);
+    if (player->backwards_texture)
+        render_texture_destroy(player->backwards_texture);
     free(player);
 }
 
@@ -50,6 +54,16 @@ void player_set_sprite(Player *player, SDL_Texture *texture, int w, int h)
     player->sprite_texture = texture;
     player->sprite_w       = (w > 0) ? w : PLAYER_W;
     player->sprite_h       = (h > 0) ? h : PLAYER_SPRITE_H;
+}
+
+void player_set_backwards_sprite(Player *player, SDL_Texture *texture, int w, int h)
+{
+    if (!player) return;
+    if (player->backwards_texture)
+        render_texture_destroy(player->backwards_texture);
+    player->backwards_texture = texture;
+    player->sprite_w          = (w > 0) ? w : PLAYER_W;
+    player->sprite_h          = (h > 0) ? h : PLAYER_SPRITE_H;
 }
 
 /* ── Inventory ─────────────────────────────────────────────────────────── */
@@ -136,7 +150,11 @@ void player_update(Player *player, float dt)
 
     /* Advance animation */
     if (player->is_moving) {
-        animation_update(&player->walk_anim, dt);
+        if (player->is_moving_backwards) {
+            animation_update(&player->backwards_anim, dt);
+        } else {
+            animation_update(&player->walk_anim, dt);
+        }
     } else {
         animation_update(&player->idle_anim, dt);
     }
@@ -144,8 +162,9 @@ void player_update(Player *player, float dt)
 
 /* ── Visual render ─────────────────────────────────────────────────────── */
 /*
- * The player is drawn using a sprite texture if one is set, otherwise
- * falls back to a simple pixel-art silhouette made of coloured rectangles.
+ * The player is drawn using a sprite texture if one is set.
+ * When moving backwards the character turns around, achieved by inverting
+ * the horizontal flip relative to the normal facing direction.
  *
  *   screen_x / screen_y = top-left corner of the player sprite on screen.
  */
@@ -154,18 +173,31 @@ void player_render(Player *player, SDL_Renderer *renderer,
 {
     if (!player || !renderer) return;
 
-    int w = 32;  /* sprite width */
-    int h = 64;  /* sprite height */
-    
-    if (player->sprite_texture) {
-        int frame = player->is_moving
-                    ? animation_get_frame(&player->walk_anim)
-                    : animation_get_frame(&player->idle_anim);
-        
-        SDL_Rect src = {frame * w, 0, w, h};
+    int w = 32;  /* sprite frame width  */
+    int h = 64;  /* sprite frame height */
+
+    /* When moving backwards the character turns around, so invert the flip. */
+    int effective_right = player->is_moving_backwards
+                          ? !player->facing_right
+                          : player->facing_right;
+    SDL_FlipMode flip = effective_right ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+
+    SDL_Texture *tex  = NULL;
+    int          frame = 0;
+
+    if (player->is_moving_backwards && player->backwards_texture) {
+        tex   = player->backwards_texture;
+        frame = animation_get_frame(&player->backwards_anim);
+    } else if (player->sprite_texture) {
+        tex   = player->sprite_texture;
+        frame = player->is_moving
+                ? animation_get_frame(&player->walk_anim)
+                : animation_get_frame(&player->idle_anim);
+    }
+
+    if (tex) {
+        SDL_FRect src = {(float)(frame * w), 0.0f, (float)w, (float)h};
         SDL_FRect dst = {(float)screen_x, (float)screen_y, (float)w, (float)h};
-        SDL_FlipMode flip = player->facing_right ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-        
-        SDL_RenderTextureRotated(renderer, player->sprite_texture, &src, &dst, 0, NULL, flip);
+        SDL_RenderTextureRotated(renderer, tex, &src, &dst, 0, NULL, flip);
     }
 }

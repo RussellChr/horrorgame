@@ -46,15 +46,18 @@ typedef struct {
     float    vx, vy;        /* velocity in pixels/second            */
     int      facing_right;  /* 1 = right, 0 = left                  */
     int      is_moving;     /* 1 if walking this frame              */
+    int      is_moving_backwards; /* 1 if moving backward this frame */
 
     /* Animations */
     Animation idle_anim;
     Animation walk_anim;
+    Animation backwards_anim;  /* backward movement animation        */
 
-    /* Sprite (optional – if NULL, falls back to rectangle rendering) */
-    SDL_Texture *sprite_texture;
+    /* Sprites */
+    SDL_Texture *sprite_texture;    /* forward/idle sprite sheet    */
     int          sprite_w;
     int          sprite_h;
+    SDL_Texture *backwards_texture; /* backward movement sprite sheet */
 } Player;
 
 /* ── API ───────────────────────────────────────────────────────────────── */
@@ -64,6 +67,7 @@ void    player_destroy(Player *player);
 
 /* Sprite */
 void player_set_sprite(Player *player, SDL_Texture *texture, int w, int h);
+void player_set_backwards_sprite(Player *player, SDL_Texture *texture, int w, int h);
 
 /* Inventory */
 int  player_add_item(Player *player, const Item *item);

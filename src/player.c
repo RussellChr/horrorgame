@@ -154,92 +154,18 @@ void player_render(Player *player, SDL_Renderer *renderer,
 {
     if (!player || !renderer) return;
 
-    int w = player->sprite_w;
-    int h = player->sprite_h;
-
-    /* Idle bobbing */
-    int bob = 0;
-    if (!player->is_moving) {
-        int f = animation_get_frame(&player->idle_anim);
-        bob = (f == 0) ? 0 : -2;
-    }
-    int sy = screen_y + bob;
-
-    /* ── Sprite texture with frame selection ── */
+    int w = 32;  /* sprite width */
+    int h = 64;  /* sprite height */
+    
     if (player->sprite_texture) {
-        /* Get current frame index */
         int frame = player->is_moving
-                  ? animation_get_frame(&player->walk_anim)
-                  : animation_get_frame(&player->idle_anim);
+                    ? animation_get_frame(&player->walk_anim)
+                    : animation_get_frame(&player->idle_anim);
         
-        /* Calculate source rect (crop from spritesheet) */
-        int frame_w = 64;  /* Adjust based on your actual frame size */
-        int frame_h = 96;  /* Adjust based on your actual frame size */
-        int cols = 3;      /* Your sheet has 3 columns */
-        
-        SDL_Rect src = {
-            (frame % cols) * frame_w,           /* X position */
-            (frame / cols) * frame_h,           /* Y position */
-            frame_w,
-            frame_h
-        };
-
-        SDL_FRect dest = {
-            (float)screen_x, (float)sy, (float)w, (float)h
-        };
-
+        SDL_Rect src = {frame * w, 0, w, h};
+        SDL_FRect dst = {(float)screen_x, (float)screen_y, (float)w, (float)h};
         SDL_FlipMode flip = player->facing_right ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
-        SDL_RenderTextureRotated(renderer, player->sprite_texture,
-                                &src, &dest, 0.0, NULL, flip);
-        return;
+        
+        SDL_RenderTextureRotated(renderer, player->sprite_texture, &src, &dst, 0, NULL, flip);
     }
-
-    /* ── Fallback: rectangle silhouette ── */
-
-    /* Walk stride: shift foot rect left/right by frame. */
-    int stride = 0;
-    if (player->is_moving) {
-        int f = animation_get_frame(&player->walk_anim);
-        static const int stride_offsets[4] = {0, 2, 0, -2};
-        stride = stride_offsets[f];
-        if (!player->facing_right) stride = -stride;
-    }
-
-    /* Torso */
-    render_filled_rect(renderer,
-        screen_x + 4, sy + h/3,
-        w - 8, h * 2/5,
-        80, 80, 110, 255);
-
-    /* Head */
-    render_filled_rect(renderer,
-        screen_x + 5, sy + 2,
-        w - 10, h/4,
-        200, 170, 140, 255);
-
-    /* Hair */
-    render_filled_rect(renderer,
-        screen_x + 4, sy,
-        w - 8, h/8,
-        60, 40, 20, 255);
-
-    /* Legs */
-    int leg_y = sy + h * 3/4;
-    render_filled_rect(renderer,
-        screen_x + 3 + stride, leg_y,
-        (w - 6) / 2 - 1, h/4,
-        60, 60, 90, 255);
-    render_filled_rect(renderer,
-        screen_x + w/2 + 1 - stride, leg_y,
-        (w - 6) / 2 - 1, h/4,
-        60, 60, 90, 255);
-
-    /* Eyes (direction-dependent) */
-    int eye_x = player->facing_right
-                ? (screen_x + w - 8)
-                : (screen_x + 4);
-    render_filled_rect(renderer,
-        eye_x, sy + h/4 - 2,
-        3, 3,
-        30, 20, 20, 255);
 }

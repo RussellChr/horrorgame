@@ -84,12 +84,27 @@ void game_start_new(Game *game)
     game->world  = world_create();
     game->story  = story_create();
 
-    /* Load player sprite */
-    SDL_Texture *player_sprite = render_load_texture(game->renderer,
-                                                     "assets/player_walk.png");
-    if (player_sprite) {
-        player_set_sprite(game->player, player_sprite, 64, 96);
-    }
+    /* Load idle animations from assets/player/ */
+    game->player->idle_texture_north = render_load_texture(game->renderer, "assets/player/player_idle_north.png");
+    game->player->idle_texture_south = render_load_texture(game->renderer, "assets/player/player_idle_south.png");
+    game->player->idle_texture_east  = render_load_texture(game->renderer, "assets/player/player_idle_east.png");
+    game->player->idle_texture_west  = render_load_texture(game->renderer, "assets/player/player_idle_west.png");
+
+    /* Load walking animations from assets/player/ */
+    game->player->walk_frames_north[0] = render_load_texture(game->renderer, "assets/player/player_walk_north_0.png");
+    game->player->walk_frames_north[1] = render_load_texture(game->renderer, "assets/player/player_walk_north_1.png");
+    game->player->walk_frames_south[0] = render_load_texture(game->renderer, "assets/player/player_walk_south_0.png");
+    game->player->walk_frames_south[1] = render_load_texture(game->renderer, "assets/player/player_walk_south_1.png");
+    game->player->walk_frames_east[0]  = render_load_texture(game->renderer, "assets/player/player_walk_east_0.png");
+    game->player->walk_frames_east[1]  = render_load_texture(game->renderer, "assets/player/player_walk_east_1.png");
+    game->player->walk_frames_west[0]  = render_load_texture(game->renderer, "assets/player/player_walk_west_0.png");
+    game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
+
+    /* Initialize animation state */
+    game->player->current_direction = DIRECTION_EAST;  /* Start facing east */
+    game->player->frame_index       = 0;
+    game->player->frame_timer       = 0.0f;
+    game->player->frame_duration    = 0.15f;
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world);

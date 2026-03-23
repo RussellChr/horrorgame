@@ -157,28 +157,40 @@ void player_render(Player *player, SDL_Renderer *renderer,
     int w = player->sprite_w;
     int h = player->sprite_h;
 
-    /* Idle bobbing: shift up by 0–2 px depending on idle frame. */
+    /* Idle bobbing */
     int bob = 0;
     if (!player->is_moving) {
         int f = animation_get_frame(&player->idle_anim);
-        bob   = (f == 0) ? 0 : -2;
+        bob = (f == 0) ? 0 : -2;
     }
     int sy = screen_y + bob;
 
-    /* ── Sprite texture path ── */
+    /* ── Sprite texture with frame selection ── */
     if (player->sprite_texture) {
+        /* Get current frame index */
+        int frame = player->is_moving
+                  ? animation_get_frame(&player->walk_anim)
+                  : animation_get_frame(&player->idle_anim);
+        
+        /* Calculate source rect (crop from spritesheet) */
+        int frame_w = 64;  /* Adjust based on your actual frame size */
+        int frame_h = 96;  /* Adjust based on your actual frame size */
+        int cols = 3;      /* Your sheet has 3 columns */
+        
+        SDL_Rect src = {
+            (frame % cols) * frame_w,           /* X position */
+            (frame / cols) * frame_h,           /* Y position */
+            frame_w,
+            frame_h
+        };
+
         SDL_FRect dest = {
             (float)screen_x, (float)sy, (float)w, (float)h
         };
-        if (!player->facing_right) {
-            /* Flip horizontally using SDL_RenderTextureRotated */
-            SDL_RenderTextureRotated(renderer, player->sprite_texture,
-                                     NULL, &dest,
-                                     0.0, NULL,
-                                     SDL_FLIP_HORIZONTAL);
-        } else {
-            SDL_RenderTexture(renderer, player->sprite_texture, NULL, &dest);
-        }
+
+        SDL_FlipMode flip = player->facing_right ? SDL_FLIP_NONE : SDL_FLIP_HORIZONTAL;
+        SDL_RenderTextureRotated(renderer, player->sprite_texture,
+                                &src, &dest, 0.0, NULL, flip);
         return;
     }
 

@@ -80,17 +80,16 @@ void game_start_new(Game *game)
 {
     if (!game) return;
 
-    if (game->player)        { player_destroy(game->player);       game->player = NULL; }
-    if (game->world)         { world_destroy(game->world);         game->world  = NULL; }
-    if (game->story)         { story_destroy(game->story);         game->story  = NULL; }
-    if (game->dialogue_tree) {
-        dialogue_tree_destroy(game->dialogue_tree);
-        game->dialogue_tree = NULL;
-    }
-
     game->player = player_create("Alex");
     game->world  = world_create();
     game->story  = story_create();
+
+    /* Load player sprite */
+    SDL_Texture *player_sprite = render_load_texture(game->renderer,
+                                                     "assets/player_walk.png");
+    if (player_sprite) {
+        player_set_sprite(game->player, player_sprite, 64, 96);
+    }
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world);

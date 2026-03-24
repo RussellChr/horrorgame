@@ -54,7 +54,35 @@ void draw_button(SDL_Renderer *renderer, const Button *button)
             render_text(renderer, button->text, tx, ty, 2, 180, 150, 200);
     }
 }
+void draw_button_menu(SDL_Renderer *renderer, const Button *button)
+{
+    if (!button || !renderer) return;
 
+    int x = (int)button->rect.x;
+    int y = (int)button->rect.y;
+    int w = (int)button->rect.w;
+    int h = (int)button->rect.h;
+
+    /* Dark overlay when hovered */
+    if (button->is_hovered) {
+        render_filled_rect(renderer, x, y, w, h, 0, 0, 0, 110);           /* dark transparent */
+        
+        /* Shadow effect - offset dark rectangle below */
+        render_filled_rect(renderer, x + 4, y + h + 2, w, 8, 0, 0, 0, 80);  /* shadow */
+    }
+
+    /* Text (black on hover, light purple when not) */
+    if (button->text) {
+        int tw = render_text_width(button->text, 2);
+        int tx = x + (w - tw) / 2;
+        int ty = y + (h - 16) / 2;
+
+        if (button->is_hovered)
+            render_text(renderer, button->text, tx, ty, 2, 255, 0, 0);      /* black text on hover */
+        else
+            render_text(renderer, button->text, tx, ty, 2, 200, 190, 210); /* light purple */
+    }
+}
 /* ── HUD ───────────────────────────────────────────────────────────────── */
 
 void ui_draw_hud(SDL_Renderer *renderer, const Player *player)

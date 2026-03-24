@@ -39,10 +39,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
-    g->buttons[0] = make_button(bx, 340.0f, bw, bh, "New Game");
-    g->buttons[1] = make_button(bx, 410.0f, bw, bh, "Load Game");
-    g->buttons[2] = make_button(bx, 480.0f, bw, bh, "Quit");
-
+    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New Game");
+    g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Load Game");
+    g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
     g->pause_buttons[0] = make_button(bx, 310.0f, bw, bh, "Resume");
     g->pause_buttons[1] = make_button(bx, 380.0f, bw, bh, "Quit to Menu");
 
@@ -57,6 +56,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
                                                     "assets/inventory_bg.png");
     g->inventory_slot_texture = render_load_texture(renderer,
                                                     "assets/inventory_slot.png");
+    /* Load Title Screen*/
+    g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
     return g;
 }
@@ -71,6 +72,7 @@ void game_cleanup(Game *game)
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->inventory_bg_texture);
     render_texture_destroy(game->inventory_slot_texture);
+    render_texture_destroy(game->title_screen_texture);
     free(game);
 }
 
@@ -595,29 +597,40 @@ void game_render_menu(Game *game)
 {
     SDL_Renderer *r = game->renderer;
 
-    /* Gradient background */
-    for (int y = 0; y < WINDOW_H; y++) {
-        Uint8 c = (Uint8)(y * 25 / WINDOW_H);
-        render_filled_rect(r, 0, y, WINDOW_W, 1,
-                           (Uint8)(5 + c), (Uint8)(3 + c/2),
-                           (Uint8)(8 + c*2), 255);
+    if (game->state == GAME_STATE_MENU) {
+        if (game->title_screen_texture) {
+            // Draw full-screen PNG
+            render_texture(r, game->title_screen_texture,
+                          0, 0, WINDOW_W, WINDOW_H);
+        } else {
+            // Fallback to colored background if PNG fails to load
+            render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H,
+                              0, 0, 0, 255);
+        }
+        // Then draw your menu buttons on top
+        // ... existing menu button code ...
     }
-
-    render_text_centered(r, "PROJECT YOZORA",
+    render_text_centered(r, "MetaMorph",
                          WINDOW_W/2, 110, 4, 190, 150, 220);
-    render_text_centered(r, "A Horror Story",
+    render_text_centered(r, "Like how a worm become a butterfly",
                          WINDOW_W/2, 165, 2, 110, 85, 135);
     render_filled_rect(r, WINDOW_W/2 - 150, 196, 300, 2, 70,45,90,180);
 
     for (int i = 0; i < 3; i++) {
         Button btn = game->buttons[i];
         if (i == game->current_menu_choice) btn.is_hovered = 1;
-        draw_button(r, &btn);
+        draw_button_menu(r, &btn);
     }
-
+    /* mouse coordinates */
     render_text_centered(r,
         "WASD: move | E: interact | I: inventory | ESC: pause",
         WINDOW_W/2, WINDOW_H - 28, 1, 65, 50, 78);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "mouse: %d, %d",
+             (int)game->mouse_x, (int)game->mouse_y);
+
+    /* top-left debug text */
+    render_text(r, buf, 10, 10, 2, 255, 255, 255);
 }
 
 /* ── Playing ─────────────────────────────────────────────────────────────── */

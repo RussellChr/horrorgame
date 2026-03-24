@@ -107,7 +107,8 @@ void world_add_exit(Location *loc, const char *direction,
 int world_load_locations(World *world, const char *filepath);
 
 /* Visual room setup – builds decor, colliders and triggers procedurally. */
-void world_setup_rooms(World *world, SDL_Renderer *renderer);
+void world_setup_rooms(World *world, SDL_Renderer *renderer,
+                       const char *asset_base_path);
 
 /* Draw the current room. */
 void world_render_room(const Location *loc, SDL_Renderer *renderer,

@@ -1,4 +1,5 @@
 #include "render.h"
+#include <stdio.h>
 #include <string.h>
 
 #ifdef HAVE_SDL3_IMAGE
@@ -236,16 +237,22 @@ int render_text_wrapped(SDL_Renderer *r, const char *text,
 
 /* ── Texture helpers ──────────────────────────────────────────────────── */
 
-SDL_Texture *render_load_texture(SDL_Renderer *r, const char *path)
+SDL_Texture *render_load_texture(SDL_Renderer *r, const char *base,
+                                 const char *path)
 {
     if (!r || !path) return NULL;
+    char full_path[2048];
+    if (base && *base)
+        snprintf(full_path, sizeof(full_path), "%s%s", base, path);
+    else
+        snprintf(full_path, sizeof(full_path), "%s", path);
 #ifdef HAVE_SDL3_IMAGE
-    SDL_Texture *tex = IMG_LoadTexture(r, path);
+    SDL_Texture *tex = IMG_LoadTexture(r, full_path);
     if (!tex)
-        SDL_Log("render: failed to load texture '%s': %s", path, SDL_GetError());
+        SDL_Log("render: failed to load texture '%s': %s", full_path, SDL_GetError());
     return tex;
 #else
-    (void)r; (void)path;
+    (void)r; (void)full_path;
     return NULL;
 #endif
 }

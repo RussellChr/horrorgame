@@ -78,11 +78,15 @@ typedef struct {
 
     /* Running flag */
     int running;
+
+    /* Base path for assets (exe directory or -a override) */
+    char asset_base_path[512];
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
 
-Game *game_init(SDL_Window *window, SDL_Renderer *renderer);
+Game *game_init(SDL_Window *window, SDL_Renderer *renderer,
+                const char *asset_base_path);
 void  game_cleanup(Game *game);
 
 /* ── Per-frame ────────────────────────────────────────────────────────── */

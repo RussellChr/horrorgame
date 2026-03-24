@@ -184,7 +184,8 @@ int world_load_locations(World *world, const char *filepath)
         } \
     } while(0)
 
-void world_setup_rooms(World *world, SDL_Renderer *renderer)
+void world_setup_rooms(World *world, SDL_Renderer *renderer,
+                       const char *asset_base_path)
 {
     if (!world || !renderer) return;
 
@@ -203,7 +204,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 loc->spawn_y = (float)(ROOM_H / 3);
 
                 loc->background_texture = render_load_texture(
-                    renderer, "assets/room/room1.png");
+                    renderer, asset_base_path, "assets/room/room1.png");
                 
                 break;
             }
@@ -213,7 +214,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 loc->spawn_y = (float)(ROOM_H / 2);
 
                 loc->background_texture = render_load_texture(
-                    renderer, "assets/room/room2.png");
+                    renderer, asset_base_path, "assets/room/room2.png");
                 
                 break;
             }

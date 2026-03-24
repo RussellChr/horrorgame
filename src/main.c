@@ -1,13 +1,44 @@
 #include <SDL3/SDL.h>
+#include <string.h>
 #include "game.h"
 
 int main(int argc, char *argv[])
 {
-    (void)argc; (void)argv;
+    /* Determine asset base path: -a <path> flag overrides SDL_GetBasePath() */
+    char asset_base_path[512] = {0};
+    const char *flag_override = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-a") == 0) {
+            if (i + 1 < argc)
+                flag_override = argv[i + 1];
+            break;
+        }
+    }
 
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
+    }
+
+    /* Resolve asset base path after SDL_Init so SDL_GetBasePath() is available */
+    if (flag_override) {
+        size_t len = strlen(flag_override);
+        snprintf(asset_base_path, sizeof(asset_base_path), "%s", flag_override);
+        /* Ensure the path ends with a separator */
+        if (len > 0 && asset_base_path[len - 1] != '/'
+                    && asset_base_path[len - 1] != '\\') {
+            if (len + 1 < sizeof(asset_base_path)) {
+                asset_base_path[len]     = '/';
+                asset_base_path[len + 1] = '\0';
+            }
+        }
+    } else {
+        char *base = SDL_GetBasePath();
+        if (base) {
+            snprintf(asset_base_path, sizeof(asset_base_path), "%s", base);
+            SDL_free(base);
+        }
     }
 
     SDL_Window *window = SDL_CreateWindow(
@@ -30,7 +61,7 @@ int main(int argc, char *argv[])
     /* Enable alpha blending globally. */
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
-    Game *game = game_init(window, renderer);
+    Game *game = game_init(window, renderer, asset_base_path);
     if (!game) {
         SDL_Log("game_init failed");
         SDL_DestroyRenderer(renderer);

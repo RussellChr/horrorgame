@@ -14,6 +14,16 @@
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
+/* Build a full asset path by joining base + rel into buf. */
+static void build_asset_path(char *buf, size_t buf_size,
+                              const char *base, const char *rel)
+{
+    if (base && *base)
+        snprintf(buf, buf_size, "%s%s", base, rel);
+    else
+        snprintf(buf, buf_size, "%s", rel);
+}
+
 static Button make_button(float x, float y, float w, float h,
                           const char *text)
 {
@@ -27,7 +37,8 @@ static Button make_button(float x, float y, float w, float h,
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
-Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
+Game *game_init(SDL_Window *window, SDL_Renderer *renderer,
+                const char *asset_base_path)
 {
     Game *g = calloc(1, sizeof(Game));
     if (!g) return NULL;
@@ -36,6 +47,11 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->renderer = renderer;
     g->state    = GAME_STATE_MENU;
     g->running  = 1;
+
+    /* Store the asset base path (empty string means use working directory) */
+    if (asset_base_path && *asset_base_path)
+        snprintf(g->asset_base_path, sizeof(g->asset_base_path),
+                 "%s", asset_base_path);
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
@@ -48,16 +64,22 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
 
+    char path[1024];
+
     /* Load the dialogue box background image */
-    dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
+    build_asset_path(path, sizeof(path), g->asset_base_path, "assets/dialogue.png");
+    dialogue_load_texture(&g->dialogue_state, renderer, path);
 
     /* Load inventory UI textures */
     g->inventory_bg_texture   = render_load_texture(renderer,
+                                                    g->asset_base_path,
                                                     "assets/inventory_bg.png");
     g->inventory_slot_texture = render_load_texture(renderer,
+                                                    g->asset_base_path,
                                                     "assets/inventory_slot.png");
     /* Load Title Screen*/
-    g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
+    g->title_screen_texture = render_load_texture(renderer, g->asset_base_path,
+                                                  "assets/title_screen.png");
 
     return g;
 }
@@ -87,20 +109,20 @@ void game_start_new(Game *game)
     game->story  = story_create();
 
     /* Load idle animations from assets/player/ */
-    game->player->idle_texture_north = render_load_texture(game->renderer, "assets/player/player_idle_north.png");
-    game->player->idle_texture_south = render_load_texture(game->renderer, "assets/player/player_idle_south.png");
-    game->player->idle_texture_east  = render_load_texture(game->renderer, "assets/player/player_idle_east.png");
-    game->player->idle_texture_west  = render_load_texture(game->renderer, "assets/player/player_idle_west.png");
+    game->player->idle_texture_north = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_idle_north.png");
+    game->player->idle_texture_south = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_idle_south.png");
+    game->player->idle_texture_east  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_idle_east.png");
+    game->player->idle_texture_west  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_idle_west.png");
 
     /* Load walking animations from assets/player/ */
-    game->player->walk_frames_north[0] = render_load_texture(game->renderer, "assets/player/player_walk_north_0.png");
-    game->player->walk_frames_north[1] = render_load_texture(game->renderer, "assets/player/player_walk_north_1.png");
-    game->player->walk_frames_south[0] = render_load_texture(game->renderer, "assets/player/player_walk_south_0.png");
-    game->player->walk_frames_south[1] = render_load_texture(game->renderer, "assets/player/player_walk_south_1.png");
-    game->player->walk_frames_east[0]  = render_load_texture(game->renderer, "assets/player/player_walk_east_0.png");
-    game->player->walk_frames_east[1]  = render_load_texture(game->renderer, "assets/player/player_walk_east_1.png");
-    game->player->walk_frames_west[0]  = render_load_texture(game->renderer, "assets/player/player_walk_west_0.png");
-    game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
+    game->player->walk_frames_north[0] = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_north_0.png");
+    game->player->walk_frames_north[1] = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_north_1.png");
+    game->player->walk_frames_south[0] = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_south_0.png");
+    game->player->walk_frames_south[1] = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_south_1.png");
+    game->player->walk_frames_east[0]  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_east_0.png");
+    game->player->walk_frames_east[1]  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_east_1.png");
+    game->player->walk_frames_west[0]  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_west_0.png");
+    game->player->walk_frames_west[1]  = render_load_texture(game->renderer, game->asset_base_path, "assets/player/player_walk_west_1.png");
 
     /* Initialize animation state */
     game->player->current_direction = DIRECTION_EAST;  /* Start facing east */
@@ -108,8 +130,10 @@ void game_start_new(Game *game)
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
 
-    story_populate_world(game->world, "assets/locations.txt");
-    world_setup_rooms(game->world, game->renderer);
+    char path[1024];
+    build_asset_path(path, sizeof(path), game->asset_base_path, "assets/locations.txt");
+    story_populate_world(game->world, path);
+    world_setup_rooms(game->world, game->renderer, game->asset_base_path);
 
     camera_init(&game->camera, WINDOW_W, WINDOW_H, ROOM_W, ROOM_H);
 

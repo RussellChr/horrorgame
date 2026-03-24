@@ -38,7 +38,7 @@ int  render_text_width(const char *text, int scale);
 
 /* ── Texture helpers ──────────────────────────────────────────────────── */
 
-SDL_Texture *render_load_texture(SDL_Renderer *r, const char *path);
+SDL_Texture *render_load_texture(SDL_Renderer *r, const char *base, const char *path);
 void         render_texture(SDL_Renderer *r, SDL_Texture *texture,
                             int x, int y, int w, int h);
 void         render_texture_destroy(SDL_Texture *texture);

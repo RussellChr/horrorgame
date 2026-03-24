@@ -54,6 +54,7 @@ typedef struct {
     int    current_menu_choice;
     float  mouse_x, mouse_y;
     int    mouse_clicked;
+    SDL_Texture *title_screen_texture;
 
     /* Pause menu */
     Button pause_buttons[2];

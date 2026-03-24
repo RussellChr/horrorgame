@@ -15,6 +15,7 @@ typedef struct {
 void button_update_hover(Button *button, float mouse_x, float mouse_y);
 int  button_is_clicked(Button *button, float mouse_x, float mouse_y);
 void draw_button(SDL_Renderer *renderer, const Button *button);
+void draw_button_menu(SDL_Renderer *r, const Button *b);
 
 /* ── HUD (heads-up display drawn over the game scene) ────────────────── */
 

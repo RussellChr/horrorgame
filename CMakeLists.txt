@@ -58,3 +58,7 @@ add_custom_command(TARGET horrorgame POST_BUILD
         "$<TARGET_FILE_DIR:horrorgame>/assets"
     COMMENT "Copying assets to build directory"
 )
+
+# Install the executable and assets
+install(TARGETS horrorgame DESTINATION .)
+install(DIRECTORY assets DESTINATION .)

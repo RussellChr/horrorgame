@@ -61,6 +61,9 @@ typedef struct {
     Uint8 floor_r, floor_g, floor_b;
     Uint8 ceil_r,  ceil_g,  ceil_b;
 
+    /* Visual background texture */
+    SDL_Texture *background_texture;
+
     /* Visual decorations */
     Decor decor[MAX_DECOR];
     int   decor_count;
@@ -103,7 +106,7 @@ void world_add_exit(Location *loc, const char *direction,
 int world_load_locations(World *world, const char *filepath);
 
 /* Visual room setup – builds decor, colliders and triggers procedurally. */
-void world_setup_rooms(World *world);
+void world_setup_rooms(World *world, SDL_Renderer *renderer);
 
 /* Draw the current room. */
 void world_render_room(const Location *loc, SDL_Renderer *renderer,

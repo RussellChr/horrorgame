@@ -109,7 +109,7 @@ void game_start_new(Game *game)
     game->player->frame_duration    = 0.15f;
 
     story_populate_world(game->world, "assets/locations.txt");
-    world_setup_rooms(game->world);
+    world_setup_rooms(game->world, game->renderer);
 
     camera_init(&game->camera, WINDOW_W, WINDOW_H, ROOM_W, ROOM_H);
 

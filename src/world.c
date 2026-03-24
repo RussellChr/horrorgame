@@ -184,9 +184,9 @@ int world_load_locations(World *world, const char *filepath)
         } \
     } while(0)
 
-void world_setup_rooms(World *world)
+void world_setup_rooms(World *world, SDL_Renderer *renderer)
 {
-    if (!world) return;
+    if (!world || !renderer) return;
 
     for (int i = 0; i < world->location_count; i++) {
         Location *loc = &world->locations[i];
@@ -199,34 +199,15 @@ void world_setup_rooms(World *world)
 
         /* ── 0: Entrance Hall ───────────────────────────────────────── */
             case 0: {
-                int npc_x = STRANGER_NPC_X;
-                int npc_y = 360;
-
-                loc->wall_r  = 40;  loc->wall_g  = 30;  loc->wall_b  = 25;
-                loc->floor_r = 90;  loc->floor_g = 70;  loc->floor_b = 50;
-                loc->ceil_r  = 20;  loc->ceil_g  = 15;  loc->ceil_b  = 10;
                 loc->spawn_x = (float)(ROOM_W / 2);
                 loc->spawn_y = (float)(ROOM_H / 2);
 
-                /* Stranger NPC – body and head */
-                ADD_DECOR(loc, npc_x,     npc_y,      30, 60, 230, 200, 30, "body");
-                ADD_DECOR(loc, npc_x - 7, npc_y - 70, 44, 44, 240, 210, 40, "head");
+                /* Load background texture from PNG */
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/room1.png");
 
-                /* NPC interaction trigger (trigger_id=40) */
-                ADD_TRIGGER(loc, npc_x - 80, npc_y - 100, 160, 180, 40, 0.0f, 0.0f);
-
-                /* Mysterious portrait on the left wall */
-                ADD_DECOR(loc, 330, 180,  90, 120,  80,  50,  20, "frame");  /* outer frame */
-                ADD_DECOR(loc, 342, 192,  66,  90, 120,  90,  60, "canvas"); /* painted face */
-
-                /* Portrait interaction trigger (trigger_id=30) */
-                ADD_TRIGGER(loc, 270, 140, 200, 200, 30, 0.0f, 0.0f);
-
-                /* Wall colliders – plain rectangle */
-                ADD_COLLIDER(loc, 0,           0, 40,     ROOM_H); /* left  */
-                ADD_COLLIDER(loc, ROOM_W - 40, 0, 40,     ROOM_H); /* right */
-                ADD_COLLIDER(loc, 0,           0, ROOM_W, 40);     /* top   */
-                ADD_COLLIDER(loc, 0, ROOM_H - 40, ROOM_W, 40);    /* bottom */
+                /* Add any decorative elements or NPCs as needed */
+                
                 break;
             }
 

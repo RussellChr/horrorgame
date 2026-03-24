@@ -478,31 +478,26 @@ void game_update(Game *game)
         p->is_moving_backwards = 0;
 
         if (game->keys[SDL_SCANCODE_A] || game->keys[SDL_SCANCODE_LEFT]) {
-            p->vx = -PLAYER_SPEED; p->facing_right = 0; p->is_moving = 1;
+            p->vx = -PLAYER_SPEED; p->facing_right = 0;
         }
-        if (game->keys[SDL_SCANCODE_D] || game->keys[SDL_SCANCODE_RIGHT]) {
-            p->vx = +PLAYER_SPEED; p->facing_right = 1; p->is_moving = 1;
+        else if (game->keys[SDL_SCANCODE_D] || game->keys[SDL_SCANCODE_RIGHT]) {
+            p->vx = +PLAYER_SPEED; p->facing_right = 1;
         }
-        if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP])
-            p->vy = -PLAYER_SPEED * 0.3f;
-        if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN])
-            p->vy = +PLAYER_SPEED * 0.3f;
+        else if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP]) {
+            p->vy = -PLAYER_SPEED;  // CHANGED: Remove the * 0.3f
+        }
+        else if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN]) {
+            p->vy = +PLAYER_SPEED;  // CHANGED: Remove the * 0.3f
+        }
 
+        /* Set is_moving if any velocity is applied */
+        p->is_moving = (p->vx != 0.0f || p->vy != 0.0f) ? 1 : 0;
+        
         /* ── Apply movement ── */
         p->x += p->vx * dt;
         p->y += p->vy * dt;
 
-        /* ── Floor clamp (allow full vertical movement) ── */
-        float floor_min = 30.0f;
-        float floor_max = (float)(ROOM_H - 30);
-        if (p->y < floor_min) p->y = floor_min;
-        if (p->y > floor_max) p->y = floor_max;
-
-        /* ── Room bounds ── */
         float half_w = (float)PLAYER_W / 2.0f;
-        if (p->x < half_w + 42.0f) p->x = half_w + 42.0f;
-        if (p->x > (float)(ROOM_W - (int)half_w - 42))
-            p->x = (float)(ROOM_W - (int)half_w - 42);
 
         /* ── Collision with room colliders ── */
         if (loc) {
@@ -618,9 +613,9 @@ void game_render_menu(Game *game)
                            (Uint8)(8 + c*2), 255);
     }
 
-    render_text_centered(r, "PROJECT YOZORA",
+    render_text_centered(r, "Metamorph",
                          WINDOW_W/2, 110, 4, 190, 150, 220);
-    render_text_centered(r, "A Horror Story",
+    render_text_centered(r, "Low Cortisol Game",
                          WINDOW_W/2, 165, 2, 110, 85, 135);
     render_filled_rect(r, WINDOW_W/2 - 150, 196, 300, 2, 70,45,90,180);
 

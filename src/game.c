@@ -621,12 +621,6 @@ void game_render_menu(Game *game)
         // ... existing menu button code ...
     }
 
-    render_text_centered(r, "Metamorph",
-                         WINDOW_W/2, 110, 4, 190, 150, 220);
-    render_text_centered(r, "Low Cortisol Game",
-                         WINDOW_W/2, 165, 2, 110, 85, 135);
-    render_filled_rect(r, WINDOW_W/2 - 150, 196, 300, 2, 70,45,90,180);
-
     for (int i = 0; i < 3; i++) {
         Button btn = game->buttons[i];
         if (i == game->current_menu_choice) btn.is_hovered = 1;
@@ -671,10 +665,6 @@ void game_render_playing(Game *game)
                                         STRANGER_NPC_X + 15);  /* half body width */
         int npc_sy = camera_to_screen_y(&game->camera, FLOOR_Y - 190);
         /* Bright yellow "!" above the NPC head */
-        render_text(game->renderer, "!",
-                    npc_sx - 4,  /* half of "!" glyph width at scale 2 */
-                    npc_sy,
-                    2, 255, 230, 0);
     }
 
     /* Interaction prompt */

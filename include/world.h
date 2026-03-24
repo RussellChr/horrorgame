@@ -78,6 +78,7 @@ typedef struct {
 
     /* Player spawn position when entering this location */
     float spawn_x, spawn_y;
+    float texture_scale;
 } Location;
 
 /* ── World ────────────────────────────────────────────────────────────── */
@@ -111,5 +112,6 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer);
 /* Draw the current room. */
 void world_render_room(const Location *loc, SDL_Renderer *renderer,
                        const Camera *cam);
+
 
 #endif /* WORLD_H */

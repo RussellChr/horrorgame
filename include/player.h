@@ -11,8 +11,8 @@
 #define ITEM_DESC_MAX      256
 
 /* Sprite dimensions in world pixels. */
-#define PLAYER_W  24
-#define PLAYER_SPRITE_H  48
+#define PLAYER_W  48
+#define PLAYER_SPRITE_H  96
 
 /* Movement speed in pixels per second. */
 #define PLAYER_SPEED 220.0f

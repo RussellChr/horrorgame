@@ -199,18 +199,24 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
         /* ── 0: Entrance Hall ───────────────────────────────────────── */
             case 0: {
-                loc->spawn_x = (float)(ROOM_W / 2);
-                loc->spawn_y = (float)(ROOM_H / 2);
+                loc->spawn_x = (float)(ROOM_W / 3);
+                loc->spawn_y = (float)(ROOM_H / 3);
 
-                /* Load background texture from PNG */
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/room1.png");
-
-                /* Add any decorative elements or NPCs as needed */
                 
                 break;
             }
 
+            case 1: {
+                loc->spawn_x = (float)(ROOM_W / 2);
+                loc->spawn_y = (float)(ROOM_H / 2);
+
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/room2.png");
+                
+                break;
+            }
         default:
             break;
         }
@@ -218,10 +224,6 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 }
 
 /* ── Room rendering ────────────────────────────────────────────────────── */
-/*
- * Draws the room in three layers (ceiling, walls, floor) and then all
- * decorative objects, each offset by the camera position.
- */
 void world_render_room(const Location *loc, SDL_Renderer *renderer,
                        const Camera *cam)
 {
@@ -230,41 +232,47 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
     int cx = (int)cam->x;
     int cy = (int)cam->y;
 
-    /* ── Ceiling ── */
-    render_filled_rect(renderer,
-        -cx, 0,
-        ROOM_W, FLOOR_Y - 40,
-        loc->wall_r, loc->wall_g, loc->wall_b, 255);
+    /* Draw background texture if available, otherwise use colored rectangles */
+    if (loc->background_texture) {
+        render_texture(renderer, loc->background_texture,
+                      -cx, -cy, ROOM_W, ROOM_H);
+    } else {
+        /* ── Ceiling ── */
+        render_filled_rect(renderer,
+            -cx, 0,
+            ROOM_W, FLOOR_Y - 40,
+            loc->wall_r, loc->wall_g, loc->wall_b, 255);
 
-    /* ── Ceiling strip ── */
-    render_filled_rect(renderer,
-        -cx, 0,
-        ROOM_W, 40,
-        loc->ceil_r, loc->ceil_g, loc->ceil_b, 255);
+        /* ── Ceiling strip ── */
+        render_filled_rect(renderer,
+            -cx, 0,
+            ROOM_W, 40,
+            loc->ceil_r, loc->ceil_g, loc->ceil_b, 255);
 
-    /* ── Wall bottom strip ── */
-    render_filled_rect(renderer,
-        -cx, FLOOR_Y - 40,
-        ROOM_W, 40,
-        (Uint8)(loc->wall_r/2), (Uint8)(loc->wall_g/2), (Uint8)(loc->wall_b/2),
-        255);
-
-    /* ── Floor ── */
-    render_filled_rect(renderer,
-        -cx, FLOOR_Y,
-        ROOM_W, ROOM_H - FLOOR_Y,
-        loc->floor_r, loc->floor_g, loc->floor_b, 255);
-
-    /* Floor planks / detail lines */
-    for (int fx = 0; fx < ROOM_W; fx += 120) {
-        int lx = fx - cx;
-        SDL_SetRenderDrawColor(renderer,
-            (Uint8)(loc->floor_r > 15 ? loc->floor_r - 15 : 0),
-            (Uint8)(loc->floor_g > 15 ? loc->floor_g - 15 : 0),
-            (Uint8)(loc->floor_b > 15 ? loc->floor_b - 15 : 0),
+        /* ── Wall bottom strip ── */
+        render_filled_rect(renderer,
+            -cx, FLOOR_Y - 40,
+            ROOM_W, 40,
+            (Uint8)(loc->wall_r/2), (Uint8)(loc->wall_g/2), (Uint8)(loc->wall_b/2),
             255);
-        SDL_RenderLine(renderer, (float)lx, (float)FLOOR_Y,
-                       (float)lx, (float)ROOM_H);
+
+        /* ── Floor ── */
+        render_filled_rect(renderer,
+            -cx, FLOOR_Y,
+            ROOM_W, ROOM_H - FLOOR_Y,
+            loc->floor_r, loc->floor_g, loc->floor_b, 255);
+
+        /* Floor planks / detail lines */
+        for (int fx = 0; fx < ROOM_W; fx += 120) {
+            int lx = fx - cx;
+            SDL_SetRenderDrawColor(renderer,
+                (Uint8)(loc->floor_r > 15 ? loc->floor_r - 15 : 0),
+                (Uint8)(loc->floor_g > 15 ? loc->floor_g - 15 : 0),
+                (Uint8)(loc->floor_b > 15 ? loc->floor_b - 15 : 0),
+                255);
+            SDL_RenderLine(renderer, (float)lx, (float)FLOOR_Y,
+                           (float)lx, (float)ROOM_H);
+        }
     }
 
     /* ── Decorations ── */

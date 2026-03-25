@@ -20,6 +20,7 @@ typedef enum {
     GAME_STATE_INVENTORY,
     GAME_STATE_PAUSE,
     GAME_STATE_ENDING,
+    GAME_STATE_SETTINGS,
     GAME_STATE_QUIT
 } GameState;
 
@@ -59,6 +60,14 @@ typedef struct {
     /* Pause menu */
     Button pause_buttons[2];
     int    pause_choice;
+
+    /* Settings menu */
+    float  volume;                     /* 0–100 */
+    float  brightness;                 /* 0–100 */
+    int    settings_focus;             /* 0=volume, 1=brightness */
+    Slider settings_volume_slider;
+    Slider settings_brightness_slider;
+    Button settings_back_button;
 
     /* Inventory */
     int selected_inventory_slot;
@@ -108,5 +117,6 @@ void game_render_dialogue_overlay(Game *game);
 void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_ending(Game *game);
+void game_render_settings(Game *game);
 
 #endif /* GAME_H */

@@ -9,7 +9,7 @@
 # This file documents the intended layout for reference.
 
 ROOM 0 Entrance Hall
-SPAWN 400 360
+SPAWN 100 500
 # Left wall, right wall - only bottom half
 COLLIDER 0 400 40 320
 COLLIDER 760 400 40 320

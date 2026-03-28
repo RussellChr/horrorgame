@@ -1,6 +1,7 @@
 #include "world.h"
 #include "utils.h"
 #include "render.h"
+#include "tilemap.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -215,6 +216,20 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/room2.png");
                 
+                break;
+            }
+
+        /* ── 2: Archive Room ────────────────────────────────────────── */
+            case 2: {
+                loc->spawn_x = (float)(ROOM_W / 3);
+                loc->spawn_y = (float)(ROOM_H / 2);
+
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/room3.png");
+
+                tilemap_load_colliders(
+                    "maps/Archive room tiled.csv", loc, 32);
+
                 break;
             }
         default:

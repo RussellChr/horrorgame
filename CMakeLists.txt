@@ -36,6 +36,7 @@ add_executable(horrorgame
     src/animation.c
     src/camera.c
     src/collision.c
+    src/tilemap.c
 )
 
 target_link_libraries(horrorgame SDL3::SDL3)
@@ -57,6 +58,14 @@ add_custom_command(TARGET horrorgame POST_BUILD
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:horrorgame>/assets"
     COMMENT "Copying assets to build directory"
+)
+
+# Copy maps folder to the build output directory after each build
+add_custom_command(TARGET horrorgame POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/maps"
+        "$<TARGET_FILE_DIR:horrorgame>/maps"
+    COMMENT "Copying maps to build directory"
 )
 
 # Install the executable and assets

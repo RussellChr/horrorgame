@@ -18,3 +18,10 @@ TRIGGER 350 0 100 40 exit 1
 # Exit east
 TRIGGER 760 300 40 100 exit 2
 END
+
+ROOM 2 Archive Room
+SPAWN 853 360
+# Collision is generated at runtime from maps/Archive room tiled.csv
+# Exit west
+TRIGGER 0 300 40 100 exit 0
+END

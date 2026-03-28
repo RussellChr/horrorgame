@@ -1,7 +1,7 @@
 #ifndef COLLISION_H
 #define COLLISION_H
 
-#define MAX_COLLISION_RECTS 32
+#define MAX_COLLISION_RECTS 1024
 #define MAX_TRIGGER_ZONES   16
 
 /* Axis-aligned bounding box. */

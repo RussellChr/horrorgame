@@ -120,10 +120,12 @@ void game_start_new(Game *game)
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
-    camera_init(&game->camera, WINDOW_W, WINDOW_H, ROOM_W, ROOM_H);
-
     Location *start = world_get_location(game->world,
                                          game->player->current_location_id);
+    int start_w = start ? start->room_width  : ROOM_W;
+    int start_h = start ? start->room_height : ROOM_H;
+    camera_init(&game->camera, WINDOW_W, WINDOW_H, start_w, start_h);
+
     if (start) {
         game->player->x = start->spawn_x;
         game->player->y = start->spawn_y;
@@ -161,6 +163,12 @@ void game_change_location(Game *game, int location_id,
     game->player->y = spawn_y;
     game->player->vx = 0.0f;
     game->player->vy = 0.0f;
+
+    Location *next = world_get_location(game->world, location_id);
+    if (next) {
+        game->camera.world_w = next->room_width;
+        game->camera.world_h = next->room_height;
+    }
 
     camera_snap(&game->camera, spawn_x, spawn_y);
 
@@ -282,7 +290,7 @@ static void handle_interaction(Game *game)
                 /* Add a walk-through exit trigger to basement at runtime */
                 if (loc && loc->trigger_count < MAX_TRIGGER_ZONES) {
                     TriggerZone *tz = &loc->triggers[loc->trigger_count++];
-                    tz->bounds.x = (float)(ROOM_W - 80);
+                    tz->bounds.x = (float)(loc->room_width - 80);
                     tz->bounds.y = (float)(FLOOR_Y - 200);
                     tz->bounds.w = 80.0f;
                     tz->bounds.h = 200.0f;

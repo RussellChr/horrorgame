@@ -47,6 +47,6 @@ int map_build_colliders(const Map *map, Location *loc);
  * Returns 1 on success, 0 if no floor tile was found.
  */
 int map_find_spawn(const Map *map, int hint_row, int hint_col,
-                   float *out_x, float *out_y);
+                   float *out_x, float *out_y, int room_w, int room_h);
 
 #endif /* MAP_H */

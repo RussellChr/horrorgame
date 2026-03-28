@@ -93,6 +93,10 @@ typedef struct {
     /* Player spawn position when entering this location */
     float spawn_x, spawn_y;
     float texture_scale;
+
+    /* Dynamic room dimensions (set from background texture at load time) */
+    int room_width;
+    int room_height;
 } Location;
 
 /* ── World ────────────────────────────────────────────────────────────── */

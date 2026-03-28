@@ -24,10 +24,11 @@
 [game_start]
 Alex
 ---
-The rain has not stopped for three days. I stand before the old Ashwood
-estate, my car broken down a mile behind me. The house looms ahead --
-the only shelter for miles. Something is wrong with this place. I can
-feel it.
+A portrait hangs on the wall.
+The painted eyes seem to follow me wherever I move.
+I have heard of optical illusions like this -- clever brushwork that gives depth to a flat image.
+But this feels different.
+This feels deliberate.
 ---
 
 # ── Entrance Hall ─────────────────────────────────────────────────────

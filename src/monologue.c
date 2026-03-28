@@ -149,6 +149,30 @@ const MonologueSection *monologue_find(const MonologueFile *mf,
  * single "..." choice that advances to the next node.  The last node is
  * marked terminal so ENTER closes the dialogue.
  */
+/* Helper: Find the next sentence boundary */
+static int find_sentence_end(const char *text, int start)
+{
+    int i = start;
+    while (text[i]) {
+        if (text[i] == '.' || text[i] == '!' || text[i] == '?') {
+            return i + 1;  /* Include the punctuation */
+        }
+        i++;
+    }
+    return i;  /* End of string */
+}
+
+/* Helper: Extract and trim a sentence */
+static void extract_sentence(const char *text, int start, int end, char *buf, size_t buf_size)
+{
+    size_t len = (size_t)(end - start);
+    if (len >= buf_size) len = buf_size - 1;
+    
+    memcpy(buf, text + start, len);
+    buf[len] = '\0';
+    trim(buf);
+}
+
 DialogueTree *monologue_to_dialogue_tree(const MonologueSection *section)
 {
     if (!section) return NULL;
@@ -158,7 +182,6 @@ DialogueTree *monologue_to_dialogue_tree(const MonologueSection *section)
 
     const char *text    = section->text;
     const char *speaker = section->speaker;
-    const int   chunk   = DIALOGUE_TEXT_MAX - 1; /* max chars per node (reserve 1 for '\0') */
     int         total   = (int)strlen(text);
     int         node_id = 0;
 
@@ -170,22 +193,28 @@ DialogueTree *monologue_to_dialogue_tree(const MonologueSection *section)
 
     int offset = 0;
     while (offset < total) {
-        int remaining = total - offset;
-        int take = (remaining <= chunk) ? remaining : chunk;
+        /* Skip leading whitespace */
+        while (offset < total && isspace((unsigned char)text[offset])) {
+            offset++;
+        }
+        
+        if (offset >= total) break;
 
-        /* When splitting, prefer to break at the last space within the chunk */
-        if (take < remaining) {
-            int j = take;
-            while (j > 0 && text[offset + j] != ' ') j--;
-            if (j > 0) take = j;
+        /* Find the end of this sentence */
+        int sent_end = find_sentence_end(text, offset);
+        if (sent_end == offset) sent_end = offset + 1;  /* Safety: at least one char */
+
+        /* Extract and trim the sentence */
+        char buf[DIALOGUE_TEXT_MAX];
+        extract_sentence(text, offset, sent_end, buf, sizeof(buf));
+
+        /* Skip empty sentences */
+        if (buf[0] == '\0') {
+            offset = sent_end;
+            continue;
         }
 
-        char buf[DIALOGUE_TEXT_MAX];
-        memcpy(buf, text + offset, (size_t)take);
-        buf[take] = '\0';
-        trim(buf);
-
-        int is_last = (offset + take >= total);
+        int is_last = (sent_end >= total);
 
         DialogueNode *node = dialogue_add_node(tree, node_id, speaker,
                                                buf, is_last ? 1 : 0);
@@ -200,9 +229,7 @@ DialogueTree *monologue_to_dialogue_tree(const MonologueSection *section)
             dialogue_add_choice(node, &adv);
         }
 
-        /* Advance past the chunk and skip any leading space */
-        offset += take;
-        while (offset < total && text[offset] == ' ') offset++;
+        offset = sent_end;
         node_id++;
     }
 

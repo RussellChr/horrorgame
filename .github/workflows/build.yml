@@ -98,7 +98,7 @@ jobs:
           chmod +x horrorgame.app/Contents/MacOS/horrorgame
           
           # Copy assets
-          cp -r assets horrorgame.app/Contents/Resources/ || echo "Assets folder not found"
+          cp -r assets horrorgame.app/Contents/MacOS/ || echo "Assets folder not found"
           
           # Create Info.plist
           cat > horrorgame.app/Contents/Info.plist << 'EOF'

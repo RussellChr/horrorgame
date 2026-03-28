@@ -13,7 +13,10 @@
 #include "map.h"
 
 /* ── Tileset layout ───────────────────────────────────────────────────── */
-/* Set this to how many tiles wide your spritesheet PNG is (width / 32).  */
+/* Number of tile columns in the room PNG (room1.png is 6220 px wide,
+   6220 / 32 ≈ 194).  Kept for map_load() signature compatibility; the
+   renderer now samples each tile directly from its grid position and no
+   longer uses this value for source-rect calculation.                   */
 #define MAP_TILESET_COLS 194
 
 /* ── Game states ──────────────────────────────────────────────────────── */

@@ -4,21 +4,16 @@
 #include <stdio.h>
 #include <SDL3_image/SDL_image.h>
 
-/* ── Internal: tile index → source rect on spritesheet ─────────────────── */
-static SDL_FRect tile_src(const Map *map, int tile_id)
+/* ── Internal: source rect in the room image for tile at (col, row) ────── */
+static SDL_FRect tile_src(int col, int row)
 {
-    /* Map CSV values to spritesheet indices:
-       -1 (floor) → spritesheet index 0
-        0 (wall)  → spritesheet index 1
-       Extend this mapping if you add more tile types. */
-    int sheet_idx;
-    if      (tile_id == -1) sheet_idx = 0;   /* floor */
-    else if (tile_id ==  0) sheet_idx = 1;   /* wall  */
-    else                    sheet_idx = 0;   /* fallback */
-
+    /* The room PNG is a full room image where each 32×32 cell at position
+       (col, row) contains the correct visual for that map tile.  Sample
+       directly from the matching grid position so the rendered image aligns
+       with the CSV collision data. */
     SDL_FRect src;
-    src.x = (float)((sheet_idx % map->tileset_cols) * TILE_SIZE);
-    src.y = (float)((sheet_idx / map->tileset_cols) * TILE_SIZE);
+    src.x = (float)(col * TILE_SIZE);
+    src.y = (float)(row * TILE_SIZE);
     src.w = (float)TILE_SIZE;
     src.h = (float)TILE_SIZE;
     return src;
@@ -95,7 +90,7 @@ void map_render(const Map *map, SDL_Renderer *renderer,
 
     for (int r = first_row; r < last_row; r++) {
         for (int c = first_col; c < last_col; c++) {
-            SDL_FRect src = tile_src(map, map->tiles[r][c]);
+            SDL_FRect src = tile_src(c, r);
 
             SDL_FRect dst = {
                 .x = (float)(c * TILE_SIZE) - cam_x,

@@ -597,9 +597,9 @@ void game_update(Game *game) {
             float box_offset_y = 4.0f;
 
             float left   = p->x - box_w * 0.5f;
-            float right  = left + box_w;  // Remove the -1.0f
-            float top    = p->y - (float)PLAYER_SPRITE_H + box_offset_y;  // Reference from top of sprite
-            float bottom = p->y + box_offset_y;  // Bottom relative to center/feet
+            float right  = left + box_w - 1.0f;
+            float top    = p->y - box_h + box_offset_y;
+            float bottom = p->y - 1.0f  + box_offset_y;
 
             /* Horizontal */
             if (p->vx < 0.0f) {

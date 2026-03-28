@@ -255,6 +255,9 @@ static void handle_interaction(Game *game)
         key.id     = 10;
         key.usable = 1;
         player_add_item(game->player, &key);
+        strncpy(game->pickup_item_name, key.name, sizeof(game->pickup_item_name) - 1);
+        game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+        game->pickup_notify_timer = 2.5f;
         game->player->flags |= FLAG_KEY_OBTAINED;
         set_dialogue_tree(game, "key", 4);
     }
@@ -269,6 +272,9 @@ static void handle_interaction(Game *game)
             diary.id     = 1;
             diary.usable = 0;
             player_add_item(game->player, &diary);
+            strncpy(game->pickup_item_name, diary.name, sizeof(game->pickup_item_name) - 1);
+            game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+            game->pickup_notify_timer = 2.5f;
             story_trigger_event(game->story, game->player,
                                 game->world, "find_diary");
         }
@@ -457,14 +463,27 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_I)
                 game->state = GAME_STATE_PLAYING;
-            if (event->key.key == SDLK_UP &&
-                game->selected_inventory_slot > 0)
-                game->selected_inventory_slot--;
-            if (event->key.key == SDLK_DOWN &&
-                game->player &&
-                game->selected_inventory_slot <
-                    game->player->inventory_count - 1)
-                game->selected_inventory_slot++;
+
+            /* Grid navigation: 4 columns */
+#define INV_NAV_COLS 4
+            int *slot = &game->selected_inventory_slot;
+            int  cap  = INVENTORY_CAPACITY;
+            if (event->key.key == SDLK_LEFT) {
+                if (*slot % INV_NAV_COLS > 0) (*slot)--;
+            }
+            if (event->key.key == SDLK_RIGHT) {
+                if (*slot % INV_NAV_COLS < INV_NAV_COLS - 1 &&
+                    *slot + 1 < cap)
+                    (*slot)++;
+            }
+            if (event->key.key == SDLK_UP) {
+                if (*slot >= INV_NAV_COLS) *slot -= INV_NAV_COLS;
+            }
+            if (event->key.key == SDLK_DOWN) {
+                if (*slot + INV_NAV_COLS < cap)
+                    *slot += INV_NAV_COLS;
+            }
+#undef INV_NAV_COLS
         }
         break;
 
@@ -681,6 +700,13 @@ void game_update(Game *game)
     } else if (game->state == GAME_STATE_ENDING) {
         game->ending_timer += dt;
     }
+
+    /* Tick the pickup notification regardless of game state */
+    if (game->pickup_notify_timer > 0.0f) {
+        game->pickup_notify_timer -= dt;
+        if (game->pickup_notify_timer < 0.0f)
+            game->pickup_notify_timer = 0.0f;
+    }
 }
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
@@ -806,6 +832,40 @@ void game_render_playing(Game *game)
 
     render_text(game->renderer, "I:inv  ESC:pause",
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
+
+    /* ── Item pickup notification ── */
+    if (game->pickup_notify_timer > 0.0f) {
+        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
+        float t = game->pickup_notify_timer; /* remaining time */
+        float alpha_f;
+        if (t > 2.2f)        alpha_f = (2.5f - t) / 0.3f;   /* fade in  */
+        else if (t > 0.7f)   alpha_f = 1.0f;                 /* full     */
+        else                 alpha_f = t / 0.7f;             /* fade out */
+        if (alpha_f > 1.0f) alpha_f = 1.0f;
+        Uint8 a = (Uint8)(alpha_f * 255.0f);
+
+        /* Build label */
+        char notify_buf[80];
+        snprintf(notify_buf, sizeof(notify_buf),
+                 "Obtained: %s", game->pickup_item_name);
+
+        /* Measure text width (8px per char × scale 2) */
+        int text_w = (int)(strlen(notify_buf) * 8 * 2);
+        int text_h = 16;  /* 8px × scale 2 */
+        int bx = (WINDOW_W - text_w) / 2 - 14;
+        int by = 48;
+        int bw = text_w + 28;
+        int bh = text_h + 18;
+
+        render_filled_rect(game->renderer, bx, by, bw, bh, 10, 3, 3,
+                           (Uint8)(a * 0.82f));
+        render_rect_outline(game->renderer, bx, by, bw, bh, 160, 60, 60, a);
+        render_text(game->renderer, notify_buf,
+                    bx + 14, by + 9, 2,
+                    (Uint8)(220 * alpha_f),
+                    (Uint8)(140 * alpha_f),
+                    (Uint8)(140 * alpha_f));
+    }
 }
 
 /* ── Dialogue overlay ────────────────────────────────────────────────────── */
@@ -833,9 +893,9 @@ void game_render_inventory(Game *game)
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 170);
 
-    int px = 180, py = 70, pw = WINDOW_W - 360, ph = WINDOW_H - 140;
+    int px = 140, py = 60, pw = WINDOW_W - 280, ph = WINDOW_H - 120;
 
-    /* Inventory panel background: PNG if available, otherwise solid rect */
+    /* Panel background */
     if (game->inventory_bg_texture) {
         render_texture(r, game->inventory_bg_texture, px, py, pw, ph);
     } else {
@@ -844,57 +904,161 @@ void game_render_inventory(Game *game)
         render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 180);
     }
 
-    render_text_centered(r, "INVENTORY", WINDOW_W/2, py + 18, 2, 200, 110, 110);
-    render_filled_rect(r, px+18, py+46, pw-36, 2, 70, 18, 18, 190);
+    render_text_centered(r, "INVENTORY", WINDOW_W/2, py + 14, 2, 200, 110, 110);
+    render_filled_rect(r, px+18, py+42, pw-36, 2, 70, 18, 18, 190);
+
+    /* ── Grid layout constants ── */
+#define INV_COLS       4
+#define INV_CELL_SIZE  84   /* square cell size in px          */
+#define INV_CELL_GAP   10   /* gap between cells               */
+#define INV_ICON_PAD    8   /* padding inside cell to icon box */
+
+    /* Centre the 4-column grid in the left ~55% of the panel */
+    int grid_total_w = INV_COLS * INV_CELL_SIZE + (INV_COLS - 1) * INV_CELL_GAP;
+    int grid_x = px + 24;
+    int grid_y = py + 54;
+
+    /* Detail pane sits to the right of the grid */
+    int detail_x = grid_x + grid_total_w + 24;
+    int detail_w = (px + pw - 18) - detail_x;  /* reaches the right border */
 
     Player *p = game->player;
-    if (p->inventory_count == 0) {
-        render_text_centered(r, "(empty)", WINDOW_W/2, py + 80, 2, 88, 28, 28);
-    } else {
-        int iy = py + 60;
-        for (int i = 0; i < p->inventory_count; i++) {
-            int sy2   = iy + i * 62;
-            int is_sel = (i == game->selected_inventory_slot);
 
-            /* Item slot: PNG if available, otherwise solid rect */
-            if (game->inventory_slot_texture) {
-                render_texture(r, game->inventory_slot_texture,
-                               px+18, sy2, pw-36, 54);
-            } else {
-                render_filled_rect(r, px+18, sy2, pw-36, 54,
-                                   is_sel ? 55 : 32,
-                                   is_sel ?  12 :  8,
-                                   is_sel ?  12 :  8, 210);
-                render_rect_outline(r, px+18, sy2, pw-36, 54,
-                                    is_sel ? 140 :  65,
-                                    is_sel ?  30 :  15,
-                                    is_sel ?  30 :  15, 200);
+    /* Draw all grid cells (filled slots and empty slots) */
+    for (int i = 0; i < INVENTORY_CAPACITY; i++) {
+        int col = i % INV_COLS;
+        int row = i / INV_COLS;
+        int cx = grid_x + col * (INV_CELL_SIZE + INV_CELL_GAP);
+        int cy = grid_y + row * (INV_CELL_SIZE + INV_CELL_GAP);
+        int is_sel  = (i == game->selected_inventory_slot);
+        int has_item = (i < p->inventory_count);
+
+        /* Cell background */
+        if (game->inventory_slot_texture) {
+            render_texture(r, game->inventory_slot_texture,
+                           cx, cy, INV_CELL_SIZE, INV_CELL_SIZE);
+        } else {
+            render_filled_rect(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                               has_item ? (is_sel ? 55 : 30) : 15,
+                               has_item ? (is_sel ? 12 :  8) :  4,
+                               has_item ? (is_sel ? 12 :  8) :  4, 210);
+            render_rect_outline(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                                is_sel ? 180 : 60,
+                                is_sel ?  40 : 15,
+                                is_sel ?  40 : 15, 200);
+        }
+
+        /* Selection highlight */
+        if (is_sel) {
+            render_filled_rect(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                               255, 160, 160, 45);
+            render_rect_outline(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                                230, 100, 100, 200);
+        }
+
+        if (has_item) {
+            /* Icon box inside the cell */
+            int icon_size = INV_CELL_SIZE - INV_ICON_PAD * 2 - 20;
+            int ix = cx + INV_ICON_PAD;
+            int icon_y = cy + INV_ICON_PAD;
+            render_filled_rect(r, ix, icon_y, icon_size, icon_size,
+                               120, 25, 25, 220);
+            render_rect_outline(r, ix, icon_y, icon_size, icon_size,
+                                155, 35, 35, 200);
+
+            /* Item name (1-2 words, clipped) below icon */
+            char short_name[18];
+            strncpy(short_name, p->inventory[i].name, sizeof(short_name) - 1);
+            short_name[sizeof(short_name) - 1] = '\0';
+            /* Truncate with ".." if too wide (max ~9 chars at scale 1) */
+            if (strlen(short_name) > 9) {
+                short_name[7] = '.';
+                short_name[8] = '.';
+                short_name[9] = '\0';
             }
-
-            /* Selection highlight overlay when slot texture is in use */
-            if (game->inventory_slot_texture && is_sel) {
-                render_filled_rect(r, px+18, sy2, pw-36, 54,
-                                   255, 160, 160, 40);
-                render_rect_outline(r, px+18, sy2, pw-36, 54,
-                                    220, 100, 100, 160);
-            }
-
-            render_filled_rect(r, px+28, sy2+9, 36, 36, 120,25,25,220);
-            render_rect_outline(r, px+28, sy2+9, 36, 36, 155,35,35,200);
-
-            render_text(r, p->inventory[i].name,
-                        px+72, sy2+10, 2,
-                        is_sel?255:195, is_sel?175:115, is_sel?175:115);
-
-            render_text_wrapped(r, p->inventory[i].description,
-                                px+72, sy2+32, pw-110, 1, 14,
-                                is_sel?195:135, is_sel?115:55, is_sel?115:55);
+            render_text(r, short_name,
+                        cx + 4, cy + INV_CELL_SIZE - 14, 1,
+                        is_sel ? 255 : 160,
+                        is_sel ? 180 : 90,
+                        is_sel ? 180 : 90);
         }
     }
 
-    render_text_centered(r, "[I] or [ESC] to close",
-                         WINDOW_W/2, py+ph-16, 1, 78,22,22);
+    /* ── Detail pane for selected item ── */
+    int sel = game->selected_inventory_slot;
+    if (sel >= 0 && sel < p->inventory_count) {
+        const Item *it = &p->inventory[sel];
+
+        /* Detail box background */
+        render_filled_rect(r, detail_x, grid_y, detail_w,
+                           4 * (INV_CELL_SIZE + INV_CELL_GAP) - INV_CELL_GAP,
+                           20, 6, 6, 200);
+        render_rect_outline(r, detail_x, grid_y, detail_w,
+                            4 * (INV_CELL_SIZE + INV_CELL_GAP) - INV_CELL_GAP,
+                            90, 22, 22, 200);
+
+        /* Large icon placeholder */
+        int big_icon = 64;
+        int bix = detail_x + (detail_w - big_icon) / 2;
+        render_filled_rect(r, bix, grid_y + 14, big_icon, big_icon,
+                           130, 28, 28, 240);
+        render_rect_outline(r, bix, grid_y + 14, big_icon, big_icon,
+                            170, 40, 40, 220);
+
+        /* Item name */
+        render_text_centered(r, it->name,
+                             detail_x + detail_w / 2,
+                             grid_y + 14 + big_icon + 12, 2,
+                             230, 160, 160);
+
+        /* Divider */
+        render_filled_rect(r, detail_x + 8,
+                           grid_y + 14 + big_icon + 32,
+                           detail_w - 16, 1, 80, 20, 20, 180);
+
+        /* Description (wrapped) */
+        render_text_wrapped(r, it->description,
+                            detail_x + 10,
+                            grid_y + 14 + big_icon + 40,
+                            detail_w - 20, 1, 14,
+                            180, 100, 100);
+
+        /* "Usable" hint */
+        if (it->usable)
+            render_text_centered(r, "[U] Use item",
+                                 detail_x + detail_w / 2,
+                                 grid_y + 4 * (INV_CELL_SIZE + INV_CELL_GAP) - 30,
+                                 1, 130, 200, 130);
+    } else {
+        /* Empty selection — show placeholder */
+        render_filled_rect(r, detail_x, grid_y, detail_w,
+                           4 * (INV_CELL_SIZE + INV_CELL_GAP) - INV_CELL_GAP,
+                           15, 5, 5, 160);
+        render_rect_outline(r, detail_x, grid_y, detail_w,
+                            4 * (INV_CELL_SIZE + INV_CELL_GAP) - INV_CELL_GAP,
+                            60, 15, 15, 160);
+        render_text_centered(r, "No item selected",
+                             detail_x + detail_w / 2,
+                             grid_y + (4 * (INV_CELL_SIZE + INV_CELL_GAP)) / 2,
+                             1, 70, 20, 20);
+    }
+
+    /* Item count label */
+    {
+        char count_buf[32];
+        snprintf(count_buf, sizeof(count_buf),
+                 "Items: %d / %d", p->inventory_count, INVENTORY_CAPACITY);
+        render_text(r, count_buf, px + 24, py + ph - 22, 1, 100, 30, 30);
+    }
+
+    render_text_centered(r, "[Arrow keys] navigate   [I] or [ESC] close",
+                         WINDOW_W/2, py + ph - 22, 1, 78, 22, 22);
 }
+
+#undef INV_COLS
+#undef INV_CELL_SIZE
+#undef INV_CELL_GAP
+#undef INV_ICON_PAD
 
 /* ── Pause ───────────────────────────────────────────────────────────────── */
 

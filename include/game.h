@@ -78,6 +78,10 @@ typedef struct {
     SDL_Texture *inventory_bg_texture;
     SDL_Texture *inventory_slot_texture;
 
+    /* Item pickup notification */
+    char  pickup_item_name[64];  /* name of the last picked-up item */
+    float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
+
     /* Ending */
     int   ending_type;               /* Ending enum value            */
     float ending_timer;              /* seconds since ending started */

@@ -80,6 +80,10 @@ typedef struct {
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
+    /* Flashlight */
+    SDL_Texture *flashlight_floor_texture; /* sprite shown on the floor  */
+    int          flashlight_on;            /* 1 when cone is active       */
+
     /* Ending */
     int   ending_type;               /* Ending enum value            */
     float ending_timer;              /* seconds since ending started */

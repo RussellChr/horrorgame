@@ -237,6 +237,13 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
+                /* Flashlight item — placed near centre of the room floor.
+                 * trigger_id 50, no room transition (target_location_id = -1). */
+                ADD_TRIGGER(loc,
+                    980, FLOOR_Y - 10, 40, 30,   /* x, y, w, h */
+                    50,                          /* trigger_id  */
+                    0.0f, 0.0f);                 /* spawn coords unused */
+
                 break;
             }
 

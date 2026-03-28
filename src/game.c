@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -82,6 +83,7 @@ void game_cleanup(Game *game)
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
+    render_texture_destroy(game->flashlight_floor_texture);
     free(game);
 }
 
@@ -138,6 +140,9 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->ending_type             = 0;
     game->ending_timer            = 0.0f;
+    game->flashlight_on           = 0;
+    game->flashlight_floor_texture = render_load_texture(
+        game->renderer, "assets/flashlight.png");
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -337,6 +342,26 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* Flashlight pickup (Entrance Hall, trigger 50) */
+    else if (tid == 50 && loc_id == 0 &&
+             !(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+        Item flashlight;
+        strncpy(flashlight.name,        "Flashlight",             ITEM_NAME_MAX - 1);
+        strncpy(flashlight.description, "A sturdy flashlight. "
+                                        "Press F to toggle the beam on or off.",
+                                        ITEM_DESC_MAX - 1);
+        flashlight.name[ITEM_NAME_MAX - 1]        = '\0';
+        flashlight.description[ITEM_DESC_MAX - 1] = '\0';
+        flashlight.id     = 20;
+        flashlight.usable = 1;
+        player_add_item(game->player, &flashlight);
+        strncpy(game->pickup_item_name, flashlight.name,
+                sizeof(game->pickup_item_name) - 1);
+        game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+        game->pickup_notify_timer = 2.5f;
+        game->player->flags |= FLAG_FLASHLIGHT_OBTAINED;
+        return;   /* no dialogue — item is silently picked up */
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
@@ -409,6 +434,11 @@ void game_handle_event(Game *game, SDL_Event *event)
             case SDLK_E:
                 if (game->near_interactive)
                     handle_interaction(game);
+                break;
+            case SDLK_F:
+                /* Toggle flashlight beam when the item is in inventory */
+                if (player_has_item(game->player, 20))
+                    game->flashlight_on = !game->flashlight_on;
                 break;
             default: break;
             }
@@ -483,6 +513,17 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->key.key == SDLK_DOWN) {
                 if (*slot + INV_NAV_COLS < cap)
                     *slot += INV_NAV_COLS;
+            }
+            /* Use selected item (U key) */
+            if (event->key.key == SDLK_U) {
+                int sel = game->selected_inventory_slot;
+                if (sel >= 0 && sel < game->player->inventory_count) {
+                    const Item *it = &game->player->inventory[sel];
+                    if (it->usable && it->id == 20) { /* flashlight */
+                        game->flashlight_on = !game->flashlight_on;
+                        game->state = GAME_STATE_PLAYING;
+                    }
+                }
             }
 #undef INV_NAV_COLS
         }
@@ -666,10 +707,24 @@ void game_update(Game *game)
                         tz->bounds.w + 80.0f, tz->bounds.h + 40.0f
                     };
                     if (rect_overlaps(&pr, &near_zone)) {
+                        /* Suppress the flashlight prompt after it has been collected */
+                        if (tz->trigger_id == 50 &&
+                            p->current_location_id == 0 &&
+                            (p->flags & FLAG_FLASHLIGHT_OBTAINED))
+                            continue;
+
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        strncpy(game->interact_label, "Press E to talk",
-                                sizeof(game->interact_label) - 1);
+                        /* Context-sensitive prompt label */
+                        if (tz->trigger_id == 50 &&
+                            p->current_location_id == 0 &&
+                            !(p->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+                            strncpy(game->interact_label, "Press E to pick up",
+                                    sizeof(game->interact_label) - 1);
+                        } else {
+                            strncpy(game->interact_label, "Press E to talk",
+                                    sizeof(game->interact_label) - 1);
+                        }
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';
                         break;
                     }
@@ -790,12 +845,104 @@ void game_render_playing(Game *game)
                                        game->player->current_location_id);
     if (loc) world_render_room(loc, game->renderer, &game->camera);
 
+/* ── Flashlight floor sprite (Entrance Hall, before pickup) ── */
+#define FLASHLIGHT_W 48
+#define FLASHLIGHT_H 20
+#define FLASHLIGHT_WX 1000   /* world-space X centre of the item */
+#define FLASHLIGHT_WY (FLOOR_Y + 8) /* sits just below the floor line */
+    if (game->player->current_location_id == 0 &&
+        !(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+        int fx = camera_to_screen_x(&game->camera, FLASHLIGHT_WX) - FLASHLIGHT_W / 2;
+        int fy = camera_to_screen_y(&game->camera, FLASHLIGHT_WY) - FLASHLIGHT_H / 2;
+        if (game->flashlight_floor_texture) {
+            render_texture(game->renderer, game->flashlight_floor_texture,
+                           fx, fy, FLASHLIGHT_W, FLASHLIGHT_H);
+        } else {
+            /* Fallback: coloured rectangle */
+            render_filled_rect(game->renderer, fx, fy,
+                               FLASHLIGHT_W, FLASHLIGHT_H,
+                               220, 180, 30, 210);
+            render_rect_outline(game->renderer, fx, fy,
+                                FLASHLIGHT_W, FLASHLIGHT_H,
+                                255, 220, 80, 230);
+        }
+    }
+#undef FLASHLIGHT_WX
+#undef FLASHLIGHT_WY
+#undef FLASHLIGHT_W
+#undef FLASHLIGHT_H
+
     /* Player */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
              - PLAYER_W / 2;
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+/* ── Flashlight light-cone (rendered after player so it overlays the scene) ── */
+    if (game->flashlight_on && player_has_item(game->player, 20)) {
+        /* Apex of the cone: centre of the player sprite */
+        float apex_x = (float)(sx + PLAYER_W / 2);
+        float apex_y = (float)(sy + PLAYER_SPRITE_H / 2);
+
+        /* Base direction angle (radians) from current facing */
+        float angle;
+        switch (game->player->current_direction) {
+        case DIRECTION_EAST:  angle = 0.0f;                     break;
+        case DIRECTION_WEST:  angle = (float)M_PI;              break;
+        case DIRECTION_NORTH: angle = -(float)(M_PI / 2.0);     break;
+        default:              angle = (float)(M_PI / 2.0);      break; /* SOUTH */
+        }
+
+        /* Draw a fan of triangles that fade outward to simulate a soft beam.
+         * Layers: innermost brightest, outermost fully transparent. */
+        static const struct {
+            float half_angle;  /* radians */
+            float length;
+            float alpha;       /* 0-1 */
+        } cone_layers[] = {
+            { 0.20f, 380.0f, 0.45f },  /* tight bright core   */
+            { 0.32f, 340.0f, 0.30f },  /* mid-cone            */
+            { 0.45f, 280.0f, 0.18f },  /* wide soft penumbra  */
+        };
+
+        for (int li = 0; li < 3; li++) {
+            float ha  = cone_layers[li].half_angle;
+            float len = cone_layers[li].length;
+            float a   = cone_layers[li].alpha;
+
+            SDL_Vertex verts[3];
+            /* Apex */
+            verts[0].position.x  = apex_x;
+            verts[0].position.y  = apex_y;
+            verts[0].color.r     = 1.0f;
+            verts[0].color.g     = 0.92f;
+            verts[0].color.b     = 0.55f;
+            verts[0].color.a     = a;
+            verts[0].tex_coord.x = 0.0f;
+            verts[0].tex_coord.y = 0.0f;
+            /* Far-left edge — transparent */
+            verts[1].position.x  = apex_x + cosf(angle - ha) * len;
+            verts[1].position.y  = apex_y + sinf(angle - ha) * len;
+            verts[1].color.r     = 1.0f;
+            verts[1].color.g     = 0.92f;
+            verts[1].color.b     = 0.55f;
+            verts[1].color.a     = 0.0f;
+            verts[1].tex_coord.x = 0.0f;
+            verts[1].tex_coord.y = 0.0f;
+            /* Far-right edge — transparent */
+            verts[2].position.x  = apex_x + cosf(angle + ha) * len;
+            verts[2].position.y  = apex_y + sinf(angle + ha) * len;
+            verts[2].color.r     = 1.0f;
+            verts[2].color.g     = 0.92f;
+            verts[2].color.b     = 0.55f;
+            verts[2].color.a     = 0.0f;
+            verts[2].tex_coord.x = 0.0f;
+            verts[2].tex_coord.y = 0.0f;
+
+            SDL_RenderGeometry(game->renderer, NULL, verts, 3, NULL, 0);
+        }
+    }
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.
@@ -831,8 +978,8 @@ void game_render_playing(Game *game)
                         WINDOW_W - 100, 12, 1, 110, 30, 30);
     }
 
-    render_text(game->renderer, "I:inv  ESC:pause",
-                WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
+    render_text(game->renderer, "I:inv  F:light  ESC:pause",
+                WINDOW_W - 208, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
     if (game->pickup_notify_timer > 0.0f) {

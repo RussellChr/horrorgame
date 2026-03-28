@@ -29,6 +29,7 @@ add_executable(horrorgame
     src/ui.c
     src/player.c
     src/world.c
+    src/map.c
     src/dialogue.c
     src/monologue.c
     src/story.c
@@ -60,6 +61,15 @@ add_custom_command(TARGET horrorgame POST_BUILD
     COMMENT "Copying assets to build directory"
 )
 
+# Copy maps folder to the build output directory after each build
+add_custom_command(TARGET horrorgame POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/maps"
+        "$<TARGET_FILE_DIR:horrorgame>/maps"
+    COMMENT "Copying maps to build directory"
+)
+
 # Install the executable and assets
 install(TARGETS horrorgame DESTINATION .)
 install(DIRECTORY assets DESTINATION .)
+install(DIRECTORY maps DESTINATION .)

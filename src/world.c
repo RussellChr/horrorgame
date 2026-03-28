@@ -1,4 +1,5 @@
 #include "world.h"
+#include "map.h"
 #include "utils.h"
 #include "render.h"
 
@@ -199,12 +200,28 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
         /* ── 0: Entrance Hall ───────────────────────────────────────── */
             case 0: {
-                loc->spawn_x = (float)(ROOM_W / 3);
-                loc->spawn_y = (float)(ROOM_H / 3);
-
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/room1.png");
-                
+
+                /* Load tile map and build collision from the CSV. */
+                Map *m = map_load_csv("maps/Archive room logic.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    /* Place the player in a central floor tile. */
+                    float sx = (float)(ROOM_W / 2);
+                    float sy = (float)(ROOM_H / 2);
+                    map_find_spawn(m, m->rows / 2, m->cols / 2, &sx, &sy);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    /* Fallback spawn if CSV is missing. */
+                    loc->spawn_x = (float)(ROOM_W / 2);
+                    loc->spawn_y = (float)(ROOM_H / 2);
+                }
+
                 break;
             }
 

@@ -22,10 +22,12 @@
 # ── Opening monologue ──────────────────────────────────────────────────
 
 [game_start]
-Richard
+???
 ---
-I love femboys.
-Felix or Astolfo?
+Ugh my head, Where am I?
+Who am I, What's happening?
+What are these that is already opened?
+Perhaps someone knows what's happening.
 ---
 
 # ── Entrance Hall ─────────────────────────────────────────────────────

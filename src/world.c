@@ -221,6 +221,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/logic archive tutup_logic.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_door_triggers(m, loc);
 
                     /* Place the player in a central floor tile. */
                     float sx = (float)(loc->room_width / 2);

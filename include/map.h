@@ -6,6 +6,7 @@
 /* ── Tile values used in the CSV ─────────────────────────────────────── */
 #define MAP_TILE_WALL   0    /* impassable */
 #define MAP_TILE_FLOOR (-1)  /* walkable   */
+#define MAP_TILE_DOOR   1    /* door to the next room (location id + 1) */
 
 /* ── Map ─────────────────────────────────────────────────────────────── */
 
@@ -38,6 +39,19 @@ void map_free(Map *map);
  * Returns the number of colliders added, or -1 if loc is NULL.
  */
 int map_build_colliders(const Map *map, Location *loc);
+
+/*
+ * Build trigger zones for every door tile run in 'map' and add them to
+ * 'loc->triggers'.  Each door tile (MAP_TILE_DOOR) creates a TriggerZone
+ * that transitions the player to location id loc->id + 1.
+ *
+ * Adjacent door tiles on the same row are merged into a single zone.
+ * The spawn position for the destination room is left as -1 / -1 so that
+ * game_change_location() will fall back to the target room's default spawn.
+ *
+ * Returns the number of trigger zones added, or -1 if loc is NULL.
+ */
+int map_build_door_triggers(const Map *map, Location *loc);
 
 /*
  * Find the world-space position of the first floor tile at or near

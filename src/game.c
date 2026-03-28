@@ -154,6 +154,22 @@ void game_change_location(Game *game, int location_id,
 {
     if (!game || !game->world) return;
 
+    Location *next = world_get_location(game->world, location_id);
+
+    /* A negative spawn coord is a sentinel meaning "use this room's default
+       spawn position" (set by world_setup_rooms / map_find_spawn).
+       If the target room does not exist, abort the transition. */
+    if (spawn_x < 0.0f || spawn_y < 0.0f) {
+        if (!next) {
+            fprintf(stderr,
+                    "game: cannot change to location %d – not found\n",
+                    location_id);
+            return;
+        }
+        spawn_x = next->spawn_x;
+        spawn_y = next->spawn_y;
+    }
+
     Location *prev = world_get_location(game->world,
                                         game->player->current_location_id);
     if (prev) prev->visited = 1;
@@ -164,7 +180,6 @@ void game_change_location(Game *game, int location_id,
     game->player->vx = 0.0f;
     game->player->vy = 0.0f;
 
-    Location *next = world_get_location(game->world, location_id);
     if (next) {
         game->camera.world_w = next->room_width;
         game->camera.world_h = next->room_height;

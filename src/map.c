@@ -117,7 +117,54 @@ int map_build_colliders(const Map *map, Location *loc)
     return added;
 }
 
-/* ── Spawn search ─────────────────────────────────────────────────────── */
+/* ── Door trigger building ─────────────────────────────────────────────── */
+
+int map_build_door_triggers(const Map *map, Location *loc)
+{
+    if (!loc) return -1;
+    if (!map || !map->cells) return 0;
+
+    int added = 0;
+    float tile_w = (float)loc->room_width  / (float)map->cols;
+    float tile_h = (float)loc->room_height / (float)map->rows;
+    int next_id  = loc->id + 1;
+
+    for (int r = 0; r < map->rows; r++) {
+        int c = 0;
+        while (c < map->cols) {
+            if (map->cells[r * map->cols + c] == MAP_TILE_DOOR) {
+                /* Start of a door run – extend right as far as possible. */
+                int run_start = c;
+                while (c < map->cols &&
+                       map->cells[r * map->cols + c] == MAP_TILE_DOOR)
+                    c++;
+                /* [run_start, c) are all door tiles on row r. */
+                if (loc->trigger_count < MAX_TRIGGER_ZONES) {
+                    TriggerZone *tz = &loc->triggers[loc->trigger_count++];
+                    tz->bounds.x = (float)run_start * tile_w;
+                    tz->bounds.y = (float)r          * tile_h;
+                    tz->bounds.w = (float)(c - run_start) * tile_w;
+                    tz->bounds.h = tile_h;
+                    tz->target_location_id = next_id;
+                    tz->trigger_id         = -1;
+                    /* Use -1 as sentinel: game_change_location() will fall
+                       back to the target room's default spawn position. */
+                    tz->spawn_x = -1.0f;
+                    tz->spawn_y = -1.0f;
+                    added++;
+                } else {
+                    fprintf(stderr,
+                            "map: MAX_TRIGGER_ZONES reached, door tile at "
+                            "row %d col %d ignored\n", r, run_start);
+                }
+            } else {
+                c++;
+            }
+        }
+    }
+
+    return added;
+}
 
 int map_find_spawn(const Map *map, int hint_row, int hint_col,
                    float *out_x, float *out_y, int room_w, int room_h)

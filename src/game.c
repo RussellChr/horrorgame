@@ -67,11 +67,6 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load inner monologue file */
     monologue_load(&g->monologue_file, "assets/dialogue/monologues.txt");
 
-    /* Load inventory UI textures */
-    g->inventory_bg_texture   = render_load_texture(renderer,
-                                                    "assets/inventory_bg.png");
-    g->inventory_slot_texture = render_load_texture(renderer,
-                                                    "assets/inventory_slot.png");
     /* Load Title Screen*/
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
@@ -86,8 +81,6 @@ void game_cleanup(Game *game)
     if (game->story)         story_destroy(game->story);
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
-    render_texture_destroy(game->inventory_bg_texture);
-    render_texture_destroy(game->inventory_slot_texture);
     render_texture_destroy(game->title_screen_texture);
     free(game);
 }
@@ -896,13 +889,9 @@ void game_render_inventory(Game *game)
     int px = 140, py = 60, pw = WINDOW_W - 280, ph = WINDOW_H - 120;
 
     /* Panel background */
-    if (game->inventory_bg_texture) {
-        render_texture(r, game->inventory_bg_texture, px, py, pw, ph);
-    } else {
-        render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 235);
-        render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
-        render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 180);
-    }
+    render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 235);
+    render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
+    render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 180);
 
     render_text_centered(r, "INVENTORY", WINDOW_W/2, py + 14, 2, 200, 110, 110);
     render_filled_rect(r, px+18, py+42, pw-36, 2, 70, 18, 18, 190);
@@ -916,7 +905,7 @@ void game_render_inventory(Game *game)
     /* Centre the 4-column grid in the left ~55% of the panel */
     int grid_total_w = INV_COLS * INV_CELL_SIZE + (INV_COLS - 1) * INV_CELL_GAP;
     int grid_x = px + 24;
-    int grid_y = py + 54;
+    int grid_y = py + 90;
 
     /* Detail pane sits to the right of the grid */
     int detail_x = grid_x + grid_total_w + 24;
@@ -933,27 +922,22 @@ void game_render_inventory(Game *game)
         int is_sel  = (i == game->selected_inventory_slot);
         int has_item = (i < p->inventory_count);
 
-        /* Cell background */
-        if (game->inventory_slot_texture) {
-            render_texture(r, game->inventory_slot_texture,
-                           cx, cy, INV_CELL_SIZE, INV_CELL_SIZE);
-        } else {
-            render_filled_rect(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
-                               has_item ? (is_sel ? 55 : 30) : 15,
-                               has_item ? (is_sel ? 12 :  8) :  4,
-                               has_item ? (is_sel ? 12 :  8) :  4, 210);
-            render_rect_outline(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
-                                is_sel ? 180 : 60,
-                                is_sel ?  40 : 15,
-                                is_sel ?  40 : 15, 200);
-        }
+        /* Cell background — bright red */
+        render_filled_rect(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                           has_item ? (is_sel ? 180 : 120) : 60,
+                           has_item ? (is_sel ?  20 :  10) :  8,
+                           has_item ? (is_sel ?  20 :  10) :  8, 220);
+        render_rect_outline(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
+                            is_sel ? 255 : 180,
+                            is_sel ?  50 :  20,
+                            is_sel ?  50 :  20, 220);
 
         /* Selection highlight */
         if (is_sel) {
             render_filled_rect(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
-                               255, 160, 160, 45);
+                               255, 60, 60, 60);
             render_rect_outline(r, cx, cy, INV_CELL_SIZE, INV_CELL_SIZE,
-                                230, 100, 100, 200);
+                                255, 80, 80, 240);
         }
 
         if (has_item) {

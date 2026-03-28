@@ -207,7 +207,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     renderer, "assets/room/room1.png");
 
                 /* Load tile map and build collision from the CSV. */
-                Map *m = map_load_csv("maps/Archive room logic.csv");
+                Map *m = map_load_csv("maps/logic archive_logic.csv");
                 if (m) {
                     map_build_colliders(m, loc);
 

@@ -22,13 +22,10 @@
 # ── Opening monologue ──────────────────────────────────────────────────
 
 [game_start]
-Alex
+Richard
 ---
-A portrait hangs on the wall.
-The painted eyes seem to follow me wherever I move.
-I have heard of optical illusions like this -- clever brushwork that gives depth to a flat image.
-But this feels different.
-This feels deliberate.
+I love femboys.
+Felix or Astolfo?
 ---
 
 # ── Entrance Hall ─────────────────────────────────────────────────────

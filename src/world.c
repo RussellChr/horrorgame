@@ -366,6 +366,25 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (int)col->w, (int)col->h,
             255, 0, 0, 255);  /* Red outline */
     }
+    /* ── Door / exit trigger visual indicators ── */
+    for (int i = 0; i < loc->trigger_count; i++) {
+        const TriggerZone *tz = &loc->triggers[i];
+        if (tz->target_location_id < 0) continue; /* skip interaction triggers */
+
+        int tx = (int)(tz->bounds.x - cx);
+        int ty = (int)(tz->bounds.y - cy);
+        int tw = (int)tz->bounds.w;
+        int th = (int)tz->bounds.h;
+
+        /* Semi-transparent golden fill to mark the doorway */
+        render_filled_rect(renderer, tx, ty, tw, th, 220, 180, 60, 80);
+        /* Bright yellow border */
+        render_rect_outline(renderer, tx, ty, tw, th, 255, 220, 0, 255);
+        /* "EXIT" label centred on the tile */
+        render_text_centered(renderer, "EXIT",
+                             tx + tw / 2, ty + th / 2 - 4,
+                             1, 255, 255, 180);
+    }
     /* ── Danger zone vignette ── */
     if (loc->is_danger_zone) {
         /* Red border on all four edges */

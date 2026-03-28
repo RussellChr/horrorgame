@@ -25,6 +25,46 @@ static Button make_button(float x, float y, float w, float h,
     return b;
 }
 
+/* ── Map registry ───────────────────────────────────────────────────────── */
+typedef struct {
+    int         location_id;
+    const char *csv_path;
+    const char *png_path;
+} MapEntry;
+
+static const MapEntry map_registry[] = {
+    { 0, "maps/Archive room logic_Logic.csv", "assets/room/room1.png" },
+    /* Add more rooms here:
+    { 1, "maps/corridor.csv",   "assets/room/room2.png" },
+    { 2, "maps/library.csv",    "assets/room/room3.png" },
+    { 3, "maps/basement.csv",   "assets/room/room4.png" },
+    { 4, "maps/childsroom.csv", "assets/room/room5.png" },
+    { 5, "maps/ritual.csv",     "assets/room/room6.png" }, */
+};
+static const int map_registry_count =
+    (int)(sizeof(map_registry) / sizeof(map_registry[0]));
+
+static void load_map_for_location(Game *game, int location_id)
+{
+    for (int i = 0; i < map_registry_count; i++) {
+        if (map_registry[i].location_id == location_id) {
+            map_free(&game->map);
+            if (!map_load(&game->map, game->renderer,
+                          map_registry[i].csv_path,
+                          map_registry[i].png_path,
+                          MAP_TILESET_COLS)) {
+                SDL_Log("load_map_for_location: failed to load map for location %d",
+                        location_id);
+            }
+            camera_init(&game->camera, WINDOW_W, WINDOW_H,
+                        game->map.cols * TILE_SIZE,
+                        game->map.rows * TILE_SIZE);
+            return;
+        }
+    }
+    SDL_Log("load_map_for_location: no map registered for location %d", location_id);
+}
+
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
 Game *game_init(SDL_Window *window, SDL_Renderer *renderer) {
@@ -59,16 +99,11 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer) {
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
 
-    /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
 
-    /* Load inventory UI textures */
-    g->inventory_bg_texture   = render_load_texture(renderer,
-                                                    "assets/inventory_bg.png");
-    g->inventory_slot_texture = render_load_texture(renderer,
-                                                    "assets/inventory_slot.png");
-    /* Load Title Screen */
-    g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
+    g->inventory_bg_texture   = render_load_texture(renderer, "assets/inventory_bg.png");
+    g->inventory_slot_texture = render_load_texture(renderer, "assets/inventory_slot.png");
+    g->title_screen_texture   = render_load_texture(renderer, "assets/title_screen.png");
 
     return g;
 }
@@ -96,13 +131,11 @@ void game_start_new(Game *game) {
     game->world  = world_create();
     game->story  = story_create();
 
-    /* Load idle animations from assets/player/ */
     game->player->idle_texture_north = render_load_texture(game->renderer, "assets/player/player_idle_north.png");
     game->player->idle_texture_south = render_load_texture(game->renderer, "assets/player/player_idle_south.png");
     game->player->idle_texture_east  = render_load_texture(game->renderer, "assets/player/player_idle_east.png");
     game->player->idle_texture_west  = render_load_texture(game->renderer, "assets/player/player_idle_west.png");
 
-    /* Load walking animations from assets/player/ */
     game->player->walk_frames_north[0] = render_load_texture(game->renderer, "assets/player/player_walk_north_0.png");
     game->player->walk_frames_north[1] = render_load_texture(game->renderer, "assets/player/player_walk_north_1.png");
     game->player->walk_frames_south[0] = render_load_texture(game->renderer, "assets/player/player_walk_south_0.png");
@@ -112,7 +145,6 @@ void game_start_new(Game *game) {
     game->player->walk_frames_west[0]  = render_load_texture(game->renderer, "assets/player/player_walk_west_0.png");
     game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
 
-    /* Initialize animation state */
     game->player->current_direction = DIRECTION_EAST;
     game->player->frame_index       = 0;
     game->player->frame_timer       = 0.0f;
@@ -121,27 +153,21 @@ void game_start_new(Game *game) {
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
-    /* ── Load tile map ── */
-    /* Free any previous map first (e.g. returning from menu) */
-    map_free(&game->map);
-    if (!map_load(&game->map, game->renderer,
-                  "maps/Archive room logic_Logic.csv", "assets/room/room1.png",
-                  MAP_TILESET_COLS)) {
-        SDL_Log("game_start_new: failed to load map");
-    }
+    /* Load map for starting location */
+    load_map_for_location(game, game->player->current_location_id);
 
-    /* World size = map size in pixels */
-    int world_w = game->map.cols * TILE_SIZE;
-    int world_h = game->map.rows * TILE_SIZE;
+    /* Safe default spawn on a known floor tile: tile(8,28) → world(912, 272) */
+    game->player->x = 912.0f;
+    game->player->y = 272.0f;
 
-    camera_init(&game->camera, WINDOW_W, WINDOW_H, world_w, world_h);
-
+    /* Override with location spawn if set */
     Location *start = world_get_location(game->world,
                                          game->player->current_location_id);
-    if (start) {
+    if (start && start->spawn_x > 0.0f && start->spawn_y > 0.0f) {
         game->player->x = start->spawn_x;
         game->player->y = start->spawn_y;
     }
+
     camera_snap(&game->camera, game->player->x, game->player->y);
 
     game->state                   = GAME_STATE_PLAYING;
@@ -161,14 +187,17 @@ void game_change_location(Game *game, int location_id,
     if (prev) prev->visited = 1;
 
     game->player->current_location_id = location_id;
-    game->player->x = spawn_x;
-    game->player->y = spawn_y;
+    game->player->x  = spawn_x;
+    game->player->y  = spawn_y;
     game->player->vx = 0.0f;
     game->player->vy = 0.0f;
 
+    /* Swap map for new room — also reinits camera to new map size */
+    load_map_for_location(game, location_id);
+
     camera_snap(&game->camera, spawn_x, spawn_y);
 
-    if (location_id == 4) /* Child's Room – meet Lily */
+    if (location_id == 4)
         story_trigger_event(game->story, game->player,
                             game->world, "meet_lily");
 }
@@ -190,8 +219,7 @@ void game_end_dialogue(Game *game) {
 
 void game_trigger_ending(Game *game) {
     if (!game || !game->story || !game->player) return;
-    game->ending_type  = (int)story_determine_ending(game->story,
-                                                      game->player);
+    game->ending_type  = (int)story_determine_ending(game->story, game->player);
     game->ending_timer = 0.0f;
     game->state        = GAME_STATE_ENDING;
 }
@@ -221,7 +249,7 @@ static void handle_interaction(Game *game) {
     if (tid == 10 && loc_id == 4 &&
         !(game->player->flags & FLAG_KEY_OBTAINED)) {
         Item key;
-        strncpy(key.name,        "Basement Key",           ITEM_NAME_MAX - 1);
+        strncpy(key.name,        "Basement Key",            ITEM_NAME_MAX - 1);
         strncpy(key.description, "A heavy brass key. "
                                  "Opens the basement lock.", ITEM_DESC_MAX - 1);
         key.id     = 10;
@@ -554,45 +582,59 @@ void game_update(Game *game) {
         p->x += p->vx * dt;
         p->y += p->vy * dt;
 
-        float half_w = (float)PLAYER_W / 2.0f;
-
-        /* ── Tile-based wall collision ── */
+        /* ── Tile-based wall collision ──
+         * A small feet-box is used instead of the full sprite rect so that
+         * collision matches what the player sees on the tile map.
+         *
+         * If you still see misalignment after enabling the debug box below,
+         * tweak these three values:
+         *   box_w        — how wide the feet hitbox is (default 60% of sprite)
+         *   box_h        — how tall the feet hitbox is (default 16 px)
+         *   box_offset_y — shift the box down (+) or up (-) relative to p->y */
         if (game->map.tileset) {
-            /* Test all four corners of the player's feet rect */
-            float px_left  = p->x - half_w;
-            float px_right = p->x + half_w - 1.0f;
-            float py_top   = p->y - (float)PLAYER_SPRITE_H;
-            float py_bot   = p->y - 1.0f;
+            float box_w        = (float)PLAYER_W * 0.6f;
+            float box_h        = 16.0f;
+            float box_offset_y = 4.0f;
 
-            /* Horizontal resolution */
+            float left   = p->x - box_w * 0.5f;
+            float right  = left + box_w - 1.0f;
+            float top    = p->y - box_h + box_offset_y;
+            float bottom = p->y - 1.0f  + box_offset_y;
+
+            /* Horizontal */
             if (p->vx < 0.0f) {
-                if (map_is_wall(&game->map, px_left, py_top) ||
-                    map_is_wall(&game->map, px_left, py_bot)) {
-                    p->x = (float)((int)(px_left / TILE_SIZE) + 1) * TILE_SIZE + half_w;
+                if (map_is_wall(&game->map, left, top) ||
+                    map_is_wall(&game->map, left, bottom)) {
+                    p->x = (float)((int)(left / TILE_SIZE) + 1) * TILE_SIZE
+                           + box_w * 0.5f;
                 }
             } else if (p->vx > 0.0f) {
-                if (map_is_wall(&game->map, px_right, py_top) ||
-                    map_is_wall(&game->map, px_right, py_bot)) {
-                    p->x = (float)((int)(px_right / TILE_SIZE)) * TILE_SIZE - half_w;
+                if (map_is_wall(&game->map, right, top) ||
+                    map_is_wall(&game->map, right, bottom)) {
+                    p->x = (float)((int)(right / TILE_SIZE)) * TILE_SIZE
+                           - box_w * 0.5f;
                 }
             }
 
-            /* Vertical resolution */
+            /* Vertical */
             if (p->vy < 0.0f) {
-                if (map_is_wall(&game->map, px_left, py_top) ||
-                    map_is_wall(&game->map, px_right, py_top)) {
-                    p->y = (float)((int)(py_top / TILE_SIZE) + 1) * TILE_SIZE + (float)PLAYER_SPRITE_H;
+                if (map_is_wall(&game->map, left,  top) ||
+                    map_is_wall(&game->map, right, top)) {
+                    p->y = (float)((int)(top / TILE_SIZE) + 1) * TILE_SIZE
+                           + box_h - box_offset_y;
                 }
             } else if (p->vy > 0.0f) {
-                if (map_is_wall(&game->map, px_left, py_bot) ||
-                    map_is_wall(&game->map, px_right, py_bot)) {
-                    p->y = (float)((int)(py_bot / TILE_SIZE)) * TILE_SIZE;
+                if (map_is_wall(&game->map, left,  bottom) ||
+                    map_is_wall(&game->map, right, bottom)) {
+                    p->y = (float)((int)(bottom / TILE_SIZE)) * TILE_SIZE
+                           - box_offset_y;
                 }
             }
         }
 
         /* ── Collision with room colliders ── */
         if (loc) {
+            float half_w = (float)PLAYER_W / 2.0f;
             Rect pr = {
                 p->x - half_w,
                 p->y - (float)PLAYER_SPRITE_H,
@@ -609,6 +651,7 @@ void game_update(Game *game) {
         game->interactive_trigger_id = -1;
 
         if (loc) {
+            float half_w = (float)PLAYER_W / 2.0f;
             Rect pr = {
                 p->x - half_w,
                 p->y - (float)PLAYER_SPRITE_H,
@@ -744,6 +787,25 @@ void game_render_playing(Game *game) {
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* ── DEBUG: collision box ──────────────────────────────────────────
+     * Shows the exact feet box used for tile collision as a red rect.
+     * Adjust box_w, box_h, box_offset_y here AND in game_update to match.
+     * Remove this block once the alignment looks correct.            */
+    {
+        float box_w        = (float)PLAYER_W * 0.6f;
+        float box_h        = 16.0f;
+        float box_offset_y = 4.0f;
+        SDL_FRect debug_box = {
+            game->player->x - box_w * 0.5f - game->camera.x,
+            game->player->y - box_h + box_offset_y - game->camera.y,
+            box_w,
+            box_h
+        };
+        SDL_SetRenderDrawColor(game->renderer, 255, 0, 0, 200);
+        SDL_RenderRect(game->renderer, &debug_box);
+    }
+    /* ── END DEBUG ── */
 
     /* ── Interaction prompt ── */
     if (game->near_interactive) {

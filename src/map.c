@@ -1,11 +1,11 @@
 #include "map.h"
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_image.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <SDL3_image/SDL_image.h>
 
 /* ── Internal: tile index → source rect on spritesheet ─────────────────── */
-static SDL_Rect tile_src(const Map *map, int tile_id)
+static SDL_FRect tile_src(const Map *map, int tile_id)
 {
     /* Map CSV values to spritesheet indices:
        -1 (floor) → spritesheet index 0
@@ -16,11 +16,11 @@ static SDL_Rect tile_src(const Map *map, int tile_id)
     else if (tile_id ==  0) sheet_idx = 1;   /* wall  */
     else                    sheet_idx = 0;   /* fallback */
 
-    SDL_Rect src;
-    src.x = (sheet_idx % map->tileset_cols) * TILE_SIZE;
-    src.y = (sheet_idx / map->tileset_cols) * TILE_SIZE;
-    src.w = TILE_SIZE;
-    src.h = TILE_SIZE;
+    SDL_FRect src;
+    src.x = (float)((sheet_idx % map->tileset_cols) * TILE_SIZE);
+    src.y = (float)((sheet_idx / map->tileset_cols) * TILE_SIZE);
+    src.w = (float)TILE_SIZE;
+    src.h = (float)TILE_SIZE;
     return src;
 }
 
@@ -55,7 +55,7 @@ int map_load(Map *map, SDL_Renderer *renderer,
         return 0;
     }
 
-    char line[MAP_MAX_COLS * 6]; /* enough room per row */
+    char line[MAP_MAX_COLS * 6];
     int row = 0;
     while (fgets(line, sizeof(line), f) && row < MAP_MAX_ROWS) {
         int col = 0;
@@ -95,7 +95,7 @@ void map_render(const Map *map, SDL_Renderer *renderer,
 
     for (int r = first_row; r < last_row; r++) {
         for (int c = first_col; c < last_col; c++) {
-            SDL_Rect src = tile_src(map, map->tiles[r][c]);
+            SDL_FRect src = tile_src(map, map->tiles[r][c]);
 
             SDL_FRect dst = {
                 .x = (float)(c * TILE_SIZE) - cam_x,

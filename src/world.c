@@ -309,7 +309,14 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (Uint8)(d->b > 30 ? d->b - 30 : 0),
             200);
     }
-
+    /* ── Collision boxes (debug visualization) ── */
+    for (int i = 0; i < loc->collider_count; i++) {
+        const Rect *col = &loc->colliders[i];
+        render_rect_outline(renderer,
+            (int)(col->x - cx), (int)(col->y - cy),
+            (int)col->w, (int)col->h,
+            255, 0, 0, 255);  /* Red outline */
+    }
     /* ── Danger zone vignette ── */
     if (loc->is_danger_zone) {
         /* Red border on all four edges */

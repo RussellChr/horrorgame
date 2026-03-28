@@ -12,10 +12,18 @@
 
 Player *player_create(const char *name)
 {
+    
     Player *p = calloc(1, sizeof(Player));
     if (!p) return NULL;
-
     strncpy(p->name, name ? name : "Unknown", PLAYER_NAME_MAX - 1);
+    p->x = 0.0f;
+    p->y = 0.0f;
+
+    /* Initialize custom collider */
+    p->collider_w = PLAYER_COLLIDER_W;
+    p->collider_h = PLAYER_COLLIDER_H;
+    p->collider_offset_x = PLAYER_COLLIDER_OFFSET_X;
+    p->collider_offset_y = PLAYER_COLLIDER_OFFSET_Y;
 
     /* Starting world position (overridden by room spawn on load). */
     p->x = 400.0f;
@@ -25,12 +33,11 @@ Player *player_create(const char *name)
     animation_init(&p->idle_anim, 2, 1.5f, 1);
     animation_init(&p->walk_anim, 4, 8.0f, 1);
     animation_init(&p->backwards_anim, 2, 8.0f, 1);
-
+    
     p->sprite_texture    = NULL;
     p->sprite_w          = PLAYER_W;
     p->sprite_h          = PLAYER_SPRITE_H;
     p->backwards_texture = NULL;
-
     return p;
 }
 

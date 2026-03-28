@@ -605,19 +605,19 @@ void game_update(Game *game)
 
         float half_w = (float)PLAYER_W / 2.0f;
 
-        /* ── Collision with room colliders ── */
+        /* ── Collision with room colliders (using custom collider) ── */
         if (loc) {
             Rect pr = {
-                p->x - half_w,
-                p->y - (float)PLAYER_SPRITE_H,
-                (float)PLAYER_W, (float)PLAYER_SPRITE_H
+                p->x - half_w + p->collider_offset_x,
+                p->y - (float)PLAYER_SPRITE_H + p->collider_offset_y,
+                (float)p->collider_w,
+                (float)p->collider_h
             };
             for (int i = 0; i < loc->collider_count; i++)
                 rect_resolve_collision(&pr, &loc->colliders[i], &p->vx, &p->vy);
-            p->x = pr.x + half_w;
-            p->y = pr.y + (float)PLAYER_SPRITE_H;
+            p->x = pr.x - p->collider_offset_x + half_w;
+            p->y = pr.y - p->collider_offset_y + (float)PLAYER_SPRITE_H;
         }
-
         /* ── Check triggers ── */
         game->near_interactive       = 0;
         game->interactive_trigger_id = -1;

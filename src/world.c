@@ -225,6 +225,24 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(ROOM_H / 2);
                 }
 
+                /* Flashlight floor item near center of the map */
+                if (loc->floor_item_count < MAX_FLOOR_ITEMS) {
+                    FloorItem *fi = &loc->floor_items[loc->floor_item_count++];
+                    fi->texture    = render_load_texture(renderer,
+                                                         "assets/flashlight.png");
+                    fi->x          = ROOM_W / 2 - 40;  /* center: half item width */
+                    fi->y          = FLOOR_Y - 60;       /* just above the floor   */
+                    fi->w          = 80;
+                    fi->h          = 44;
+                    fi->taken      = 0;
+                    fi->trigger_id = 50;
+                }
+
+                /* Interactive trigger zone for the flashlight (trigger 50) */
+                ADD_TRIGGER(loc,
+                    ROOM_W / 2 - 40, FLOOR_Y - 60, 80, 44,
+                    50, 0, 0);
+
                 break;
             }
 
@@ -311,6 +329,14 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (Uint8)(d->g > 30 ? d->g - 30 : 0),
             (Uint8)(d->b > 30 ? d->b - 30 : 0),
             200);
+    }
+
+    /* ── Floor items (pickable overlays) ── */
+    for (int i = 0; i < loc->floor_item_count; i++) {
+        const FloorItem *fi = &loc->floor_items[i];
+        if (fi->taken || !fi->texture) continue;
+        render_texture(renderer, fi->texture,
+                       fi->x - cx, fi->y - cy, fi->w, fi->h);
     }
     /* ── Collision boxes (debug visualization) ── */
     for (int i = 0; i < loc->collider_count; i++) {

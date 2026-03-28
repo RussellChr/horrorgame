@@ -8,6 +8,7 @@
 #define MAX_LOCATIONS      16
 #define MAX_EXITS           8
 #define MAX_DECOR          32
+#define MAX_FLOOR_ITEMS     8
 
 #define LOCATION_NAME_MAX  64
 #define LOCATION_DESC_MAX  512
@@ -39,6 +40,15 @@ typedef struct {
     char  label[32];   /* optional label painted on/above the object */
 } Decor;
 
+/* ── Floor item (pickable texture overlay) ────────────────────────────── */
+
+typedef struct {
+    SDL_Texture *texture;
+    int          x, y, w, h;  /* world-space position and size */
+    int          taken;        /* 1 once the player has picked it up */
+    int          trigger_id;   /* matches the TriggerZone trigger_id */
+} FloorItem;
+
 /* ── Location ─────────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -67,6 +77,10 @@ typedef struct {
     /* Visual decorations */
     Decor decor[MAX_DECOR];
     int   decor_count;
+
+    /* Floor items (pickable texture overlays) */
+    FloorItem floor_items[MAX_FLOOR_ITEMS];
+    int        floor_item_count;
 
     /* Collision rectangles */
     Rect  colliders[MAX_COLLISION_RECTS];

@@ -17,6 +17,7 @@
 #   basement_door_unlocked-- trigger 10 in the Dark Corridor, key obtained
 #   diary                 -- trigger  1 in the Library
 #   key                   -- trigger 10 in the Child's Room
+#   flashlight            -- trigger 50 in the Entrance Hall
 #   ritual_circle         -- trigger 20 in the Ritual Room
 
 # ── Opening monologue ──────────────────────────────────────────────────
@@ -84,6 +85,16 @@ Alex
 A small brass key, half-buried in a toy box beneath a threadbare teddy
 bear. Why would a child have a key to the basement door? Unless they were
 not put there to play -- but to guard it.
+---
+
+# ── Entrance Hall items ───────────────────────────────────────────────
+
+[flashlight]
+Alex
+---
+A flashlight. Someone left it here on the floor -- carelessly, or
+perhaps deliberately. Either way, I am grateful for it. The darkness
+in this house is not natural.
 ---
 
 # ── Ritual Room ───────────────────────────────────────────────────────

@@ -7,6 +7,7 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
+#include "map.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -15,8 +16,7 @@
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static Button make_button(float x, float y, float w, float h,
-                          const char *text)
-{
+                           const char *text) {
     Button b;
     b.rect.x = x; b.rect.y = y;
     b.rect.w = w; b.rect.h = h;
@@ -27,8 +27,7 @@ static Button make_button(float x, float y, float w, float h,
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
-Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
-{
+Game *game_init(SDL_Window *window, SDL_Renderer *renderer) {
     Game *g = calloc(1, sizeof(Game));
     if (!g) return NULL;
 
@@ -50,7 +49,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->brightness = 100.0f;
     g->settings_focus = 0;
     float sw = 400.0f, sh = 24.0f;
-    float sx = (WINDOW_W - sw) / 2.0f + 60.0f;   /* offset right to leave room for label */
+    float sx = (WINDOW_W - sw) / 2.0f + 60.0f;
     slider_init(&g->settings_volume_slider,     sx, 300.0f, sw, sh, 0.0f, 100.0f, 100.0f);
     slider_init(&g->settings_brightness_slider, sx, 380.0f, sw, sh, 0.0f, 100.0f, 100.0f);
     float bbw = 200.0f, bbh = 48.0f;
@@ -68,14 +67,13 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
                                                     "assets/inventory_bg.png");
     g->inventory_slot_texture = render_load_texture(renderer,
                                                     "assets/inventory_slot.png");
-    /* Load Title Screen*/
+    /* Load Title Screen */
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
     return g;
 }
 
-void game_cleanup(Game *game)
-{
+void game_cleanup(Game *game) {
     if (!game) return;
     if (game->player)        player_destroy(game->player);
     if (game->world)         world_destroy(game->world);
@@ -85,13 +83,13 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->inventory_bg_texture);
     render_texture_destroy(game->inventory_slot_texture);
     render_texture_destroy(game->title_screen_texture);
+    map_free(&game->map);
     free(game);
 }
 
 /* ── State transitions ─────────────────────────────────────────────────── */
 
-void game_start_new(Game *game)
-{
+void game_start_new(Game *game) {
     if (!game) return;
 
     game->player = player_create("Alex");
@@ -115,7 +113,7 @@ void game_start_new(Game *game)
     game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
 
     /* Initialize animation state */
-    game->player->current_direction = DIRECTION_EAST;  /* Start facing east */
+    game->player->current_direction = DIRECTION_EAST;
     game->player->frame_index       = 0;
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
@@ -123,7 +121,20 @@ void game_start_new(Game *game)
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
-    camera_init(&game->camera, WINDOW_W, WINDOW_H, ROOM_W, ROOM_H);
+    /* ── Load tile map ── */
+    /* Free any previous map first (e.g. returning from menu) */
+    map_free(&game->map);
+    if (!map_load(&game->map, game->renderer,
+                  "assets/map.csv", "assets/tileset.png",
+                  MAP_TILESET_COLS)) {
+        SDL_Log("game_start_new: failed to load map");
+    }
+
+    /* World size = map size in pixels */
+    int world_w = game->map.cols * TILE_SIZE;
+    int world_h = game->map.rows * TILE_SIZE;
+
+    camera_init(&game->camera, WINDOW_W, WINDOW_H, world_w, world_h);
 
     Location *start = world_get_location(game->world,
                                          game->player->current_location_id);
@@ -142,8 +153,7 @@ void game_start_new(Game *game)
 }
 
 void game_change_location(Game *game, int location_id,
-                          float spawn_x, float spawn_y)
-{
+                           float spawn_x, float spawn_y) {
     if (!game || !game->world) return;
 
     Location *prev = world_get_location(game->world,
@@ -163,15 +173,13 @@ void game_change_location(Game *game, int location_id,
                             game->world, "meet_lily");
 }
 
-void game_start_dialogue(Game *game, int node_id)
-{
+void game_start_dialogue(Game *game, int node_id) {
     if (!game || !game->dialogue_tree) return;
     dialogue_state_init(&game->dialogue_state, game->dialogue_tree, node_id);
     game->state = GAME_STATE_DIALOGUE;
 }
 
-void game_end_dialogue(Game *game)
-{
+void game_end_dialogue(Game *game) {
     if (!game) return;
     if (game->dialogue_tree) {
         dialogue_tree_destroy(game->dialogue_tree);
@@ -180,8 +188,7 @@ void game_end_dialogue(Game *game)
     game->state = GAME_STATE_PLAYING;
 }
 
-void game_trigger_ending(Game *game)
-{
+void game_trigger_ending(Game *game) {
     if (!game || !game->story || !game->player) return;
     game->ending_type  = (int)story_determine_ending(game->story,
                                                       game->player);
@@ -191,9 +198,7 @@ void game_trigger_ending(Game *game)
 
 /* ── Interaction handler ───────────────────────────────────────────────── */
 
-/* Apply story flag from the currently selected dialogue choice. */
-static void apply_dialogue_choice_flag(Game *game)
-{
+static void apply_dialogue_choice_flag(Game *game) {
     if (!game || !game->player || !game->dialogue_state.text_complete) return;
 
     const DialogueChoice *ch = dialogue_state_get_selected(
@@ -204,38 +209,34 @@ static void apply_dialogue_choice_flag(Game *game)
         game->player->flags |= (uint32_t)ch->story_flag;
 }
 
-static void handle_interaction(Game *game)
-{
+static void handle_interaction(Game *game) {
     if (!game || !game->player || !game->world) return;
 
     int loc_id = game->player->current_location_id;
     int tid    = game->interactive_trigger_id;
     Location *loc = world_get_location(game->world, loc_id);
 
-    /* Guard: don't open duplicate dialogue */
     if (game->dialogue_tree) return;
 
-    /* Basement Key pickup (Child's Room, trigger 10) */
     if (tid == 10 && loc_id == 4 &&
         !(game->player->flags & FLAG_KEY_OBTAINED)) {
         Item key;
         strncpy(key.name,        "Basement Key",           ITEM_NAME_MAX - 1);
         strncpy(key.description, "A heavy brass key. "
-                                 "Opens the basement lock.",ITEM_DESC_MAX - 1);
+                                 "Opens the basement lock.", ITEM_DESC_MAX - 1);
         key.id     = 10;
         key.usable = 1;
         player_add_item(game->player, &key);
         game->player->flags |= FLAG_KEY_OBTAINED;
         game->dialogue_tree = dialogue_build_for_location(4);
     }
-    /* Diary pickup (Library, trigger 1) */
     else if (tid == 1 && loc_id == 2) {
         if (!(game->player->flags & FLAG_FOUND_DIARY)) {
             Item diary;
-            strncpy(diary.name,       "Professor's Diary",  ITEM_NAME_MAX - 1);
-            strncpy(diary.description,"A water-stained diary "
-                                      "filled with terrible confessions.",
-                                      ITEM_DESC_MAX - 1);
+            strncpy(diary.name,        "Professor's Diary",  ITEM_NAME_MAX - 1);
+            strncpy(diary.description, "A water-stained diary "
+                                       "filled with terrible confessions.",
+                                       ITEM_DESC_MAX - 1);
             diary.id     = 1;
             diary.usable = 0;
             player_add_item(game->player, &diary);
@@ -244,13 +245,11 @@ static void handle_interaction(Game *game)
         }
         game->dialogue_tree = dialogue_build_for_location(2);
     }
-    /* Basement door (Corridor, trigger 10) */
     else if (tid == 10 && loc_id == 1) {
         if (game->player->flags & FLAG_KEY_OBTAINED) {
             if (!(game->player->flags & FLAG_OPENED_BASEMENT)) {
                 story_trigger_event(game->story, game->player,
                                     game->world, "open_basement");
-                /* Add a walk-through exit trigger to basement at runtime */
                 if (loc && loc->trigger_count < MAX_TRIGGER_ZONES) {
                     TriggerZone *tz = &loc->triggers[loc->trigger_count++];
                     tz->bounds.x = (float)(ROOM_W - 80);
@@ -268,16 +267,13 @@ static void handle_interaction(Game *game)
             game->dialogue_tree = dialogue_build_for_location(1);
         }
     }
-    /* Ritual circle (Ritual Room, trigger 20) */
     else if (tid == 20 && loc_id == 5) {
-        if (!(game->player->flags & FLAG_MONSTER_AWARE)) {
+        if (!(game->player->flags & FLAG_MONSTER_AWARE))
             story_trigger_event(game->story, game->player,
                                 game->world, "study_creature");
-        }
-        if (!(game->player->flags & FLAG_SOLVED_PUZZLE)) {
+        if (!(game->player->flags & FLAG_SOLVED_PUZZLE))
             story_trigger_event(game->story, game->player,
                                 game->world, "solve_puzzle");
-        }
         if ((game->player->flags & FLAG_FOUND_DIARY) &&
             (game->player->flags & FLAG_SOLVED_PUZZLE) &&
             !(game->player->flags & FLAG_KNOWS_TRUTH)) {
@@ -286,21 +282,15 @@ static void handle_interaction(Game *game)
             game->player->flags |= FLAG_LILY_TRUSTS_PLAYER;
         }
         game->dialogue_tree = dialogue_build_for_location(5);
-        /* Check for ending condition after ritual */
-        if (game->player->flags & FLAG_KNOWS_TRUTH) {
-            /* End will be triggered after dialogue */
-            game->ending_type = -1; /* signal to trigger ending on dialogue end */
-        }
+        if (game->player->flags & FLAG_KNOWS_TRUTH)
+            game->ending_type = -1;
     }
-    /* Portrait interaction (Entrance Hall, trigger 30) */
     else if (tid == 30 && loc_id == 0) {
         game->dialogue_tree = dialogue_build_for_location(30);
     }
-    /* Stranger NPC interaction (Entrance Hall, trigger 40) */
     else if (tid == 40 && loc_id == 0) {
         game->dialogue_tree = dialogue_build_for_location(40);
     }
-    /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
     }
@@ -311,8 +301,7 @@ static void handle_interaction(Game *game)
 
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
-void game_handle_event(Game *game, SDL_Event *event)
-{
+void game_handle_event(Game *game, SDL_Event *event) {
     if (!game || !event) return;
 
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
@@ -380,7 +369,6 @@ void game_handle_event(Game *game, SDL_Event *event)
 
     case GAME_STATE_DIALOGUE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
-            /* Navigate choices with UP / DOWN */
             if (event->key.key == SDLK_UP &&
                 game->dialogue_state.text_complete) {
                 if (game->dialogue_state.selected_choice > 0)
@@ -397,12 +385,10 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->key.key == SDLK_RETURN ||
                 event->key.key == SDLK_SPACE  ||
                 event->key.key == SDLK_E) {
-                /* Apply story flag from the chosen option before advancing */
                 apply_dialogue_choice_flag(game);
                 int cont = dialogue_state_advance(&game->dialogue_state, 0);
                 if (!cont) {
                     game_end_dialogue(game);
-                    /* Trigger ending if flagged */
                     if (game->ending_type == -1)
                         game_trigger_ending(game);
                 }
@@ -411,7 +397,6 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game_end_dialogue(game);
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            /* Apply story flag before advancing on mouse click too */
             apply_dialogue_choice_flag(game);
             int cont = dialogue_state_advance(&game->dialogue_state, 0);
             if (!cont) {
@@ -451,9 +436,8 @@ void game_handle_event(Game *game, SDL_Event *event)
                                   game->mouse_x, game->mouse_y))
                 game->state = GAME_STATE_PLAYING;
             if (button_is_clicked(&game->pause_buttons[1],
-                                  game->mouse_x, game->mouse_y)) {
+                                  game->mouse_x, game->mouse_y))
                 game->state = GAME_STATE_MENU;
-            }
         }
         break;
 
@@ -501,9 +485,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (button_is_clicked(&game->settings_back_button,
-                                  game->mouse_x, game->mouse_y)) {
+                                  game->mouse_x, game->mouse_y))
                 game->state = GAME_STATE_MENU;
-            }
             if (slider_handle_click(&game->settings_volume_slider,
                                     game->mouse_x, game->mouse_y)) {
                 game->volume = game->settings_volume_slider.value;
@@ -531,12 +514,11 @@ void game_handle_event(Game *game, SDL_Event *event)
 
 /* ── Per-frame update ──────────────────────────────────────────────────── */
 
-void game_update(Game *game)
-{
+void game_update(Game *game) {
     if (!game) return;
 
-    Uint64 now      = SDL_GetTicks();
-    float  dt       = (float)(now - game->last_ticks) / 1000.0f;
+    Uint64 now = SDL_GetTicks();
+    float  dt  = (float)(now - game->last_ticks) / 1000.0f;
     if (dt > 0.1f) dt = 0.1f;
     game->delta_time = dt;
     game->last_ticks = now;
@@ -560,20 +542,54 @@ void game_update(Game *game)
             p->vx = +PLAYER_SPEED; p->facing_right = 1;
         }
         else if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP]) {
-            p->vy = -PLAYER_SPEED;  // CHANGED: Remove the * 0.3f
+            p->vy = -PLAYER_SPEED;
         }
         else if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN]) {
-            p->vy = +PLAYER_SPEED;  // CHANGED: Remove the * 0.3f
+            p->vy = +PLAYER_SPEED;
         }
 
-        /* Set is_moving if any velocity is applied */
         p->is_moving = (p->vx != 0.0f || p->vy != 0.0f) ? 1 : 0;
-        
+
         /* ── Apply movement ── */
         p->x += p->vx * dt;
         p->y += p->vy * dt;
 
         float half_w = (float)PLAYER_W / 2.0f;
+
+        /* ── Tile-based wall collision ── */
+        if (game->map.tileset) {
+            /* Test all four corners of the player's feet rect */
+            float px_left  = p->x - half_w;
+            float px_right = p->x + half_w - 1.0f;
+            float py_top   = p->y - (float)PLAYER_SPRITE_H;
+            float py_bot   = p->y - 1.0f;
+
+            /* Horizontal resolution */
+            if (p->vx < 0.0f) {
+                if (map_is_wall(&game->map, px_left, py_top) ||
+                    map_is_wall(&game->map, px_left, py_bot)) {
+                    p->x = (float)((int)(px_left / TILE_SIZE) + 1) * TILE_SIZE + half_w;
+                }
+            } else if (p->vx > 0.0f) {
+                if (map_is_wall(&game->map, px_right, py_top) ||
+                    map_is_wall(&game->map, px_right, py_bot)) {
+                    p->x = (float)((int)(px_right / TILE_SIZE)) * TILE_SIZE - half_w;
+                }
+            }
+
+            /* Vertical resolution */
+            if (p->vy < 0.0f) {
+                if (map_is_wall(&game->map, px_left, py_top) ||
+                    map_is_wall(&game->map, px_right, py_top)) {
+                    p->y = (float)((int)(py_top / TILE_SIZE) + 1) * TILE_SIZE + (float)PLAYER_SPRITE_H;
+                }
+            } else if (p->vy > 0.0f) {
+                if (map_is_wall(&game->map, px_left, py_bot) ||
+                    map_is_wall(&game->map, px_right, py_bot)) {
+                    p->y = (float)((int)(py_bot / TILE_SIZE)) * TILE_SIZE;
+                }
+            }
+        }
 
         /* ── Collision with room colliders ── */
         if (loc) {
@@ -602,7 +618,6 @@ void game_update(Game *game)
                 TriggerZone *tz = &loc->triggers[i];
 
                 if (tz->target_location_id >= 0) {
-                    /* Room transition */
                     if (rect_overlaps(&pr, &tz->bounds)) {
                         game_change_location(game,
                             tz->target_location_id,
@@ -610,7 +625,6 @@ void game_update(Game *game)
                         break;
                     }
                 } else {
-                    /* Interactive: detect proximity */
                     Rect near_zone = {
                         tz->bounds.x - 40.0f, tz->bounds.y - 20.0f,
                         tz->bounds.w + 80.0f, tz->bounds.h + 40.0f
@@ -655,8 +669,7 @@ void game_update(Game *game)
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
 
-void game_render(Game *game)
-{
+void game_render(Game *game) {
     if (!game) return;
     switch (game->state) {
     case GAME_STATE_MENU:      game_render_menu(game);      break;
@@ -675,10 +688,6 @@ void game_render(Game *game)
     default: break;
     }
 
-    /* Apply brightness: draw a black overlay when brightness < 100
-     * (skipped in settings so sliders remain visible at all brightness levels)
-     * Alpha is capped at 220 rather than 255 so some scene detail is still
-     * visible even at the minimum brightness setting. */
     if (game->brightness < 100.0f && game->state != GAME_STATE_SETTINGS) {
         Uint8 alpha = (Uint8)((1.0f - game->brightness / 100.0f) * 220.0f);
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
@@ -686,24 +695,16 @@ void game_render(Game *game)
     }
 }
 
-/* ── Menu ────────────────────────────────────────────────────────────────── */
+/* ── Menu ─────────────────────────────────────────────────────────────── */
 
-void game_render_menu(Game *game)
-{
+void game_render_menu(Game *game) {
     SDL_Renderer *r = game->renderer;
 
-    if (game->state == GAME_STATE_MENU) {
-        if (game->title_screen_texture) {
-            // Draw full-screen PNG
-            render_texture(r, game->title_screen_texture,
-                          0, 0, WINDOW_W, WINDOW_H);
-        } else {
-            // Fallback to colored background if PNG fails to load
-            render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H,
-                              0, 0, 0, 255);
-        }
-        // Then draw your menu buttons on top
-        // ... existing menu button code ...
+    if (game->title_screen_texture) {
+        render_texture(r, game->title_screen_texture,
+                       0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
     }
 
     for (int i = 0; i < 3; i++) {
@@ -711,48 +712,40 @@ void game_render_menu(Game *game)
         if (i == game->current_menu_choice) btn.is_hovered = 1;
         draw_button_menu(r, &btn);
     }
-    /* mouse coordinates */
     render_text_centered(r,
         "WASD: move | E: interact | I: inventory | ESC: pause",
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);
     char buf[64];
     snprintf(buf, sizeof(buf), "mouse: %d, %d",
              (int)game->mouse_x, (int)game->mouse_y);
-
-    /* top-left debug text */
     render_text(r, buf, 10, 10, 2, 255, 255, 255);
 }
 
-/* ── Playing ─────────────────────────────────────────────────────────────── */
+/* ── Playing ──────────────────────────────────────────────────────────── */
 
-void game_render_playing(Game *game)
-{
+void game_render_playing(Game *game) {
     if (!game || !game->player || !game->world) return;
 
+    /* ── Tile map (drawn first, behind everything) ── */
+    if (game->map.tileset) {
+        map_render(&game->map, game->renderer,
+                   game->camera.x, game->camera.y,
+                   WINDOW_W, WINDOW_H);
+    }
+
+    /* ── Room-level decor / objects ── */
     Location *loc = world_get_location(game->world,
                                        game->player->current_location_id);
     if (loc) world_render_room(loc, game->renderer, &game->camera);
 
-    /* Player */
+    /* ── Player ── */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
              - PLAYER_W / 2;
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
-    /* Stranger NPC: draw a bright yellow exclamation mark above its head
-     * when in the Entrance Hall (location 0) so the player can spot it.
-     * The body/head are already drawn by world_render_room() via decor,
-     * so we only add the visual indicator here. */
-    if (game->player->current_location_id == 0) {
-        /* Centre of the 30-px body, above the 44-px head (FLOOR_Y-150). */
-        int npc_sx = camera_to_screen_x(&game->camera,
-                                        STRANGER_NPC_X + 15);  /* half body width */
-        int npc_sy = camera_to_screen_y(&game->camera, FLOOR_Y - 190);
-        /* Bright yellow "!" above the NPC head */
-    }
-
-    /* Interaction prompt */
+    /* ── Interaction prompt ── */
     if (game->near_interactive) {
         int px = camera_to_screen_x(&game->camera, game->player->x);
         int py = camera_to_screen_y(&game->camera,
@@ -760,10 +753,10 @@ void game_render_playing(Game *game)
         ui_draw_interact_prompt(game->renderer, game->interact_label, px, py);
     }
 
-    /* HUD */
+    /* ── HUD ── */
     ui_draw_hud(game->renderer, game->player);
 
-    /* Chapter label */
+    /* ── Chapter label ── */
     if (game->story) {
         static const char *ch_names[] = {
             "Prologue","Chapter I","Chapter II","Chapter III","Finale"
@@ -778,23 +771,20 @@ void game_render_playing(Game *game)
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 }
 
-/* ── Dialogue overlay ────────────────────────────────────────────────────── */
+/* ── Dialogue overlay ─────────────────────────────────────────────────── */
 
-void game_render_dialogue_overlay(Game *game)
-{
+void game_render_dialogue_overlay(Game *game) {
     if (!game) return;
     dialogue_render(&game->dialogue_state, game->renderer,
                     WINDOW_W, WINDOW_H);
 }
 
-/* ── Inventory ───────────────────────────────────────────────────────────── */
+/* ── Inventory ────────────────────────────────────────────────────────── */
 
-void game_render_inventory(Game *game)
-{
+void game_render_inventory(Game *game) {
     if (!game || !game->player) return;
     SDL_Renderer *r = game->renderer;
 
-    /* Render the scene behind the panel */
     if (game->world) {
         Location *loc = world_get_location(game->world,
                                            game->player->current_location_id);
@@ -805,7 +795,6 @@ void game_render_inventory(Game *game)
 
     int px = 180, py = 70, pw = WINDOW_W - 360, ph = WINDOW_H - 140;
 
-    /* Inventory panel background: PNG if available, otherwise solid rect */
     if (game->inventory_bg_texture) {
         render_texture(r, game->inventory_bg_texture, px, py, pw, ph);
     } else {
@@ -823,10 +812,9 @@ void game_render_inventory(Game *game)
     } else {
         int iy = py + 60;
         for (int i = 0; i < p->inventory_count; i++) {
-            int sy2   = iy + i * 62;
+            int sy2    = iy + i * 62;
             int is_sel = (i == game->selected_inventory_slot);
 
-            /* Item slot: PNG if available, otherwise solid rect */
             if (game->inventory_slot_texture) {
                 render_texture(r, game->inventory_slot_texture,
                                px+18, sy2, pw-36, 54);
@@ -841,7 +829,6 @@ void game_render_inventory(Game *game)
                                     is_sel ?  30 :  15, 200);
             }
 
-            /* Selection highlight overlay when slot texture is in use */
             if (game->inventory_slot_texture && is_sel) {
                 render_filled_rect(r, px+18, sy2, pw-36, 54,
                                    255, 160, 160, 40);
@@ -866,10 +853,9 @@ void game_render_inventory(Game *game)
                          WINDOW_W/2, py+ph-16, 1, 78,22,22);
 }
 
-/* ── Pause ───────────────────────────────────────────────────────────────── */
+/* ── Pause ────────────────────────────────────────────────────────────── */
 
-void game_render_pause(Game *game)
-{
+void game_render_pause(Game *game) {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
@@ -888,10 +874,9 @@ void game_render_pause(Game *game)
                          WINDOW_W/2, qy+ph-20, 1, 78,22,22);
 }
 
-/* ── Ending ──────────────────────────────────────────────────────────────── */
+/* ── Ending ───────────────────────────────────────────────────────────── */
 
-void game_render_ending(Game *game)
-{
+void game_render_ending(Game *game) {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
@@ -948,14 +933,12 @@ void game_render_ending(Game *game)
     }
 }
 
-/* ── Settings ────────────────────────────────────────────────────────────── */
+/* ── Settings ─────────────────────────────────────────────────────────── */
 
-void game_render_settings(Game *game)
-{
+void game_render_settings(Game *game) {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
-    /* Background: reuse title screen or solid black fallback */
     if (game->title_screen_texture) {
         render_texture(r, game->title_screen_texture, 0, 0, WINDOW_W, WINDOW_H);
     } else {
@@ -963,29 +946,23 @@ void game_render_settings(Game *game)
     }
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 160);
 
-    /* Panel */
     int pw = 680, ph = 340;
     int px = (WINDOW_W - pw) / 2, py = 170;
     render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 230);
     render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
     render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 180);
 
-    /* Title */
     render_text_centered(r, "SETTINGS", WINDOW_W/2, py + 20, 3, 200, 110, 110);
     render_filled_rect(r, px+18, py+54, pw-36, 2, 70, 18, 18, 190);
 
-    /* Update focused state on sliders before rendering */
     game->settings_volume_slider.focused     = (game->settings_focus == 0);
     game->settings_brightness_slider.focused = (game->settings_focus == 1);
 
-    /* Sliders */
     slider_render(r, &game->settings_volume_slider,     "Volume");
     slider_render(r, &game->settings_brightness_slider, "Brightness");
 
-    /* Back button */
     draw_button_menu(r, &game->settings_back_button);
 
-    /* Instructions */
     render_text_centered(r,
         "UP/DOWN: select  |  LEFT/RIGHT: adjust  |  ESC: back",
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);

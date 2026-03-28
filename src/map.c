@@ -117,7 +117,48 @@ int map_build_colliders(const Map *map, Location *loc)
     return added;
 }
 
-/* ── Spawn search ─────────────────────────────────────────────────────── */
+/* ── Door trigger building ─────────────────────────────────────────────── */
+
+int map_build_door_triggers(const Map *map, Location *loc,
+                            int dest_id,
+                            float dest_spawn_x, float dest_spawn_y)
+{
+    if (!loc) return -1;
+    if (!map || !map->cells) return 0;
+
+    int added = 0;
+    float tile_w = (float)loc->room_width  / (float)map->cols;
+    float tile_h = (float)loc->room_height / (float)map->rows;
+
+    for (int r = 0; r < map->rows; r++) {
+        int c = 0;
+        while (c < map->cols) {
+            if (map->cells[r * map->cols + c] == MAP_TILE_DOOR) {
+                /* Merge consecutive door tiles on the same row. */
+                int run_start = c;
+                while (c < map->cols &&
+                       map->cells[r * map->cols + c] == MAP_TILE_DOOR)
+                    c++;
+                if (loc->trigger_count < MAX_TRIGGER_ZONES) {
+                    TriggerZone *t = &loc->triggers[loc->trigger_count++];
+                    t->bounds.x           = (float)run_start * tile_w;
+                    t->bounds.y           = (float)r          * tile_h;
+                    t->bounds.w           = (float)(c - run_start) * tile_w;
+                    t->bounds.h           = tile_h;
+                    t->target_location_id = dest_id;
+                    t->trigger_id         = -1;
+                    t->spawn_x            = dest_spawn_x;
+                    t->spawn_y            = dest_spawn_y;
+                    added++;
+                }
+            } else {
+                c++;
+            }
+        }
+    }
+
+    return added;
+}
 
 int map_find_spawn(const Map *map, int hint_row, int hint_col,
                    float *out_x, float *out_y, int room_w, int room_h)

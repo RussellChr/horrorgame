@@ -259,6 +259,34 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
             break;
         }
     }
+
+    /* ── Second pass: build door triggers pointing to the next room. ─────
+     * Done after all rooms are set up so that destination spawn positions
+     * are already known.
+     */
+    for (int i = 0; i < world->location_count; i++) {
+        Location *loc = &world->locations[i];
+        const char *csv = NULL;
+
+        switch (loc->id) {
+            case 0: csv = "maps/logic archive tutup_logic.csv"; break;
+            default: break;
+        }
+
+        if (!csv) continue;
+
+        Map *m = map_load_csv(csv);
+        if (!m) continue;
+
+        int dest_id = loc->id + 1;
+        Location *dest = world_get_location(world, dest_id);
+        if (!dest) {
+            map_free(m);
+            continue;
+        }
+        map_build_door_triggers(m, loc, dest_id, dest->spawn_x, dest->spawn_y);
+        map_free(m);
+    }
 }
 
 /* ── Room rendering ────────────────────────────────────────────────────── */

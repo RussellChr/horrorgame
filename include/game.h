@@ -14,7 +14,7 @@
 
 /* ── Tileset layout ───────────────────────────────────────────────────── */
 /* Set this to how many tiles wide your spritesheet PNG is (width / 32).  */
-#define MAP_TILESET_COLS 8
+#define MAP_TILESET_COLS 193
 
 /* ── Game states ──────────────────────────────────────────────────────── */
 

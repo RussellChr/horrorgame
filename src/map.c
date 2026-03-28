@@ -87,8 +87,8 @@ int map_build_colliders(const Map *map, Location *loc)
     if (!map || !map->cells) return 0;
 
     int added = 0;
-    float tile_w = (float)ROOM_W / (float)map->cols;
-    float tile_h = (float)ROOM_H / (float)map->rows;
+    float tile_w = (float)loc->room_width  / (float)map->cols;
+    float tile_h = (float)loc->room_height / (float)map->rows;
 
     for (int r = 0; r < map->rows; r++) {
         int c = 0;
@@ -120,12 +120,12 @@ int map_build_colliders(const Map *map, Location *loc)
 /* ── Spawn search ─────────────────────────────────────────────────────── */
 
 int map_find_spawn(const Map *map, int hint_row, int hint_col,
-                   float *out_x, float *out_y)
+                   float *out_x, float *out_y, int room_w, int room_h)
 {
     if (!map || !map->cells || !out_x || !out_y) return 0;
 
-    float tile_w = (float)ROOM_W / (float)map->cols;
-    float tile_h = (float)ROOM_H / (float)map->rows;
+    float tile_w = (float)room_w / (float)map->cols;
+    float tile_h = (float)room_h / (float)map->rows;
 
     /* Search outward from the hint position. */
     for (int radius = 0; radius < map->rows; radius++) {

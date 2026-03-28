@@ -192,9 +192,13 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
     for (int i = 0; i < world->location_count; i++) {
         Location *loc = &world->locations[i];
 
+        /* Default room dimensions (fallback; overridden after texture load) */
+        loc->room_width  = ROOM_W;
+        loc->room_height = ROOM_H;
+
         /* Default spawn (centre of walkable floor) */
-        loc->spawn_x = (float)(ROOM_W / 2);
-        loc->spawn_y = (float)(ROOM_H / 2);
+        loc->spawn_x = (float)(loc->room_width / 2);
+        loc->spawn_y = (float)(loc->room_height / 2);
 
         switch (loc->id) {
 
@@ -205,6 +209,13 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/room1.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
 
                 /* Load tile map and build collision from the CSV. */
                 Map *m = map_load_csv("maps/logic archive_logic.csv");
@@ -212,29 +223,36 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_colliders(m, loc);
 
                     /* Place the player in a central floor tile. */
-                    float sx = (float)(ROOM_W / 2);
-                    float sy = (float)(ROOM_H / 2);
-                    map_find_spawn(m, m->rows / 2, m->cols / 2, &sx, &sy);
+                    float sx = (float)(loc->room_width / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, m->rows / 2, m->cols / 2, &sx, &sy,
+                                   loc->room_width, loc->room_height);
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
 
                     map_free(m);
                 } else {
                     /* Fallback spawn if CSV is missing. */
-                    loc->spawn_x = (float)(ROOM_W / 2);
-                    loc->spawn_y = (float)(ROOM_H / 2);
+                    loc->spawn_x = (float)(loc->room_width / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
                 break;
             }
 
             case 1: {
-                loc->spawn_x = (float)(ROOM_W / 2);
-                loc->spawn_y = (float)(ROOM_H / 2);
-
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/room2.png");
-                
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+                loc->spawn_x = (float)(loc->room_width / 2);
+                loc->spawn_y = (float)(loc->room_height / 2);
+
                 break;
             }
         default:
@@ -255,35 +273,35 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
     /* Draw background texture if available, otherwise use colored rectangles */
     if (loc->background_texture) {
         render_texture(renderer, loc->background_texture,
-                      -cx, -cy, ROOM_W, ROOM_H);
+                      -cx, -cy, loc->room_width, loc->room_height);
     } else {
         /* ── Ceiling ── */
         render_filled_rect(renderer,
             -cx, 0,
-            ROOM_W, FLOOR_Y - 40,
+            loc->room_width, FLOOR_Y - 40,
             loc->wall_r, loc->wall_g, loc->wall_b, 255);
 
         /* ── Ceiling strip ── */
         render_filled_rect(renderer,
             -cx, 0,
-            ROOM_W, 40,
+            loc->room_width, 40,
             loc->ceil_r, loc->ceil_g, loc->ceil_b, 255);
 
         /* ── Wall bottom strip ── */
         render_filled_rect(renderer,
             -cx, FLOOR_Y - 40,
-            ROOM_W, 40,
+            loc->room_width, 40,
             (Uint8)(loc->wall_r/2), (Uint8)(loc->wall_g/2), (Uint8)(loc->wall_b/2),
             255);
 
         /* ── Floor ── */
         render_filled_rect(renderer,
             -cx, FLOOR_Y,
-            ROOM_W, ROOM_H - FLOOR_Y,
+            loc->room_width, loc->room_height - FLOOR_Y,
             loc->floor_r, loc->floor_g, loc->floor_b, 255);
 
         /* Floor planks / detail lines */
-        for (int fx = 0; fx < ROOM_W; fx += 120) {
+        for (int fx = 0; fx < loc->room_width; fx += 120) {
             int lx = fx - cx;
             SDL_SetRenderDrawColor(renderer,
                 (Uint8)(loc->floor_r > 15 ? loc->floor_r - 15 : 0),
@@ -291,7 +309,7 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
                 (Uint8)(loc->floor_b > 15 ? loc->floor_b - 15 : 0),
                 255);
             SDL_RenderLine(renderer, (float)lx, (float)FLOOR_Y,
-                           (float)lx, (float)ROOM_H);
+                           (float)lx, (float)loc->room_height);
         }
     }
 

@@ -125,7 +125,7 @@ void game_start_new(Game *game) {
     /* Free any previous map first (e.g. returning from menu) */
     map_free(&game->map);
     if (!map_load(&game->map, game->renderer,
-                  "assets/map.csv", "assets/tileset.png",
+                  "maps/Archive room logic_Logic.csv", "assets/room/room1.png",
                   MAP_TILESET_COLS)) {
         SDL_Log("game_start_new: failed to load map");
     }

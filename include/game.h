@@ -11,6 +11,7 @@
 #include "ui.h"
 #include "npc.h"
 #include "monologue.h"
+#include "flashlight.h"
 
 /* ── Game states ──────────────────────────────────────────────────────── */
 
@@ -93,6 +94,9 @@ typedef struct {
 
     /* Running flag */
     int running;
+
+    /* Flashlight */
+    Flashlight flashlight;
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */

@@ -11,6 +11,7 @@
 #
 # Trigger IDs used by the game:
 #   game_start            -- shown when a new game begins
+#   flashlight            -- trigger 50 at the Entrance Hall (flashlight pickup)
 #   portrait              -- trigger 30 at the Entrance Hall (portrait)
 #   stranger              -- trigger 40 at the Entrance Hall (stranger NPC)
 #   basement_door_locked  -- trigger 10 in the Dark Corridor, no key yet
@@ -31,6 +32,14 @@ Perhaps someone knows what's happening.
 ---
 
 # ── Entrance Hall ─────────────────────────────────────────────────────
+
+[flashlight]
+Alex
+---
+A flashlight, left here by someone who clearly knew this place would be
+dark. The battery still works. Press F to switch it on and off -- I have
+a feeling I am going to need this.
+---
 
 [portrait]
 Alex

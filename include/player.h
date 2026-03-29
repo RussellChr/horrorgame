@@ -27,7 +27,10 @@
 #define DIRECTION_EAST  2
 #define DIRECTION_WEST  3
 
-/* ── Item ──────────────────────────────────────────────────────────────── */
+/* ── Well-known item IDs ───────────────────────────────────────────────── */
+#define ITEM_ID_DIARY       1
+#define ITEM_ID_BASEMENT_KEY 10
+#define ITEM_ID_FLASHLIGHT  11
 
 typedef struct {
     char name[ITEM_NAME_MAX];

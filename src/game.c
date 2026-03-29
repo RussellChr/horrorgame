@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -522,6 +523,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                     *slot += INV_NAV_COLS;
             }
 #undef INV_NAV_COLS
+
+            /* Use selected item */
+            if (event->key.key == SDLK_U &&
+                game->player &&
+                *slot < game->player->inventory_count &&
+                game->player->inventory[*slot].usable) {
+                const Item *it = &game->player->inventory[*slot];
+                if (it->id == 11) {
+                    /* Flashlight: toggle on/off */
+                    game->flashlight_active = !game->flashlight_active;
+                }
+            }
         }
         break;
 
@@ -707,7 +720,10 @@ void game_update(Game *game)
                     if (rect_overlaps(&pr, &near_zone)) {
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        strncpy(game->interact_label, "Press E to talk",
+                        const char *label = (tz->trigger_id == 50)
+                            ? "Press [E] to pick it up"
+                            : "Press [E] to interact";
+                        strncpy(game->interact_label, label,
                                 sizeof(game->interact_label) - 1);
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';
                         break;
@@ -835,6 +851,83 @@ void game_render_playing(Game *game)
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* ── Flashlight cone overlay ── */
+    if (game->flashlight_active) {
+        SDL_Renderer *r = game->renderer;
+        Player *p = game->player;
+
+        /* Player screen position (waist-level origin for beam) */
+        float ox = (float)camera_to_screen_x(&game->camera, p->x);
+        float oy = (float)camera_to_screen_y(&game->camera,
+                                              p->y - (float)PLAYER_SPRITE_H * 0.55f);
+
+        /* Beam direction based on facing */
+        float dir_angle;
+        switch (p->current_direction) {
+        case DIRECTION_NORTH: dir_angle = -(float)M_PI / 2.0f; break;
+        case DIRECTION_SOUTH: dir_angle =  (float)M_PI / 2.0f; break;
+        case DIRECTION_WEST:  dir_angle =  (float)M_PI;        break;
+        default:              dir_angle =  0.0f;                break; /* EAST */
+        }
+
+        /* Cone parameters */
+        float half_angle = 25.0f * ((float)M_PI / 180.0f); /* half-width in radians */
+        float beam_len   = 520.0f;
+        int   seg_count  = 24; /* triangle fan segments */
+
+        /* Draw dark overlay over the whole screen first */
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 190);
+
+        /* Build cone triangle fan using SDL_RenderGeometry */
+        int vtx_count = seg_count + 2; /* origin + seg_count+1 rim points */
+        SDL_Vertex *verts = (SDL_Vertex *)malloc(
+            (size_t)vtx_count * sizeof(SDL_Vertex));
+        if (verts) {
+            /* Centre of fan: player origin, bright white */
+            verts[0].position.x   = ox;
+            verts[0].position.y   = oy;
+            verts[0].color.r      = 1.0f;
+            verts[0].color.g      = 1.0f;
+            verts[0].color.b      = 0.95f;
+            verts[0].color.a      = 0.92f;
+            verts[0].tex_coord.x  = 0.0f;
+            verts[0].tex_coord.y  = 0.0f;
+
+            for (int s = 0; s <= seg_count; s++) {
+                float t = (float)s / (float)seg_count;   /* 0..1 */
+                float a = (dir_angle - half_angle) + t * 2.0f * half_angle;
+                float rim_x = ox + cosf(a) * beam_len;
+                float rim_y = oy + sinf(a) * beam_len;
+                verts[s + 1].position.x  = rim_x;
+                verts[s + 1].position.y  = rim_y;
+                /* Fade to transparent at the rim */
+                verts[s + 1].color.r     = 1.0f;
+                verts[s + 1].color.g     = 1.0f;
+                verts[s + 1].color.b     = 0.9f;
+                verts[s + 1].color.a     = 0.0f;
+                verts[s + 1].tex_coord.x = 0.0f;
+                verts[s + 1].tex_coord.y = 0.0f;
+            }
+
+            /* Build index list: triangle fan (origin, rim[s], rim[s+1]) */
+            int idx_count = seg_count * 3;
+            int *indices  = (int *)malloc((size_t)idx_count * sizeof(int));
+            if (indices) {
+                for (int s = 0; s < seg_count; s++) {
+                    indices[s * 3 + 0] = 0;
+                    indices[s * 3 + 1] = s + 1;
+                    indices[s * 3 + 2] = s + 2;
+                }
+                SDL_SetRenderBlendMode(r, SDL_BLENDMODE_ADD);
+                SDL_RenderGeometry(r, NULL, verts, vtx_count,
+                                   indices, idx_count);
+                SDL_SetRenderBlendMode(r, SDL_BLENDMODE_BLEND);
+                free(indices);
+            }
+            free(verts);
+        }
+    }
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.
@@ -1055,11 +1148,17 @@ void game_render_inventory(Game *game)
                             180, 100, 100);
 
         /* "Usable" hint */
-        if (it->usable)
-            render_text_centered(r, "[U] Use item",
+        if (it->usable) {
+            const char *use_label = "[U] Use item";
+            if (it->id == 11)
+                use_label = game->flashlight_active
+                    ? "[U] Turn off flashlight"
+                    : "[U] Turn on flashlight";
+            render_text_centered(r, use_label,
                                  detail_x + detail_w / 2,
                                  grid_y + 4 * (INV_CELL_SIZE + INV_CELL_GAP) - 30,
                                  1, 130, 200, 130);
+        }
     } else {
         /* Empty selection — show placeholder */
         render_filled_rect(r, detail_x, grid_y, detail_w,

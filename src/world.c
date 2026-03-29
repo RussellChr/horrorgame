@@ -237,9 +237,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
-                /* ── Flashlight pickup (near centre of map) ── */
+                /* ── Flashlight pickup (left side of map) ── */
                 {
-                    float fx = (float)(loc->room_width / 2) - 40.0f;
+                    float fx = 200.0f;
                     float fy = (float)(FLOOR_Y - 14);
                     if (loc->item_overlay_count < MAX_ITEM_OVERLAYS) {
                         ItemOverlay *ov = &loc->item_overlays[loc->item_overlay_count++];

@@ -152,6 +152,18 @@ int world_load_locations(World *world, const char *filepath)
         } \
     } while(0)
 
+/* Like ADD_DECOR but uses a pre-loaded texture instead of a flat colour. */
+#define ADD_DECOR_TEX(loc, X,Y,W,H, TEX, LBL) \
+    do { \
+        if ((loc)->decor_count < MAX_DECOR) { \
+            Decor *_d = &(loc)->decor[(loc)->decor_count++]; \
+            _d->x=(X); _d->y=(Y); _d->w=(W); _d->h=(H); \
+            _d->r=0; _d->g=0; _d->b=0; \
+            _d->texture=(TEX); \
+            strncpy(_d->label,(LBL),31); \
+        } \
+    } while(0)
+
 #define ADD_COLLIDER(loc, X,Y,W,H) \
     do { \
         if ((loc)->collider_count < MAX_COLLISION_RECTS) { \
@@ -240,6 +252,16 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 /* Flashlight item pickup trigger – placed near the entry table */
                 ADD_TRIGGER(loc, FLASHLIGHT_PICKUP_X, FLASHLIGHT_PICKUP_Y, 60, 60, 50, 0, 0);
 
+                /* Flashlight sprite – rendered using the dedicated asset */
+                {
+                    SDL_Texture *fl_tex = render_load_texture(
+                        renderer, "assets/flashlight.png");
+                    ADD_DECOR_TEX(loc,
+                                  FLASHLIGHT_PICKUP_X, FLASHLIGHT_PICKUP_Y,
+                                  60, 60,
+                                  fl_tex, "flashlight");
+                }
+
                 break;
             }
 
@@ -319,19 +341,27 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
     /* ── Decorations ── */
     for (int i = 0; i < loc->decor_count; i++) {
         const Decor *d = &loc->decor[i];
-        render_filled_rect(renderer,
-            d->x - cx, d->y - cy,
-            d->w, d->h,
-            d->r, d->g, d->b, 255);
+        if (d->hidden) continue;
 
-        /* Outline to give depth */
-        render_rect_outline(renderer,
-            d->x - cx, d->y - cy,
-            d->w, d->h,
-            (Uint8)(d->r > 30 ? d->r - 30 : 0),
-            (Uint8)(d->g > 30 ? d->g - 30 : 0),
-            (Uint8)(d->b > 30 ? d->b - 30 : 0),
-            200);
+        if (d->texture) {
+            render_texture(renderer, d->texture,
+                           d->x - cx, d->y - cy,
+                           d->w, d->h);
+        } else {
+            render_filled_rect(renderer,
+                d->x - cx, d->y - cy,
+                d->w, d->h,
+                d->r, d->g, d->b, 255);
+
+            /* Outline to give depth */
+            render_rect_outline(renderer,
+                d->x - cx, d->y - cy,
+                d->w, d->h,
+                (Uint8)(d->r > 30 ? d->r - 30 : 0),
+                (Uint8)(d->g > 30 ? d->g - 30 : 0),
+                (Uint8)(d->b > 30 ? d->b - 30 : 0),
+                200);
+        }
     }
     /* ── Collision boxes (debug visualization) ── */
     for (int i = 0; i < loc->collider_count; i++) {

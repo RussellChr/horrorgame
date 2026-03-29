@@ -351,6 +351,16 @@ static void handle_interaction(Game *game)
             game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
             game->pickup_notify_timer = 2.5f;
             game->player->flags |= FLAG_FLASHLIGHT_OBTAINED;
+
+            /* Hide the pickup sprite now that the item has been taken */
+            if (loc) {
+                for (int _i = 0; _i < loc->decor_count; _i++) {
+                    if (strncmp(loc->decor[_i].label, "flashlight", 31) == 0) {
+                        loc->decor[_i].hidden = 1;
+                        break;
+                    }
+                }
+            }
         }
         set_dialogue_tree(game, "flashlight", 0);
     }

@@ -39,12 +39,14 @@ typedef struct {
     int  required_item_id;
 } Exit;
 
-/* ── Decorative element (drawn as a coloured rectangle) ──────────────── */
+/* ── Decorative element (drawn as a coloured rectangle or sprite) ──────── */
 
 typedef struct {
-    int   x, y, w, h;
-    Uint8 r, g, b;
-    char  label[32];   /* optional label painted on/above the object */
+    int          x, y, w, h;
+    Uint8        r, g, b;
+    char         label[32];      /* optional label painted on/above the object */
+    SDL_Texture *texture;        /* if non-NULL, draw sprite instead of rect    */
+    int          hidden;         /* if non-zero, skip rendering entirely         */
 } Decor;
 
 /* ── Location ─────────────────────────────────────────────────────────── */

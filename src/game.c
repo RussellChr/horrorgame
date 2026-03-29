@@ -337,6 +337,26 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* Flashlight pickup (Entrance Hall, trigger 50) */
+    else if (tid == 50 && loc_id == 0 &&
+             !(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+        Item flashlight;
+        strncpy(flashlight.name,        "Flashlight",                ITEM_NAME_MAX - 1);
+        strncpy(flashlight.description, "A heavy-duty flashlight. "
+                                        "The beam cuts through darkness.",
+                                        ITEM_DESC_MAX - 1);
+        flashlight.name[ITEM_NAME_MAX - 1]        = '\0';
+        flashlight.description[ITEM_DESC_MAX - 1] = '\0';
+        flashlight.id     = 11;
+        flashlight.usable = 1;
+        player_add_item(game->player, &flashlight);
+        strncpy(game->pickup_item_name, flashlight.name,
+                sizeof(game->pickup_item_name) - 1);
+        game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+        game->pickup_notify_timer = 2.5f;
+        player_set_flag(game->player, FLAG_FLASHLIGHT_OBTAINED);
+        set_dialogue_tree(game, "flashlight", 0);
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);

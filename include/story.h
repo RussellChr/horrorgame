@@ -36,6 +36,7 @@ typedef enum {
 #define FLAG_LILY_TRUSTS_PLAYER (1u << 5)
 #define FLAG_MONSTER_AWARE      (1u << 6)
 #define FLAG_KEY_OBTAINED       (1u << 7)
+#define FLAG_FLASHLIGHT_OBTAINED (1u << 8)
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

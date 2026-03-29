@@ -237,6 +237,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
+                /* Flashlight pickup (trigger 50) */
+                ADD_TRIGGER(loc, 200, FLOOR_Y - 60, 60, 60, 50, 0.0f, 0.0f);
+
                 break;
             }
 

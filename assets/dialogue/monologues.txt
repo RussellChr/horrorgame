@@ -18,6 +18,7 @@
 #   diary                 -- trigger  1 in the Library
 #   key                   -- trigger 10 in the Child's Room
 #   ritual_circle         -- trigger 20 in the Ritual Room
+#   flashlight            -- trigger 50 in the Entrance Hall
 
 # ── Opening monologue ──────────────────────────────────────────────────
 
@@ -95,4 +96,14 @@ The symbols on the floor. I have seen these before -- in the diary.
 This is the binding circle. Something was imprisoned here, kept in place
 by this pattern carved into the stone. The edges are crumbling. The
 binding is breaking.
+---
+
+# ── Entrance Hall ─────────────────────────────────────────────────────────
+
+[flashlight]
+Alex
+---
+A flashlight, left on the floor. The battery still works -- a small mercy
+in a house this dark. I should hold on to this. Something tells me I will
+need every advantage I can find.
 ---

@@ -921,10 +921,10 @@ void game_render_playing(Game *game)
                     indices[s * 3 + 1] = s + 1;
                     indices[s * 3 + 2] = s + 2;
                 }
-                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+                SDL_SetRenderBlendMode(r, SDL_BLENDMODE_ADD);
                 SDL_RenderGeometry(r, NULL, verts, vtx_count,
                                    indices, idx_count);
-                SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+                SDL_SetRenderBlendMode(r, SDL_BLENDMODE_BLEND);
                 free(indices);
             }
             free(verts);

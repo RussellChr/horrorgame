@@ -237,6 +237,23 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
+                /* ── Flashlight pickup (near centre of map) ── */
+                {
+                    float fx = (float)(loc->room_width / 2) - 40.0f;
+                    float fy = (float)(FLOOR_Y - 14);
+                    if (loc->item_overlay_count < MAX_ITEM_OVERLAYS) {
+                        ItemOverlay *ov = &loc->item_overlays[loc->item_overlay_count++];
+                        ov->texture    = render_load_texture(renderer, "assets/flashlight.png");
+                        ov->x          = fx;
+                        ov->y          = fy;
+                        ov->w          = 80.0f;
+                        ov->h          = 44.0f;
+                        ov->trigger_id = 50;
+                        ov->active     = 1;
+                    }
+                    ADD_TRIGGER(loc, fx - 20.0f, fy - 6.0f, 120, 60, 50, 0, 0);
+                }
+
                 break;
             }
 
@@ -329,6 +346,14 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (Uint8)(d->g > 30 ? d->g - 30 : 0),
             (Uint8)(d->b > 30 ? d->b - 30 : 0),
             200);
+    }
+    /* ── Item overlays ── */
+    for (int i = 0; i < loc->item_overlay_count; i++) {
+        const ItemOverlay *ov = &loc->item_overlays[i];
+        if (!ov->active || !ov->texture) continue;
+        render_texture(renderer, ov->texture,
+                       (int)(ov->x - (float)cx), (int)(ov->y - (float)cy),
+                       (int)ov->w, (int)ov->h);
     }
     /* ── Collision boxes (debug visualization) ── */
     for (int i = 0; i < loc->collider_count; i++) {

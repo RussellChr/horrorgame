@@ -337,6 +337,43 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* Flashlight pickup (Entrance Hall, trigger 50) */
+    else if (tid == 50 && loc_id == 0) {
+        if (!(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+            Item flashlight = {0};
+            strncpy(flashlight.name, "Flashlight", ITEM_NAME_MAX - 1);
+            flashlight.name[ITEM_NAME_MAX - 1] = '\0';
+            strncpy(flashlight.description,
+                    "A sturdy metal flashlight. Could prove useful in the dark.",
+                    ITEM_DESC_MAX - 1);
+            flashlight.description[ITEM_DESC_MAX - 1] = '\0';
+            flashlight.id     = 11;
+            flashlight.usable = 1;
+            player_add_item(game->player, &flashlight);
+            strncpy(game->pickup_item_name, flashlight.name,
+                    sizeof(game->pickup_item_name) - 1);
+            game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+            game->pickup_notify_timer = 2.5f;
+            game->player->flags |= FLAG_FLASHLIGHT_OBTAINED;
+            /* Deactivate the map overlay and disable the trigger */
+            if (loc) {
+                for (int i = 0; i < loc->item_overlay_count; i++) {
+                    if (loc->item_overlays[i].trigger_id == 50) {
+                        loc->item_overlays[i].active = 0;
+                        break;
+                    }
+                }
+                for (int i = 0; i < loc->trigger_count; i++) {
+                    if (loc->triggers[i].trigger_id == 50) {
+                        loc->triggers[i].trigger_id = -1;
+                        break;
+                    }
+                }
+            }
+        }
+        /* No dialogue – item is picked up silently */
+        return;
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
@@ -660,7 +697,9 @@ void game_update(Game *game)
                         break;
                     }
                 } else {
-                    /* Interactive: detect proximity */
+                    /* Interactive: skip disabled triggers */
+                    if (tz->trigger_id < 0) continue;
+                    /* Detect proximity */
                     Rect near_zone = {
                         tz->bounds.x - 40.0f, tz->bounds.y - 20.0f,
                         tz->bounds.w + 80.0f, tz->bounds.h + 40.0f

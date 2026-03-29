@@ -239,8 +239,8 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 /* ── Flashlight pickup (left side of map) ── */
                 {
-                    float fx = 200.0f;
-                    float fy = (float)(FLOOR_Y - 14);
+                    float fx = 500.0f;
+                    float fy = 425.0f;
                     if (loc->item_overlay_count < MAX_ITEM_OVERLAYS) {
                         ItemOverlay *ov = &loc->item_overlays[loc->item_overlay_count++];
                         ov->texture    = render_load_texture(renderer, "assets/flashlight.png");

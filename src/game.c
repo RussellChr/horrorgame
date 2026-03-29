@@ -1,3 +1,5 @@
+#include <SDL3/SDL.h>
+
 #include "game.h"
 #include "player.h"
 #include "world.h"

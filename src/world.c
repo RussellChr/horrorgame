@@ -237,11 +237,11 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
-                /* Flashlight pickup (trigger 50) */
-                ADD_TRIGGER(loc, 200, FLOOR_Y - 60, 60, 60, 50, 0.0f, 0.0f);
+                /* Flashlight pickup (trigger 50) – 30 px below spawn (500,400) */
+                ADD_TRIGGER(loc, 500, 430, 60, 60, 50, 0.0f, 0.0f);
 
                 /* Flashlight sprite – rendered at the trigger position */
-                ADD_DECOR(loc, 200, FLOOR_Y - 60, 60, 60, 255, 200, 50, "Flashlight");
+                ADD_DECOR(loc, 500, 430, 60, 60, 255, 200, 50, "Flashlight");
                 {
                     int fi = loc->decor_count - 1;
                     loc->decor[fi].texture = render_load_texture(

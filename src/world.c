@@ -237,10 +237,15 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
-                /* ── Flashlight pickup (left side of map) ── */
+                /* ── Flashlight pickup (near centre of map) ── */
                 {
+<<<<<<< HEAD
                     float fx = 500.0f;
                     float fy = 425.0f;
+=======
+                    float fx = (float)(loc->room_width / 2) - 40.0f;
+                    float fy = (float)(FLOOR_Y - 14);
+>>>>>>> parent of ea84256 (feat: move flashlight left, fix label, add cone-of-light use system)
                     if (loc->item_overlay_count < MAX_ITEM_OVERLAYS) {
                         ItemOverlay *ov = &loc->item_overlays[loc->item_overlay_count++];
                         ov->texture    = render_load_texture(renderer, "assets/flashlight.png");

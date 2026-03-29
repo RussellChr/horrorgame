@@ -80,9 +80,6 @@ typedef struct {
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
-    /* Flashlight */
-    int   flashlight_active;     /* 1 = flashlight is switched on     */
-
     /* Ending */
     int   ending_type;               /* Ending enum value            */
     float ending_timer;              /* seconds since ending started */

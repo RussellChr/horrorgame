@@ -237,6 +237,18 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
 
+                /* Flashlight pickup (trigger 50) – beside player spawn (500,400),
+                   offset right so it isn't hidden under the player sprite */
+                ADD_TRIGGER(loc, 580, 430, 60, 60, 50, 0.0f, 0.0f);
+
+                /* Flashlight sprite – rendered at the trigger position */
+                ADD_DECOR(loc, 580, 430, 60, 60, 255, 200, 50, "Flashlight");
+                {
+                    int fi = loc->decor_count - 1;
+                    loc->decor[fi].texture = render_load_texture(
+                        renderer, "assets/flashlight.png");
+                }
+
                 break;
             }
 
@@ -316,19 +328,25 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
     /* ── Decorations ── */
     for (int i = 0; i < loc->decor_count; i++) {
         const Decor *d = &loc->decor[i];
-        render_filled_rect(renderer,
-            d->x - cx, d->y - cy,
-            d->w, d->h,
-            d->r, d->g, d->b, 255);
+        if (d->hidden) continue;
+        if (d->texture) {
+            render_texture(renderer, d->texture,
+                           d->x - cx, d->y - cy, d->w, d->h);
+        } else {
+            render_filled_rect(renderer,
+                d->x - cx, d->y - cy,
+                d->w, d->h,
+                d->r, d->g, d->b, 255);
 
-        /* Outline to give depth */
-        render_rect_outline(renderer,
-            d->x - cx, d->y - cy,
-            d->w, d->h,
-            (Uint8)(d->r > 30 ? d->r - 30 : 0),
-            (Uint8)(d->g > 30 ? d->g - 30 : 0),
-            (Uint8)(d->b > 30 ? d->b - 30 : 0),
-            200);
+            /* Outline to give depth */
+            render_rect_outline(renderer,
+                d->x - cx, d->y - cy,
+                d->w, d->h,
+                (Uint8)(d->r > 30 ? d->r - 30 : 0),
+                (Uint8)(d->g > 30 ? d->g - 30 : 0),
+                (Uint8)(d->b > 30 ? d->b - 30 : 0),
+                200);
+        }
     }
     /* ── Collision boxes (debug visualization) ── */
     for (int i = 0; i < loc->collider_count; i++) {

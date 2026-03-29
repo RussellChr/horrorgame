@@ -1,3 +1,7 @@
 LOCATION 0 Entrance Hall
 DESC A large, dimly-lit hall.
 ATMO The candlelight flickers.
+
+LOCATION 1 Kimia Lab
+DESC A cluttered chemistry laboratory.
+ATMO The smell of chemicals lingers in the air.

@@ -38,6 +38,7 @@ add_executable(horrorgame
     src/animation.c
     src/camera.c
     src/collision.c
+    src/flashlight.c
 )
 
 target_link_libraries(horrorgame SDL3::SDL3)

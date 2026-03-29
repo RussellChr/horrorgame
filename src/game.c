@@ -8,6 +8,7 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
+#include "flashlight.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -138,6 +139,9 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->ending_type             = 0;
     game->ending_timer            = 0.0f;
+
+    /* Initialise flashlight (off by default) */
+    flashlight_init(&game->flashlight);
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -329,6 +333,37 @@ static void handle_interaction(Game *game)
             game->ending_type = -1; /* signal to trigger ending on dialogue end */
         }
     }
+    /* Flashlight pickup (Entrance Hall, trigger 50) */
+    else if (tid == 50 && loc_id == 0) {
+        if (!(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+            Item fl_item;
+            strncpy(fl_item.name,        "Flashlight",           ITEM_NAME_MAX - 1);
+            strncpy(fl_item.description, "A bright handheld flashlight. "
+                                         "Press F to toggle the light.",
+                                         ITEM_DESC_MAX - 1);
+            fl_item.name[ITEM_NAME_MAX - 1]       = '\0';
+            fl_item.description[ITEM_DESC_MAX - 1] = '\0';
+            fl_item.id     = ITEM_ID_FLASHLIGHT;
+            fl_item.usable = 1;
+            player_add_item(game->player, &fl_item);
+            strncpy(game->pickup_item_name, fl_item.name,
+                    sizeof(game->pickup_item_name) - 1);
+            game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
+            game->pickup_notify_timer = 2.5f;
+            game->player->flags |= FLAG_FLASHLIGHT_OBTAINED;
+
+            /* Hide the pickup sprite now that the item has been taken */
+            if (loc) {
+                for (int _i = 0; _i < loc->decor_count; _i++) {
+                    if (strncmp(loc->decor[_i].label, "flashlight", 31) == 0) {
+                        loc->decor[_i].hidden = 1;
+                        break;
+                    }
+                }
+            }
+        }
+        set_dialogue_tree(game, "flashlight", 0);
+    }
     /* Portrait interaction (Entrance Hall, trigger 30) */
     else if (tid == 30 && loc_id == 0) {
         set_dialogue_tree(game, "portrait", 30);
@@ -409,6 +444,10 @@ void game_handle_event(Game *game, SDL_Event *event)
             case SDLK_E:
                 if (game->near_interactive)
                     handle_interaction(game);
+                break;
+            case SDLK_F:
+                if (player_has_item(game->player, ITEM_ID_FLASHLIGHT))
+                    flashlight_toggle(&game->flashlight);
                 break;
             default: break;
             }
@@ -668,8 +707,14 @@ void game_update(Game *game)
                     if (rect_overlaps(&pr, &near_zone)) {
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        strncpy(game->interact_label, "Press E to talk",
-                                sizeof(game->interact_label) - 1);
+                        if (tz->trigger_id == 50 &&
+                            !(game->player->flags & FLAG_FLASHLIGHT_OBTAINED)) {
+                            strncpy(game->interact_label, "Press E to pick up",
+                                    sizeof(game->interact_label) - 1);
+                        } else {
+                            strncpy(game->interact_label, "Press E to talk",
+                                    sizeof(game->interact_label) - 1);
+                        }
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';
                         break;
                     }
@@ -679,6 +724,9 @@ void game_update(Game *game)
 
         /* ── Animate player ── */
         player_update(p, dt);
+
+        /* ── Flashlight direction – follow movement input ── */
+        flashlight_update(&game->flashlight, p->vx, p->vy);
 
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
@@ -797,16 +845,12 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
-    /* Stranger NPC: draw a bright yellow exclamation mark above its head
-     * when in the Entrance Hall (location 0) so the player can spot it.
-     * The body/head are already drawn by world_render_room() via decor,
-     * so we only add the visual indicator here. */
-    if (game->player->current_location_id == 0) {
-        /* Centre of the 30-px body, above the 44-px head (FLOOR_Y-150). */
-        int npc_sx = camera_to_screen_x(&game->camera,
-                                        STRANGER_NPC_X + 15);  /* half body width */
-        int npc_sy = camera_to_screen_y(&game->camera, FLOOR_Y - 190);
-        /* Bright yellow "!" above the NPC head */
+    /* Flashlight overlay – rendered after world + player, before UI */
+    if (player_has_item(game->player, ITEM_ID_FLASHLIGHT)) {
+        flashlight_render(&game->flashlight, game->renderer,
+                          game->player->x, game->player->y - (float)(PLAYER_SPRITE_H / 2),
+                          game->camera.x,  game->camera.y,
+                          WINDOW_W, WINDOW_H);
     }
 
     /* Interaction prompt */
@@ -831,8 +875,12 @@ void game_render_playing(Game *game)
                         WINDOW_W - 100, 12, 1, 110, 30, 30);
     }
 
-    render_text(game->renderer, "I:inv  ESC:pause",
-                WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
+    if (player_has_item(game->player, ITEM_ID_FLASHLIGHT))
+        render_text(game->renderer, "F:flashlight  I:inv  ESC:pause",
+                    WINDOW_W - 252, WINDOW_H - 18, 1, 66, 18, 18);
+    else
+        render_text(game->renderer, "I:inv  ESC:pause",
+                    WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
     if (game->pickup_notify_timer > 0.0f) {

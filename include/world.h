@@ -22,6 +22,14 @@
 
 #define STRANGER_NPC_X  820  /* centre-left x of the 30-px body    */
 
+/* ── Entrance Hall flashlight pickup world position ──────────────────── */
+/* Change these two values to move the flashlight item in the room.      */
+/* X is the world-space horizontal position (0 = left wall).             */
+/* Y is set relative to FLOOR_Y; negative values move it up the wall.   */
+
+#define FLASHLIGHT_PICKUP_X   300              /* world-space x            */
+#define FLASHLIGHT_PICKUP_Y  (FLOOR_Y - 60)   /* slightly above the floor */
+
 /* ── Exit (logical, for text-game movement) ──────────────────────────── */
 
 typedef struct {

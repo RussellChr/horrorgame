@@ -238,7 +238,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 }
 
                 /* Flashlight item pickup trigger – placed near the entry table */
-                ADD_TRIGGER(loc, 300, FLOOR_Y - 60, 60, 60, 50, 0, 0);
+                ADD_TRIGGER(loc, FLASHLIGHT_PICKUP_X, FLASHLIGHT_PICKUP_Y, 60, 60, 50, 0, 0);
 
                 break;
             }

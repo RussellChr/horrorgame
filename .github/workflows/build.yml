@@ -45,6 +45,7 @@ jobs:
           mkdir -p horrorgame-windows
           cp build/Release/horrorgame.exe horrorgame-windows/ || cp build/horrorgame.exe horrorgame-windows/
           cp -r assets horrorgame-windows/ || echo "Assets not found, continuing..."
+          cp -r maps horrorgame-windows/ || echo "Maps not found, continuing..."
           
           # Try to find and copy SDL3 DLLs
           find vcpkg/installed -name "SDL3.dll" -exec cp {} horrorgame-windows/ \; 2>/dev/null || true

@@ -1,4 +1,10 @@
 #include <SDL3/SDL.h>
+#ifdef _WIN32
+#  include <direct.h>
+#  define chdir _chdir
+#else
+#  include <unistd.h>
+#endif
 #include "game.h"
 
 int main(int argc, char *argv[])
@@ -8,6 +14,16 @@ int main(int argc, char *argv[])
     if (!SDL_Init(SDL_INIT_VIDEO)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
+    }
+
+    /* Change working directory to the executable's location so that
+     * relative asset paths (e.g. "assets/...") resolve correctly on all
+     * platforms, including Windows when the .exe is launched via Explorer. */
+    char *base_path = SDL_GetBasePath();
+    if (base_path) {
+        if (chdir(base_path) != 0)
+            SDL_Log("Warning: could not change directory to '%s'", base_path);
+        SDL_free(base_path);
     }
 
     SDL_Window *window = SDL_CreateWindow(

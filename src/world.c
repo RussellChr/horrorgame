@@ -208,7 +208,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 loc->spawn_y = 400.0f;    // Y coordinate in pixels
 
                 loc->background_texture = render_load_texture(
-                    renderer, "assets/room/room1.png");
+                    renderer, "assets/room/archive_room.png");
                 if (loc->background_texture) {
                     float tw = 0.0f, th = 0.0f;
                     if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
@@ -243,7 +243,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
         case 1: {
                 loc->background_texture = render_load_texture(
-                    renderer, "assets/room/room2.png");
+                    renderer, "assets/room/lab.png");
                 if (loc->background_texture) {
                     float tw = 0.0f, th = 0.0f;
                     if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {

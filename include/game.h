@@ -81,6 +81,7 @@ typedef struct {
 
     /* Flashlight */
     int   flashlight_on;         /* 1 if flashlight is currently on */
+    SDL_Texture *darkness_texture; /* full-screen render target for darkness/cone mask */
 
     /* Timing */
     Uint64 last_ticks;

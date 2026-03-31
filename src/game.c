@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -70,6 +71,14 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load Title Screen*/
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
+    /* Darkness render-target texture: used to draw a dark overlay with a
+     * transparent cone punched out for the flashlight effect. */
+    g->darkness_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
+                                            SDL_TEXTUREACCESS_TARGET,
+                                            WINDOW_W, WINDOW_H);
+    if (g->darkness_texture)
+        SDL_SetTextureBlendMode(g->darkness_texture, SDL_BLENDMODE_BLEND);
+
     return g;
 }
 
@@ -82,6 +91,7 @@ void game_cleanup(Game *game)
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
+    if (game->darkness_texture) SDL_DestroyTexture(game->darkness_texture);
     free(game);
 }
 

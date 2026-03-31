@@ -79,6 +79,9 @@ typedef struct {
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
+    /* Flashlight */
+    int   flashlight_on;         /* 1 if flashlight is currently on */
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;

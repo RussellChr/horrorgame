@@ -246,6 +246,26 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* Flashlight pickup (Entrance Hall, trigger 50) */
+    else if (tid == 50 && loc_id == 0) {
+        if (!player_has_item(game->player, ITEM_ID_FLASHLIGHT)) {
+            Item flashlight;
+            memset(&flashlight, 0, sizeof(flashlight));
+            strncpy(flashlight.name, "Flashlight",
+                    sizeof(flashlight.name) - 1);
+            strncpy(flashlight.description,
+                    "A battery-powered flashlight. Press [F] to toggle it on or off.",
+                    sizeof(flashlight.description) - 1);
+            flashlight.id     = ITEM_ID_FLASHLIGHT;
+            flashlight.usable = 1;
+            player_add_item(game->player, &flashlight);
+            strncpy(game->pickup_item_name, "Flashlight",
+                    sizeof(game->pickup_item_name) - 1);
+            game->pickup_notify_timer = 2.5f;
+        }
+        /* Already have it — no action needed */
+        return;
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
@@ -319,6 +339,10 @@ void game_handle_event(Game *game, SDL_Event *event)
                 if (game->near_interactive)
                     handle_interaction(game);
                 break;
+            case SDLK_F:
+                if (player_has_item(game->player, ITEM_ID_FLASHLIGHT))
+                    game->flashlight_on = !game->flashlight_on;
+                break;
             default: break;
             }
         }
@@ -385,6 +409,18 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->key.key == SDLK_DOWN) {
                 if (*slot + INV_NAV_COLS < cap)
                     *slot += INV_NAV_COLS;
+            }
+            /* Use selected item */
+            if (event->key.key == SDLK_U) {
+                int sel = game->selected_inventory_slot;
+                if (sel >= 0 && sel < game->player->inventory_count) {
+                    const Item *it = &game->player->inventory[sel];
+                    if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
+                        game->flashlight_on = !game->flashlight_on;
+                        /* Return to playing so the effect is immediately visible */
+                        game->state = GAME_STATE_PLAYING;
+                    }
+                }
             }
 #undef INV_NAV_COLS
         }
@@ -570,8 +606,17 @@ void game_update(Game *game)
                     if (rect_overlaps(&pr, &near_zone)) {
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        strncpy(game->interact_label, "Press E to talk",
-                                sizeof(game->interact_label) - 1);
+                        if (tz->trigger_id == 50) {
+                            if (player_has_item(game->player, ITEM_ID_FLASHLIGHT))
+                                strncpy(game->interact_label, "Press E to examine",
+                                        sizeof(game->interact_label) - 1);
+                            else
+                                strncpy(game->interact_label, "Press E to pick up",
+                                        sizeof(game->interact_label) - 1);
+                        } else {
+                            strncpy(game->interact_label, "Press E to talk",
+                                    sizeof(game->interact_label) - 1);
+                        }
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';
                         break;
                     }
@@ -717,8 +762,18 @@ void game_render_playing(Game *game)
         render_text(game->renderer, "Prologue",
                     WINDOW_W - 100, 12, 1, 110, 30, 30);
 
-    render_text(game->renderer, "I:inv  ESC:pause",
-                WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
+    render_text(game->renderer, "F:light  I:inv  ESC:pause",
+                WINDOW_W - 200, WINDOW_H - 18, 1, 66, 18, 18);
+
+    /* Flashlight status indicator */
+    if (player_has_item(game->player, ITEM_ID_FLASHLIGHT)) {
+        const char *fl_label = game->flashlight_on ? "[F] Flashlight: ON" : "[F] Flashlight: OFF";
+        render_text(game->renderer, fl_label,
+                    14, WINDOW_H - 18, 1,
+                    game->flashlight_on ? 230 : 90,
+                    game->flashlight_on ? 230 : 60,
+                    game->flashlight_on ? 100 : 60);
+    }
 
     /* ── Item pickup notification ── */
     if (game->pickup_notify_timer > 0.0f) {

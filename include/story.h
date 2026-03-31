@@ -14,6 +14,7 @@
 #define LOCATION_ARCHIVE    0   /* starting room – archive / entrance hall */
 #define LOCATION_LAB        1   /* chemistry laboratory                    */
 #define LOCATION_HALLWAY    2   /* corridor / hallway                      */
+#define LOCATION_POWER      3   /* power room                              */
 
 /* ── Story flags (bitmask values for player->flags) ───────────────────── */
 

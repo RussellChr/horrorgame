@@ -9,3 +9,7 @@ ATMO The smell of chemicals lingers in the air.
 LOCATION 2 Hallway
 DESC A long, narrow hallway.
 ATMO The floorboards creak with every step.
+
+LOCATION 3 Power Room
+DESC A dark room filled with machinery and electrical panels.
+ATMO The hum of generators fills the air.

@@ -6,7 +6,9 @@
 /* ── Tile values used in the CSV ─────────────────────────────────────── */
 #define MAP_TILE_WALL   0    /* impassable */
 #define MAP_TILE_FLOOR (-1)  /* walkable   */
-#define MAP_TILE_DOOR   1    /* entrance / exit door */
+#define MAP_TILE_DOOR   1    /* entrance / exit door (default) */
+#define MAP_TILE_DOOR2  2    /* secondary door (e.g. hallway→power) */
+#define MAP_TILE_DOOR5  5    /* tertiary door  (e.g. power→hallway) */
 
 /* ── Map ─────────────────────────────────────────────────────────────── */
 
@@ -50,6 +52,15 @@ int map_build_colliders(const Map *map, Location *loc);
 int map_build_door_triggers(const Map *map, Location *loc,
                             int dest_id,
                             float dest_spawn_x, float dest_spawn_y);
+
+/*
+ * Same as map_build_door_triggers but scans for 'tile_value' instead of
+ * MAP_TILE_DOOR.  Use this when door tiles are encoded as values other than 1.
+ */
+int map_build_door_triggers_for_tile(const Map *map, Location *loc,
+                                     int tile_value,
+                                     int dest_id,
+                                     float dest_spawn_x, float dest_spawn_y);
 
 /*
  * Find the world-space position of the first floor tile at or near

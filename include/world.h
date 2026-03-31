@@ -8,6 +8,7 @@
 #define MAX_LOCATIONS      16
 #define MAX_EXITS           8
 #define MAX_DECOR          32
+#define MAX_ITEM_OVERLAYS   8
 
 #define LOCATION_NAME_MAX  64
 #define LOCATION_DESC_MAX  512
@@ -39,6 +40,15 @@ typedef struct {
     char  label[32];   /* optional label painted on/above the object */
 } Decor;
 
+/* ── Item overlay (pickable item rendered on the map) ────────────────── */
+
+typedef struct {
+    SDL_Texture *texture;
+    float        x, y, w, h;  /* world-space position and display size */
+    int          trigger_id;   /* matches the associated TriggerZone    */
+    int          active;       /* 1 = visible on map, 0 = picked up     */
+} ItemOverlay;
+
 /* ── Location ─────────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -67,6 +77,10 @@ typedef struct {
     /* Visual decorations */
     Decor decor[MAX_DECOR];
     int   decor_count;
+
+    /* Item overlays (pickable items rendered on the map) */
+    ItemOverlay item_overlays[MAX_ITEM_OVERLAYS];
+    int         item_overlay_count;
 
     /* Collision rectangles */
     Rect  colliders[MAX_COLLISION_RECTS];

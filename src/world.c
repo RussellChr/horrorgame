@@ -240,7 +240,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 /* Flashlight pickup trigger (ID 50) placed on the floor
                    of the Entrance Hall near the spawn area. */
-                ADD_TRIGGER(loc, 750, 480, 32, 32, 50, 0, 0);
+                ADD_TRIGGER(loc, 4000, 480, 32, 32, 50, 0, 0);
 
                 break;
             }

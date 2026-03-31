@@ -274,6 +274,24 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+
+        /* ── 2: Hallway ─────────────────────────────────────────────────── */
+        case 2: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/hallway.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                loc->spawn_x = (float)(loc->room_width  / 2);
+                loc->spawn_y = (float)(loc->room_height / 2);
+
+                break;
+            }
         default:
             break;
         }

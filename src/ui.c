@@ -187,6 +187,41 @@ void ui_draw_hud(SDL_Renderer *renderer, const Player *player)
     render_text(renderer, inv_text, 14, 14, 1, 150, 90, 90);
 }
 
+/* ── Objective bar ─────────────────────────────────────────────────────── */
+
+void ui_draw_objective_bar(SDL_Renderer *renderer, const char *objective_text)
+{
+    if (!renderer || !objective_text) return;
+
+    /* Build display string */
+    char buf[128];
+    snprintf(buf, sizeof(buf), "OBJECTIVE: %s", objective_text);
+
+    int scale  = 1;
+    int pad_x  = 12;
+    int pad_y  = 5;
+    int text_w = render_text_width(buf, scale);
+    int text_h = 8 * scale;
+
+    /* Centre the box horizontally, pin to top of screen */
+    int bar_w  = text_w + pad_x * 2;
+    int bar_h  = text_h + pad_y * 2;
+    int bar_x  = (WINDOW_W - bar_w) / 2;
+    int bar_y  = 0;
+
+    /* Background */
+    render_filled_rect(renderer, bar_x, bar_y, bar_w, bar_h,
+                       10, 3, 3, 200);
+    /* Border */
+    render_rect_outline(renderer, bar_x, bar_y, bar_w, bar_h,
+                        130, 30, 30, 220);
+
+    /* Text */
+    render_text(renderer, buf,
+                bar_x + pad_x, bar_y + pad_y,
+                scale, 210, 150, 150);
+}
+
 /* ── Interaction prompt ────────────────────────────────────────────────── */
 
 void ui_draw_interact_prompt(SDL_Renderer *renderer,

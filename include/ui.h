@@ -37,6 +37,10 @@ void slider_render(SDL_Renderer *r, const Slider *s, const char *label);
 
 void ui_draw_hud(SDL_Renderer *renderer, const Player *player);
 
+/* ── Objective bar (shown at the top of the screen during gameplay) ───── */
+
+void ui_draw_objective_bar(SDL_Renderer *renderer, const char *objective_text);
+
 /* ── Interaction prompt ───────────────────────────────────────────────── */
 
 void ui_draw_interact_prompt(SDL_Renderer *renderer,

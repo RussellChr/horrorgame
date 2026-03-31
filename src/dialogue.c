@@ -467,7 +467,8 @@ DialogueTree *dialogue_build_for_location(int location_id)
 
         dialogue_add_node(tree, 1, "Professor Ashwood's Diary",
             "October 12th. The ritual is complete. The creature is bound. "
-            "But the price... God forgive me, the price was Lily.", 0);
+            "But the price... God forgive me. What I have done cannot "
+            "be undone.", 0);
         next.next_node_id = 2;
         dialogue_add_choice(dialogue_get_node(tree, 1), &next);
 

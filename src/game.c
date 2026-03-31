@@ -173,10 +173,6 @@ void game_change_location(Game *game, int location_id,
     }
 
     camera_snap(&game->camera, spawn_x, spawn_y);
-
-    if (location_id == 4) /* Child's Room – meet Lily */
-        story_trigger_event(game->story, game->player,
-                            game->world, "meet_lily");
 }
 
 void game_start_dialogue(Game *game, int node_id)
@@ -322,7 +318,6 @@ static void handle_interaction(Game *game)
             !(game->player->flags & FLAG_KNOWS_TRUTH)) {
             story_trigger_event(game->story, game->player,
                                 game->world, "learn_truth");
-            game->player->flags |= FLAG_LILY_TRUSTS_PLAYER;
         }
         set_dialogue_tree(game, "ritual_circle", 5);
         /* Check for ending condition after ritual */
@@ -696,11 +691,9 @@ void game_update(Game *game)
         /* ── Story chapter auto-advance ── */
         if (game->story) {
             int ch = game->story->current_chapter;
-            if (ch == 0 && (p->flags & FLAG_MET_LILY))
+            if (ch == 0 && (p->flags & FLAG_FOUND_DIARY))
                 story_advance_chapter(game->story, p, game->world);
-            else if (ch == 1 && (p->flags & FLAG_FOUND_DIARY))
-                story_advance_chapter(game->story, p, game->world);
-            else if (ch == 2 && (p->flags & FLAG_OPENED_BASEMENT))
+            else if (ch == 1 && (p->flags & FLAG_OPENED_BASEMENT))
                 story_advance_chapter(game->story, p, game->world);
             else if (ch == 3 && (p->flags & FLAG_KNOWS_TRUTH))
                 story_advance_chapter(game->story, p, game->world);
@@ -1097,16 +1090,16 @@ void game_render_ending(Game *game)
     };
     static const char *texts[] = {
         "",
-        "You sprint through the front door as dawn breaks. Lily's hand is warm "
-        "in yours. The estate collapses behind you. Some horrors are best "
+        "You sprint through the front door as dawn breaks. "
+        "The estate collapses behind you. Some horrors are best "
         "left in the dark.",
-        "You face the creature alone while Lily slips out through the cellar. "
+        "You face the creature alone, buying time for any chance of escape. "
         "The last thing you feel is a strange peace. You chose this.",
         "You speak the creature's true name aloud. The house shudders. "
         "Light floods every shadow. The thing unravels, screaming. "
-        "Lily weeps – and smiles.",
+        "You have broken a curse older than the house itself.",
         "The darkness was patient. By the time you realise what you have become,"
-        " Lily is already gone – and so are you."
+        " there is no one left – and neither are you."
     };
     static const Uint8 clrs[][3] = {
         {60,60,60},{30,60,30},{70,30,30},{30,50,70},{50,10,55}

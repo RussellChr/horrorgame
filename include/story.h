@@ -28,12 +28,10 @@ typedef enum {
 /* ── Story flags (single-bit bitmask values for Player.flags) ──────────── */
 /* Pass these directly to player_set_flag / player_check_flag.             */
 
-#define FLAG_MET_LILY           (1u << 0)
 #define FLAG_FOUND_DIARY        (1u << 1)
 #define FLAG_OPENED_BASEMENT    (1u << 2)
 #define FLAG_SOLVED_PUZZLE      (1u << 3)
 #define FLAG_KNOWS_TRUTH        (1u << 4)
-#define FLAG_LILY_TRUSTS_PLAYER (1u << 5)
 #define FLAG_MONSTER_AWARE      (1u << 6)
 #define FLAG_KEY_OBTAINED       (1u << 7)
 

@@ -18,8 +18,8 @@ static const char *chapter_intros[CHAPTER_COUNT] = {
     "A soft sound echoes from deeper within: a child humming a lullaby.",
 
     /* CHAPTER TWO */
-    "You have met Lily. She is pale, quiet, and knows far more than a\n"
-    "child should. The locked basement door calls to you both.",
+    "The basement door has been opened. Cold air and old secrets rise\n"
+    "from below. Whatever was kept down there has been waiting a long time.",
 
     /* CHAPTER THREE */
     "The truth begins to unravel. Pages torn from a diary reveal a history\n"
@@ -37,27 +37,27 @@ static const char *ending_texts[ENDING_COUNT] = {
     "(No ending reached.)",
 
     /* ENDING_ESCAPE */
-    "You sprint through the front door as dawn breaks. Lily's hand is warm\n"
-    "in yours. The estate collapses behind you in a roar of rotting timber.\n"
+    "You sprint through the front door as dawn breaks.\n"
+    "The estate collapses behind you in a roar of rotting timber.\n"
     "You do not look back. Some horrors are best left in the dark.\n\n"
     "              ── ENDING: ESCAPE ──\n",
 
     /* ENDING_SACRIFICE */
-    "You face the creature alone while Lily slips out through the cellar.\n"
+    "You face the creature alone, buying time for any chance of escape.\n"
     "The last thing you feel is a strange peace – you chose this.\n"
-    "By morning the house is silent. Lily finds help. She never forgets.\n\n"
+    "By morning the house is silent.\n\n"
     "              ── ENDING: SACRIFICE ──\n",
 
     /* ENDING_TRUTH */
     "You speak the creature's true name aloud. The house shudders.\n"
     "Light floods every shadow. The thing unravels, screaming.\n"
-    "Lily weeps – and smiles. You have broken a curse older than the house.\n\n"
+    "You have broken a curse older than the house itself.\n\n"
     "              ── ENDING: TRUTH ──\n",
 
     /* ENDING_CORRUPTION */
     "The darkness was patient. It waited for you to look too long,\n"
     "ask too much, want too deeply. By the time you realise what you\n"
-    "have become, Lily is already gone – and so are you.\n\n"
+    "have become, there is no one left – and neither are you.\n\n"
     "              ── ENDING: CORRUPTION ──\n"
 };
 
@@ -109,9 +109,9 @@ Ending story_determine_ending(const StoryState *state,
     if (state->dark_choices > 5)
         return ENDING_CORRUPTION;
 
-    /* Truth: player knows the truth and has Lily's trust */
+    /* Truth: player knows the truth and the puzzle is solved */
     if (player_check_flag(player, FLAG_KNOWS_TRUTH) &&
-        player_check_flag(player, FLAG_LILY_TRUSTS_PLAYER))
+        player_check_flag(player, FLAG_SOLVED_PUZZLE))
         return ENDING_TRUTH;
 
     /* Sacrifice: monster is aware */
@@ -135,14 +135,6 @@ int story_trigger_event(StoryState *state, Player *player,
                         World *world, const char *event_name) {
     (void)world;
     if (!state || !player || !event_name) return 0;
-
-    if (strcmp(event_name, "meet_lily") == 0) {
-        if (player_check_flag(player, FLAG_MET_LILY)) return 0;
-        player_set_flag(player, FLAG_MET_LILY);
-        printf("A small girl steps out of the shadows.\n"
-               "\"You shouldn't be here,\" she whispers.\n");
-        return 1;
-    }
 
     if (strcmp(event_name, "find_diary") == 0) {
         if (player_check_flag(player, FLAG_FOUND_DIARY)) return 0;
@@ -174,7 +166,7 @@ int story_trigger_event(StoryState *state, Player *player,
         }
         player_set_flag(player, FLAG_KNOWS_TRUTH);
         printf("The terrible truth clicks into place.\n"
-               "Professor Ashwood made a bargain. Lily is the price.\n"
+               "Professor Ashwood made a bargain with something ancient.\n"
                "But a bargain can be broken – if you are willing to pay.\n");
         state->choices_made++;
         return 1;

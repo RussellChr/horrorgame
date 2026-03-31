@@ -672,6 +672,18 @@ void game_render(Game *game)
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
                            0, 0, 0, alpha);
     }
+
+    /* Darkness overlay: rooms are dark by default.
+     * The flashlight lifts the darkness when switched on.
+     * Only applied during active gameplay states. */
+    if (game->state == GAME_STATE_PLAYING ||
+        game->state == GAME_STATE_DIALOGUE ||
+        game->state == GAME_STATE_PAUSE) {
+        Uint8 dark_alpha = game->flashlight_on ? 0 : 200;
+        if (dark_alpha > 0)
+            render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                               0, 0, 0, dark_alpha);
+    }
 }
 
 /* ── Menu ────────────────────────────────────────────────────────────────── */

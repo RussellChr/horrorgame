@@ -274,6 +274,36 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+        case 2: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/monitoring_room.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+                /* Load collision map and find spawn near the entrance door. */
+                Map *m = map_load_csv("maps/logic kimia_logic.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+                    /* Hint one row above the door tiles (rows 23-25, cols 11-14)
+                        so the player spawns just in front of the door. */
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, m->rows - 5, 12, &sx, &sy,
+                                loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+                break;
+            }
         default:
             break;
         }

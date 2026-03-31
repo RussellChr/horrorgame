@@ -312,6 +312,14 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 ADD_TRIGGER(loc, 1312, 448, 128, 64, 60, 0, 0);
                 ADD_TRIGGER(loc, 1120, 576, 160, 96, 60, 0, 0);
 
+                /* Item triggers in hallway.csv (tile size 32×32):
+                 * Tile 8 cluster: rows 16-20, cols 16-19 → world (512,512) 128×160
+                 * Tile 9 cluster: rows 17-19, cols 13-15 → world (416,544)  96×96
+                 * Tile 10 cluster: rows 15-16, cols 26-28 → world (832,480)  96×64 */
+                ADD_TRIGGER(loc,  512, 512, 128, 160, 70, 0, 0);
+                ADD_TRIGGER(loc,  416, 544,  96,  96, 80, 0, 0);
+                ADD_TRIGGER(loc,  832, 480,  96,  64, 90, 0, 0);
+
                 break;
             }
         default:

@@ -19,6 +19,9 @@
 
 #define FLAG_ENTERED_LAB        (1u << 0)   /* player visited the lab      */
 #define FLAG_ENTERED_HALLWAY    (1u << 1)   /* player visited the hallway  */
+#define FLAG_ITEM8_CHECKED      (1u << 2)   /* hallway tile-8 examined      */
+#define FLAG_GASMASK_FOUND      (1u << 3)   /* gasmask picked up (tile 9)   */
+#define FLAG_FLASHLIGHT_FOUND   (1u << 4)   /* flashlight picked up (tile 10) */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

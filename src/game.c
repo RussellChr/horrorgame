@@ -248,8 +248,38 @@ static void handle_interaction(Game *game)
         return;
     }
 
+    /* Hallway item triggers — one-shot interactions */
+    if (tid == 70 && loc_id == 2) {
+        player_set_flag(game->player, FLAG_ITEM8_CHECKED);
+        set_dialogue_tree(game, "hallway_item8", loc_id);
+    }
+    else if (tid == 80 && loc_id == 2) {
+        player_set_flag(game->player, FLAG_GASMASK_FOUND);
+        Item gasmask = {0};
+        gasmask.id     = 2;
+        gasmask.usable = 0;
+        strncpy(gasmask.name, "Gasmask", ITEM_NAME_MAX - 1);
+        strncpy(gasmask.description,
+                "Protects against hazardous fumes.",
+                ITEM_DESC_MAX - 1);
+        player_add_item(game->player, &gasmask);
+        set_dialogue_tree(game, "hallway_gasmask", loc_id);
+    }
+    else if (tid == 90 && loc_id == 2) {
+        player_set_flag(game->player, FLAG_FLASHLIGHT_FOUND);
+        Item flashlight = {0};
+        flashlight.id     = 3;
+        flashlight.usable = 1;
+        strncpy(flashlight.name, "Flashlight", ITEM_NAME_MAX - 1);
+        strncpy(flashlight.description,
+                "Illuminates dark places.",
+                ITEM_DESC_MAX - 1);
+        player_add_item(game->player, &flashlight);
+        set_dialogue_tree(game, "hallway_flashlight", loc_id);
+    }
+
     /* Portrait interaction (Entrance Hall, trigger 30) */
-    if (tid == 30 && loc_id == 0) {
+    else if (tid == 30 && loc_id == 0) {
         set_dialogue_tree(game, "portrait", 30);
     }
     /* Stranger NPC interaction (Entrance Hall, trigger 40) */
@@ -580,6 +610,17 @@ void game_update(Game *game)
                         break;
                     }
                 } else {
+                    /* Skip one-shot item triggers that have already been used */
+                    if (tz->trigger_id == 70 &&
+                        player_check_flag(p, FLAG_ITEM8_CHECKED))
+                        continue;
+                    if (tz->trigger_id == 80 &&
+                        player_check_flag(p, FLAG_GASMASK_FOUND))
+                        continue;
+                    if (tz->trigger_id == 90 &&
+                        player_check_flag(p, FLAG_FLASHLIGHT_FOUND))
+                        continue;
+
                     /* Interactive: detect proximity */
                     Rect near_zone = {
                         tz->bounds.x - 40.0f, tz->bounds.y - 20.0f,
@@ -590,7 +631,7 @@ void game_update(Game *game)
                         game->interactive_trigger_id = tz->trigger_id;
                         const char *label = (tz->trigger_id == 60)
                             ? "Press [E] to enter locker"
-                            : "Press E to talk";
+                            : "Press [E] to examine";
                         strncpy(game->interact_label, label,
                                 sizeof(game->interact_label) - 1);
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';

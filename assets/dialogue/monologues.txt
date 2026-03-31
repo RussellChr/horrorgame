@@ -41,3 +41,23 @@ Alex
 ---
 There is someone else in this house. That should be reassuring. It is not.
 ---
+
+# ── Hallway ───────────────────────────────────────────────────────────
+
+[hallway_item8]
+Alex
+---
+Item not found.
+---
+
+[hallway_gasmask]
+Alex
+---
+Gasmask is found. This can be useful when I enter the hazardous room.
+---
+
+[hallway_flashlight]
+Alex
+---
+Flashlight is found. This can be useful in a dark place.
+---

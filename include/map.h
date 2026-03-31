@@ -52,6 +52,16 @@ int map_build_door_triggers(const Map *map, Location *loc,
                             float dest_spawn_x, float dest_spawn_y);
 
 /*
+ * Same as map_build_door_triggers() but matches any tile value given by
+ * 'tile_value' instead of MAP_TILE_DOOR.  Use this for doors marked with
+ * values other than 1 in the CSV (e.g. 3 for the security-room door).
+ */
+int map_build_exit_triggers_for_tile(const Map *map, Location *loc,
+                                     int tile_value,
+                                     int dest_id,
+                                     float dest_spawn_x, float dest_spawn_y);
+
+/*
  * Find the world-space position of the first floor tile at or near
  * (hint_row, hint_col), searching outward in a spiral.
  * Writes the spawn coordinates into *out_x (tile centre x) and

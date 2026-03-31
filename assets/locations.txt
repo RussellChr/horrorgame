@@ -9,3 +9,7 @@ ATMO The smell of chemicals lingers in the air.
 LOCATION 2 Hallway
 DESC A long, narrow hallway.
 ATMO The floorboards creak with every step.
+
+LOCATION 3 Security Room
+DESC A security monitoring room filled with screens.
+ATMO The screens flicker with static.

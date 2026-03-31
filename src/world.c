@@ -314,6 +314,43 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+
+        /* ── 3: Security Room ───────────────────────────────────────────── */
+        case 3: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/security.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                /* Load collision map and build colliders from security.csv.
+                 * Spawn near the tile-3 door: hint at row 19 (0-indexed),
+                 * col 31 – one row above the door run (rows 20-21, cols 28-34)
+                 * so map_find_spawn lands on the floor just in front of it. */
+                Map *m = map_load_csv("maps/security.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    /* Hint one row above the door run (row 19, col 31). */
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 19, 31, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
         default:
             break;
         }
@@ -341,6 +378,41 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 map_build_door_triggers(m2, loc1, 0,
                                         loc0->spawn_x, loc0->spawn_y);
                 map_free(m2);
+            }
+        }
+    }
+
+    /* ── Hallway (2) ↔ Security Room (3) via tile-3 door ───────────────── */
+    /* Tile 3 in hallway.csv (rows 7-8, cols 32-33) is the security door.
+       When the player steps on it they are transported to the security room,
+       spawning just in front of its tile-3 door (loc3->spawn_x/y).
+       Tile 3 in security.csv (rows 20-21, cols 28-34) sends the player back
+       to the hallway, spawning just to the right of the hallway's tile-3
+       door (row 9, col 35 in hallway.csv). */
+    {
+        Location *loc2 = world_get_location(world, 2);
+        Location *loc3 = world_get_location(world, 3);
+        if (loc2 && loc3) {
+            /* Hallway → Security: trigger on tile-3 in hallway.csv.
+               Also compute the hallway return-spawn (row 9, col 35) from
+               the same map load to avoid loading the file twice. */
+            Map *mh = map_load_csv("maps/hallway.csv");
+            float hsx = loc2->spawn_x;
+            float hsy = loc2->spawn_y;
+            if (mh) {
+                map_build_exit_triggers_for_tile(mh, loc2, 3, 3,
+                                                 loc3->spawn_x, loc3->spawn_y);
+                map_find_spawn(mh, 9, 35, &hsx, &hsy,
+                               loc2->room_width, loc2->room_height);
+                map_free(mh);
+            }
+
+            /* Security → Hallway: trigger on tile-3 in security.csv.
+               Spawn the player at the hallway return-spawn computed above. */
+            Map *ms = map_load_csv("maps/security.csv");
+            if (ms) {
+                map_build_exit_triggers_for_tile(ms, loc3, 3, 2, hsx, hsy);
+                map_free(ms);
             }
         }
     }

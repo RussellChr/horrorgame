@@ -751,6 +751,14 @@ void game_render_playing(Game *game)
     /* HUD */
     ui_draw_hud(game->renderer, game->player);
 
+    /* Player coordinates (debug) */
+    {
+        char coord_buf[32];
+        snprintf(coord_buf, sizeof(coord_buf),
+                 "X:%.0f  Y:%.0f", game->player->x, game->player->y);
+        render_text(game->renderer, coord_buf, 14, 26, 1, 110, 70, 70);
+    }
+
     /* Objective bar */
     if (game->story && game->player) {
         const char *obj = story_get_objective(game->player);

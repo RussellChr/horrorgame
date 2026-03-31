@@ -50,3 +50,18 @@ int story_load(StoryState *state, const char *filepath) {
     /* Placeholder: full save/load not yet implemented */
     return 0;
 }
+
+/* ── Objective text ─────────────────────────────────────────────────────── */
+
+const char *story_get_objective(const Player *player)
+{
+    if (!player) return "Find out what is happening";
+
+    if (player_check_flag(player, FLAG_ENTERED_HALLWAY))
+        return "Find a way out of the building";
+
+    if (player_check_flag(player, FLAG_ENTERED_LAB))
+        return "Look for clues in the chemistry lab";
+
+    return "Find out what is happening";
+}

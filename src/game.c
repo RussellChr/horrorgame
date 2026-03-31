@@ -164,6 +164,12 @@ void game_change_location(Game *game, int location_id,
     game->player->vx = 0.0f;
     game->player->vy = 0.0f;
 
+    /* Track first-visit story flags for the objective system */
+    if (location_id == LOCATION_LAB)
+        player_set_flag(game->player, FLAG_ENTERED_LAB);
+    else if (location_id == LOCATION_HALLWAY)
+        player_set_flag(game->player, FLAG_ENTERED_HALLWAY);
+
     Location *next = world_get_location(game->world, location_id);
     if (next) {
         game->camera.world_w = next->room_width;
@@ -699,6 +705,12 @@ void game_render_playing(Game *game)
 
     /* HUD */
     ui_draw_hud(game->renderer, game->player);
+
+    /* Objective bar */
+    if (game->story && game->player) {
+        const char *obj = story_get_objective(game->player);
+        ui_draw_objective_bar(game->renderer, obj);
+    }
 
     /* Chapter label */
     if (game->story)

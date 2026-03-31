@@ -240,9 +240,12 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 /* ── Flashlight pickup (near centre of map) ── */
                 {
 <<<<<<< HEAD
+<<<<<<< HEAD
                     float fx = 500.0f;
                     float fy = 425.0f;
 =======
+=======
+>>>>>>> parent of ea84256 (feat: move flashlight left, fix label, add cone-of-light use system)
                     float fx = (float)(loc->room_width / 2) - 40.0f;
                     float fy = (float)(FLOOR_Y - 14);
 >>>>>>> parent of ea84256 (feat: move flashlight left, fix label, add cone-of-light use system)

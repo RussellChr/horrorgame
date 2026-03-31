@@ -319,21 +319,47 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
     {
         Location *loc0 = world_get_location(world, 0);
         Location *loc1 = world_get_location(world, 1);
+        Location *loc2 = world_get_location(world, 2);
         if (loc0 && loc1) {
             Map *m = map_load_csv("maps/logic archive tutup_logic.csv");
             if (m) {
-                map_build_door_triggers(m, loc0, 1,
+                map_build_door_triggers(m, loc0, MAP_TILE_DOOR, 1,
                                         loc1->spawn_x, loc1->spawn_y);
                 map_free(m);
             }
 
             /* Room 1's door tiles (tile 1 in logic kimia_logic.csv) lead back
-               to room 0, spawning the player in front of room 0's door. */
+               to room 2 (hallway), spawning the player in front of the hallway
+               lab-door (tile 4, rows 13-15, cols 30-31 of hallway.csv).
+               We compute that spawn by searching near row 16, col 29 which
+               is the walkable tile immediately adjacent to the door. */
             Map *m2 = map_load_csv("maps/logic kimia_logic.csv");
             if (m2) {
-                map_build_door_triggers(m2, loc1, 0,
-                                        loc0->spawn_x, loc0->spawn_y);
+                float hw_door_x = loc2 ? loc2->spawn_x : 500.0f;
+                float hw_door_y = loc2 ? loc2->spawn_y : 500.0f;
+                if (loc2) {
+                    Map *mh = map_load_csv("maps/hallway.csv");
+                    if (mh) {
+                        map_find_spawn(mh, 16, 29,
+                                       &hw_door_x, &hw_door_y,
+                                       loc2->room_width, loc2->room_height);
+                        map_free(mh);
+                    }
+                }
+                map_build_door_triggers(m2, loc1, MAP_TILE_DOOR, 2,
+                                        hw_door_x, hw_door_y);
                 map_free(m2);
+            }
+        }
+
+        /* Room 2's lab-door tiles (tile 4 in hallway.csv) lead to room 1 (lab),
+           spawning the player in front of the lab's entrance door. */
+        if (loc1 && loc2) {
+            Map *m3 = map_load_csv("maps/hallway.csv");
+            if (m3) {
+                map_build_door_triggers(m3, loc2, 4, 1,
+                                        loc1->spawn_x, loc1->spawn_y);
+                map_free(m3);
             }
         }
     }

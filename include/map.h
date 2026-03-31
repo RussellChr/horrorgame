@@ -41,14 +41,15 @@ void map_free(Map *map);
 int map_build_colliders(const Map *map, Location *loc);
 
 /*
- * Build exit trigger zones for every MAP_TILE_DOOR (1) run in 'map'.
- * Adjacent door tiles on the same row are merged into a single TriggerZone.
+ * Build exit trigger zones for every run of 'tile_value' tiles in 'map'.
+ * Adjacent matching tiles on the same row are merged into a single TriggerZone.
+ * tile_value           : the CSV tile value that represents a door (e.g. MAP_TILE_DOOR or 4).
  * dest_id              : location ID the player is transported to.
  * dest_spawn_x/y       : player spawn coordinates in the destination room.
  * Returns the number of trigger zones added.
  */
 int map_build_door_triggers(const Map *map, Location *loc,
-                            int dest_id,
+                            int tile_value, int dest_id,
                             float dest_spawn_x, float dest_spawn_y);
 
 /*

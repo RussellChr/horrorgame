@@ -20,7 +20,6 @@ typedef enum {
     GAME_STATE_DIALOGUE,
     GAME_STATE_INVENTORY,
     GAME_STATE_PAUSE,
-    GAME_STATE_ENDING,
     GAME_STATE_SETTINGS,
     GAME_STATE_QUIT
 } GameState;
@@ -80,10 +79,6 @@ typedef struct {
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
-    /* Ending */
-    int   ending_type;               /* Ending enum value            */
-    float ending_timer;              /* seconds since ending started */
-
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;
@@ -113,7 +108,6 @@ void game_change_location(Game *game, int location_id,
                           float spawn_x, float spawn_y);
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
-void game_trigger_ending(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -122,7 +116,6 @@ void game_render_playing(Game *game);
 void game_render_dialogue_overlay(Game *game);
 void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
-void game_render_ending(Game *game);
 void game_render_settings(Game *game);
 
 #endif /* GAME_H */

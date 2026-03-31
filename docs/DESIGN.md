@@ -1,14 +1,13 @@
-# Paper Lily – Game Design Document
+# Project Yozora – Game Design Document
 
 ## Overview
 
-**Paper Lily** is a text-based survival horror game written in C, inspired
-by the visual-novel horror game of the same name. Players explore a haunted
-estate, uncover a dark secret, build a relationship with a trapped child
-named Lily, and choose one of four story endings.
+**Project Yozora** is a 2D visual-novel horror game written in C using SDL3.
+Players explore a mysterious facility, encounter unsettling characters, and
+experience the prologue of a larger story.
 
-The game runs entirely in a terminal, using text descriptions, ANSI colour,
-and typewriter-style output to build atmosphere.
+The game runs in a 1280×720 window with sprite-based movement, tile-map
+collision, an inner-monologue dialogue system, and atmospheric room rendering.
 
 ---
 
@@ -16,101 +15,42 @@ and typewriter-style output to build atmosphere.
 
 1. **Atmosphere over action** – suspense is built through description and pacing,
    not combat.
-2. **Meaningful choices** – every decision changes stats and flags that alter
-   the available endings.
-3. **Character empathy** – the player's relationship with Lily is the emotional
-   heart of the game.
-4. **Low-resource horror** – text-only presentation proves that horror does not
-   require graphics.
+2. **Meaningful choices** – dialogue decisions change flags that shape future events.
+3. **Low-resource horror** – minimal assets prove that horror does not require
+   large production budgets.
 
 ---
 
-## Player Stats
+## Locations (Prologue)
 
-| Stat    | Range | Effect                                                   |
-|---------|-------|----------------------------------------------------------|
-| Health  | 0–100 | Reaches 0 → game over (physical death)                  |
-| Sanity  | 0–100 | Reaches 0 → game over (madness); gates some choices     |
-| Courage | 0–100 | Unlocks brave dialogue options; required for sacrifice   |
+| ID | Name          | Map CSV                          | Background Texture        |
+|----|---------------|----------------------------------|---------------------------|
+| 0  | Entrance Hall | logic archive tutup_logic.csv    | assets/room/archive_room.png |
+| 1  | Kimia Lab     | logic kimia_logic.csv            | assets/room/lab.png       |
+| 2  | Hallway       | hallway.csv                      | assets/room/hallway.png   |
 
----
-
-## Story Flags (bit positions in Player.flags)
-
-| Bit | Name                   | Set when                                      |
-|-----|------------------------|-----------------------------------------------|
-| 0   | FLAG_MET_LILY          | First conversation with Lily occurs           |
-| 1   | FLAG_FOUND_DIARY       | Player picks up the diary                     |
-| 2   | FLAG_OPENED_BASEMENT   | Basement door is unlocked                     |
-| 3   | FLAG_SOLVED_PUZZLE     | Ritual circle puzzle is completed             |
-| 4   | FLAG_KNOWS_TRUTH       | Player reads the full diary + ritual book     |
-| 5   | FLAG_LILY_TRUSTS_PLAYER| Lily's trust branch selected in dialogue      |
-| 6   | FLAG_MONSTER_AWARE     | Player has learned the creature's nature      |
-| 7   | FLAG_KEY_OBTAINED      | Basement key is in inventory                  |
+The player starts in the Hallway (location 2). Rooms 0 and 1 are connected
+via door triggers built from the tile maps.
 
 ---
 
-## Locations
+## Interactions (Prologue)
 
-```
-[Entrance Hall] ──north──► [Dark Corridor] ──north(locked)──► [Basement]
-        │                                                          │
-       east                                                       east
-        │                                                          │
-        ▼                                                          ▼
-   [The Library] ──north──► [Child's Room]              [Ritual Room]
-```
-
-| ID | Name            | Danger | Notable Item        |
-|----|-----------------|--------|---------------------|
-| 0  | Entrance Hall   | No     | –                   |
-| 1  | Dark Corridor   | Yes    | –                   |
-| 2  | The Library     | No     | Diary (item 1)      |
-| 3  | Basement        | Yes    | –                   |
-| 4  | Child's Room    | No     | Basement Key (id 10)|
-| 5  | Ritual Room     | Yes    | –                   |
-
----
-
-## Chapters
-
-| ID | Name      | Trigger                              |
-|----|-----------|--------------------------------------|
-| 0  | Prologue  | Game start                           |
-| 1  | Chapter I | 3 or more steps taken                |
-| 2  | Chapter II| Lily encountered                     |
-| 3  | Chapter III| Diary found                         |
-| 4  | Finale    | Ritual room reached                  |
-
----
-
-## Endings
-
-| Ending      | Condition                                          | Tone         |
-|-------------|---------------------------------------------------|--------------|
-| Escape      | Default path (Lily not fully trusted)             | Bittersweet  |
-| Sacrifice   | Courage ≥ 70 and monster aware                   | Tragic/noble |
-| Truth       | Knows truth AND Lily trusts player                | Cathartic    |
-| Corruption  | Sanity < 20 OR > 5 dark choices                  | Bleak        |
-
----
-
-## Items
-
-| ID | Name          | Effect                                    |
-|----|---------------|-------------------------------------------|
-| 0  | Candle        | Starting item; cosmetic / atmosphere      |
-| 1  | Diary         | Sets FLAG_FOUND_DIARY; needed for truth   |
-| 10 | Basement Key  | Unlocks the Dark Corridor north exit      |
+| Location | Trigger ID | Event                              |
+|----------|------------|------------------------------------|
+| 0        | 30         | Portrait monologue                 |
+| 0        | 40         | Stranger NPC dialogue              |
 
 ---
 
 ## Dialogue System
 
 Conversations use a tree of `DialogueNode` objects. Each node has a speaker,
-text, and up to `MAX_CHOICES` (8) `DialogueChoice` entries. Choices can be
-gated by minimum courage and/or possession of a specific item. Selecting a
-choice applies sanity/courage deltas and may set a story flag.
+text, and up to `MAX_CHOICES` (8) `DialogueChoice` entries.
+
+Inner monologues are loaded from `assets/dialogue/monologues.txt` and
+converted to dialogue trees at runtime. Active sections: `game_start`,
+`portrait`, `stranger`.
 
 ---
 
@@ -118,21 +58,40 @@ choice applies sanity/courage deltas and may set a story flag.
 
 ```
 src/
-  main.c       – Entry point; argument parsing; menu; calls game_init/run
-  game.c       – Game loop; command dispatch; win/lose checks
-  player.c     – Player struct; stat modification; inventory
-  world.c      – Location graph; movement; file loader
-  dialogue.c   – Dialogue tree; interactive conversation runner
-  story.c      – Chapter progression; ending logic; event triggers
-  ui.c         – Terminal output; HUD; menus; ANSI helpers
-  utils.c      – String/file helpers; slow print; random; clamp
+  main.c       – Entry point; SDL3 init; event loop
+  game.c       – Game loop; state machine; input dispatch; rendering
+  player.c     – Player struct; movement; inventory; animation
+  world.c      – Location graph; tile-map loading; room rendering
+  dialogue.c   – Dialogue tree; visual conversation runner
+  story.c      – Story state; prologue intro text
+  monologue.c  – Inner monologue loader/parser
+  npc.c        – NPC system
+  ui.c         – Buttons; sliders; HUD; interaction prompts
+  render.c     – Bitmap font; primitives; texture helpers
+  camera.c     – Camera follow and snap
+  collision.c  – AABB overlap and resolution
+  animation.c  – Frame-based animation state
+  map.c        – CSV tile-map loader and collider builder
+  utils.c      – String/file helpers; slow-print; clamp
 
 include/
-  game.h / player.h / world.h / dialogue.h / story.h / ui.h / utils.h
+  game.h / player.h / world.h / dialogue.h / story.h
+  monologue.h / npc.h / render.h / camera.h / collision.h
+  animation.h / ui.h / map.h / utils.h
 
 assets/
-  story.txt    – Narrative text
-  locations.txt– Location graph (parsed by world_load_locations)
+  dialogue/monologues.txt  – Inner monologue sections
+  player/                  – Player sprite sheets (idle + walk, 4 directions)
+  room/                    – Room background textures
+  dialogue.png             – Dialogue box background
+  title_screen.png         – Title screen image
+  locations.txt            – Location metadata (name, description, atmosphere)
+
+maps/
+  hallway.csv                    – Hallway tile map
+  logic archive tutup_logic.csv  – Entrance Hall tile map
+  logic kimia_logic.csv          – Kimia Lab tile map
+  rooms.txt                      – Room layout reference
 
 docs/
   DESIGN.md    – This document
@@ -143,9 +102,9 @@ docs/
 ## Build
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_PREFIX_PATH=/usr/local -DCMAKE_BUILD_TYPE=Release
 cmake --build build
-./build/paper_lily
+./build/horrorgame
 ```
 
 Optional flags passed to the executable:
@@ -154,16 +113,24 @@ Optional flags passed to the executable:
 |--------------|--------------------------------------|
 | `-n <name>`  | Set the player character name        |
 | `-a <path>`  | Override the assets directory path   |
-| `-s`         | Enable slow (typewriter) text output |
-| `-c`         | Disable ANSI colour output           |
-| `-h`         | Print usage help                     |
+
+---
+
+## Controls
+
+| Key          | Action                        |
+|--------------|-------------------------------|
+| WASD / Arrows| Move player                   |
+| E            | Interact                      |
+| I            | Open inventory                |
+| ESC          | Pause                         |
+| ENTER/SPACE  | Advance dialogue              |
 
 ---
 
 ## Future Work
 
-- Persistent save/load (binary or JSON)
+- Chapter 1 and beyond: expand the story past the prologue
+- Persistent save/load
 - More NPCs and branching dialogue trees
 - Sound cues via a simple audio library
-- Procedurally generated atmospheric descriptions
-- Additional endings and secret paths

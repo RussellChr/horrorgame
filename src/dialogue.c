@@ -435,65 +435,6 @@ DialogueTree *dialogue_build_for_location(int location_id)
             "I'll never get out.", 1);
         break;
 
-    case 1: /* Dark Corridor – basement door */
-        dialogue_add_node(tree, 0, "You",
-            "The basement door is heavy iron, cold as winter. "
-            "A padlock the size of my fist hangs on the latch.", 0);
-        next.next_node_id = 1;
-        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
-
-        dialogue_add_node(tree, 1, "You",
-            "I need a key. Maybe there's one somewhere in this house.", 1);
-        break;
-
-    case 1+100: /* Corridor – after key obtained */
-        dialogue_add_node(tree, 0, "You",
-            "The brass key fits perfectly. The padlock clicks open with "
-            "a sound like a gunshot in the silence.", 0);
-        next.next_node_id = 1;
-        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
-
-        dialogue_add_node(tree, 1, "You",
-            "Cold air rushes up from the darkness below. "
-            "Whatever is down there has been waiting a long time.", 1);
-        break;
-
-    case 2: /* Library – diary */
-        dialogue_add_node(tree, 0, "You",
-            "A leather-bound diary lies open on the desk. "
-            "The ink is faded but still legible.", 0);
-        next.next_node_id = 1;
-        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
-
-        dialogue_add_node(tree, 1, "Professor Ashwood's Diary",
-            "October 12th. The ritual is complete. The creature is bound. "
-            "But the price... God forgive me. What I have done cannot "
-            "be undone.", 0);
-        next.next_node_id = 2;
-        dialogue_add_choice(dialogue_get_node(tree, 1), &next);
-
-        dialogue_add_node(tree, 2, "Professor Ashwood's Diary",
-            "It will keep for a generation. The circle holds. "
-            "But someone will come eventually. God help them.", 1);
-        break;
-
-    case 4: /* Child's Room – key */
-        dialogue_add_node(tree, 0, "You",
-            "A small brass key sits in the toy box, half-buried under "
-            "a threadbare teddy bear.", 0);
-        next.next_node_id = 1;
-        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
-
-        dialogue_add_node(tree, 1, "Lily",
-            "That's for the door downstairs.", 0);
-        next.next_node_id = 2;
-        dialogue_add_choice(dialogue_get_node(tree, 1), &next);
-
-        dialogue_add_node(tree, 2, "Lily",
-            "Don't open it. Please. Whatever happens... "
-            "don't open that door.", 1);
-        break;
-
     case 40: /* Entrance Hall - mysterious stranger */
         dialogue_add_node(tree, 0, "Stranger",
             "You shouldn't be in this house. No one should.", 0);
@@ -515,26 +456,6 @@ DialogueTree *dialogue_build_for_location(int location_id)
         dialogue_add_node(tree, 3, "Stranger",
             "Leave while you still can. Or stay — and learn what the house "
             "does to those who stay too long.", 1);
-        break;
-
-    case 5: /* Ritual Room */
-        dialogue_add_node(tree, 0, "You",
-            "The symbols carved into the floor pulse with a dull red light. "
-            "The air tastes of iron and old fear.", 0);
-        next.next_node_id = 1;
-        dialogue_add_choice(dialogue_get_node(tree, 0), &next);
-
-        dialogue_add_node(tree, 1, "You",
-            "I can see the shape of the ritual now. A binding. "
-            "Something was imprisoned here. Something that has been "
-            "slowly... waking up.", 0);
-        next.next_node_id = 2;
-        dialogue_add_choice(dialogue_get_node(tree, 1), &next);
-
-        dialogue_add_node(tree, 2, "Lily",
-            "You found the truth. There is a name written in the centre. "
-            "Speak it aloud and it ends. "
-            "But only if you're sure. Only if you're brave enough.", 1);
         break;
 
     default:

@@ -109,7 +109,7 @@ int  player_remove_item(Player *player, int item_id);
 int  player_has_item(const Player *player, int item_id);
 void player_show_inventory(const Player *player);
 
-/* Status flags – pass a FLAG_* bitmask value (e.g. FLAG_MET_LILY) */
+/* Status flags – pass a bitmask value to player_set_flag / player_check_flag */
 void player_set_flag(Player *player, uint32_t mask);
 void player_clear_flag(Player *player, uint32_t mask);
 int  player_check_flag(const Player *player, uint32_t mask);

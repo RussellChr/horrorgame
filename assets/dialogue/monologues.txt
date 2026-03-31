@@ -10,14 +10,9 @@
 #   ---
 #
 # Trigger IDs used by the game:
-#   game_start            -- shown when a new game begins
-#   portrait              -- trigger 30 at the Entrance Hall (portrait)
-#   stranger              -- trigger 40 at the Entrance Hall (stranger NPC)
-#   basement_door_locked  -- trigger 10 in the Dark Corridor, no key yet
-#   basement_door_unlocked-- trigger 10 in the Dark Corridor, key obtained
-#   diary                 -- trigger  1 in the Library
-#   key                   -- trigger 10 in the Child's Room
-#   ritual_circle         -- trigger 20 in the Ritual Room
+#   game_start  -- shown when a new game begins
+#   portrait    -- trigger 30 at the Entrance Hall (portrait)
+#   stranger    -- trigger 40 at the Entrance Hall (stranger NPC)
 
 # ── Opening monologue ──────────────────────────────────────────────────
 
@@ -45,54 +40,4 @@ deliberate.
 Alex
 ---
 There is someone else in this house. That should be reassuring. It is not.
----
-
-# ── Dark Corridor ─────────────────────────────────────────────────────
-
-[basement_door_locked]
-Alex
----
-Heavy iron. Cold as winter even in summer. Whoever put this padlock here
-wanted very badly for whatever is on the other side to stay there. I need
-to find the key before I can go any further.
----
-
-[basement_door_unlocked]
-Alex
----
-The padlock clicks open. The sound is too loud in the silence. Cold air
-breathes up from the darkness below -- stale, still, as though the
-basement has not been opened in years. Something down there has been
-waiting a long time for someone to open this door.
----
-
-# ── The Library ───────────────────────────────────────────────────────
-
-[diary]
-Alex
----
-A leather-bound diary, left open on the desk. The ink is faded but still
-legible. I should not read someone else's private thoughts -- but I have a
-feeling this is exactly what I am meant to find.
----
-
-# ── Child's Room ──────────────────────────────────────────────────────
-
-[key]
-Alex
----
-A small brass key, half-buried in a toy box beneath a threadbare teddy
-bear. Why would a child have a key to the basement door? Unless they were
-not put there to play -- but to guard it.
----
-
-# ── Ritual Room ───────────────────────────────────────────────────────
-
-[ritual_circle]
-Alex
----
-The symbols on the floor. I have seen these before -- in the diary.
-This is the binding circle. Something was imprisoned here, kept in place
-by this pattern carved into the stone. The edges are crumbling. The
-binding is breaking.
 ---

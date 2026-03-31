@@ -138,8 +138,6 @@ void game_start_new(Game *game)
     game->near_interactive        = 0;
     game->interactive_trigger_id  = -1;
     game->selected_inventory_slot = 0;
-    game->ending_type             = 0;
-    game->ending_timer            = 0.0f;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -192,15 +190,6 @@ void game_end_dialogue(Game *game)
     game->state = GAME_STATE_PLAYING;
 }
 
-void game_trigger_ending(Game *game)
-{
-    if (!game || !game->story || !game->player) return;
-    game->ending_type  = (int)story_determine_ending(game->story,
-                                                      game->player);
-    game->ending_timer = 0.0f;
-    game->state        = GAME_STATE_ENDING;
-}
-
 /* ── Interaction handler ───────────────────────────────────────────────── */
 
 /* Apply story flag from the currently selected dialogue choice. */
@@ -239,95 +228,12 @@ static void handle_interaction(Game *game)
 
     int loc_id = game->player->current_location_id;
     int tid    = game->interactive_trigger_id;
-    Location *loc = world_get_location(game->world, loc_id);
 
     /* Guard: don't open duplicate dialogue */
     if (game->dialogue_tree) return;
 
-    /* Basement Key pickup (Child's Room, trigger 10) */
-    if (tid == 10 && loc_id == 4 &&
-        !(game->player->flags & FLAG_KEY_OBTAINED)) {
-        Item key;
-        strncpy(key.name,        "Basement Key",           ITEM_NAME_MAX - 1);
-        strncpy(key.description, "A heavy brass key. "
-                                 "Opens the basement lock.",ITEM_DESC_MAX - 1);
-        key.id     = 10;
-        key.usable = 1;
-        player_add_item(game->player, &key);
-        strncpy(game->pickup_item_name, key.name, sizeof(game->pickup_item_name) - 1);
-        game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
-        game->pickup_notify_timer = 2.5f;
-        game->player->flags |= FLAG_KEY_OBTAINED;
-        set_dialogue_tree(game, "key", 4);
-    }
-    /* Diary pickup (Library, trigger 1) */
-    else if (tid == 1 && loc_id == 2) {
-        if (!(game->player->flags & FLAG_FOUND_DIARY)) {
-            Item diary;
-            strncpy(diary.name,       "Professor's Diary",  ITEM_NAME_MAX - 1);
-            strncpy(diary.description,"A water-stained diary "
-                                      "filled with terrible confessions.",
-                                      ITEM_DESC_MAX - 1);
-            diary.id     = 1;
-            diary.usable = 0;
-            player_add_item(game->player, &diary);
-            strncpy(game->pickup_item_name, diary.name, sizeof(game->pickup_item_name) - 1);
-            game->pickup_item_name[sizeof(game->pickup_item_name) - 1] = '\0';
-            game->pickup_notify_timer = 2.5f;
-            story_trigger_event(game->story, game->player,
-                                game->world, "find_diary");
-        }
-        set_dialogue_tree(game, "diary", 2);
-    }
-    /* Basement door (Corridor, trigger 10) */
-    else if (tid == 10 && loc_id == 1) {
-        if (game->player->flags & FLAG_KEY_OBTAINED) {
-            if (!(game->player->flags & FLAG_OPENED_BASEMENT)) {
-                story_trigger_event(game->story, game->player,
-                                    game->world, "open_basement");
-                /* Add a walk-through exit trigger to basement at runtime */
-                if (loc && loc->trigger_count < MAX_TRIGGER_ZONES) {
-                    TriggerZone *tz = &loc->triggers[loc->trigger_count++];
-                    tz->bounds.x = (float)(loc->room_width - 80);
-                    tz->bounds.y = (float)(FLOOR_Y - 200);
-                    tz->bounds.w = 80.0f;
-                    tz->bounds.h = 200.0f;
-                    tz->target_location_id = 3;
-                    tz->trigger_id = -1;
-                    tz->spawn_x = 400.0f;
-                    tz->spawn_y = (float)FLOOR_Y;
-                }
-            }
-            set_dialogue_tree(game, "basement_door_unlocked", 1 + 100);
-        } else {
-            set_dialogue_tree(game, "basement_door_locked", 1);
-        }
-    }
-    /* Ritual circle (Ritual Room, trigger 20) */
-    else if (tid == 20 && loc_id == 5) {
-        if (!(game->player->flags & FLAG_MONSTER_AWARE)) {
-            story_trigger_event(game->story, game->player,
-                                game->world, "study_creature");
-        }
-        if (!(game->player->flags & FLAG_SOLVED_PUZZLE)) {
-            story_trigger_event(game->story, game->player,
-                                game->world, "solve_puzzle");
-        }
-        if ((game->player->flags & FLAG_FOUND_DIARY) &&
-            (game->player->flags & FLAG_SOLVED_PUZZLE) &&
-            !(game->player->flags & FLAG_KNOWS_TRUTH)) {
-            story_trigger_event(game->story, game->player,
-                                game->world, "learn_truth");
-        }
-        set_dialogue_tree(game, "ritual_circle", 5);
-        /* Check for ending condition after ritual */
-        if (game->player->flags & FLAG_KNOWS_TRUTH) {
-            /* End will be triggered after dialogue */
-            game->ending_type = -1; /* signal to trigger ending on dialogue end */
-        }
-    }
     /* Portrait interaction (Entrance Hall, trigger 30) */
-    else if (tid == 30 && loc_id == 0) {
+    if (tid == 30 && loc_id == 0) {
         set_dialogue_tree(game, "portrait", 30);
     }
     /* Stranger NPC interaction (Entrance Hall, trigger 40) */
@@ -434,12 +340,8 @@ void game_handle_event(Game *game, SDL_Event *event)
                 /* Apply story flag from the chosen option before advancing */
                 apply_dialogue_choice_flag(game);
                 int cont = dialogue_state_advance(&game->dialogue_state, 0);
-                if (!cont) {
+                if (!cont)
                     game_end_dialogue(game);
-                    /* Trigger ending if flagged */
-                    if (game->ending_type == -1)
-                        game_trigger_ending(game);
-                }
             }
             if (event->key.key == SDLK_ESCAPE)
                 game_end_dialogue(game);
@@ -448,11 +350,8 @@ void game_handle_event(Game *game, SDL_Event *event)
             /* Apply story flag before advancing on mouse click too */
             apply_dialogue_choice_flag(game);
             int cont = dialogue_state_advance(&game->dialogue_state, 0);
-            if (!cont) {
+            if (!cont)
                 game_end_dialogue(game);
-                if (game->ending_type == -1)
-                    game_trigger_ending(game);
-            }
         }
         break;
 
@@ -561,14 +460,6 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->brightness = game->settings_brightness_slider.value;
                 game->settings_focus = 1;
             }
-        }
-        break;
-
-    case GAME_STATE_ENDING:
-        if (event->type == SDL_EVENT_KEY_DOWN ||
-            event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (game->ending_timer > 3.0f)
-                game->state = GAME_STATE_MENU;
         }
         break;
 
@@ -688,21 +579,8 @@ void game_update(Game *game)
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
-        /* ── Story chapter auto-advance ── */
-        if (game->story) {
-            int ch = game->story->current_chapter;
-            if (ch == 0 && (p->flags & FLAG_FOUND_DIARY))
-                story_advance_chapter(game->story, p, game->world);
-            else if (ch == 1 && (p->flags & FLAG_OPENED_BASEMENT))
-                story_advance_chapter(game->story, p, game->world);
-            else if (ch == 3 && (p->flags & FLAG_KNOWS_TRUTH))
-                story_advance_chapter(game->story, p, game->world);
-        }
-
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
-    } else if (game->state == GAME_STATE_ENDING) {
-        game->ending_timer += dt;
     }
 
     /* Tick the pickup notification regardless of game state */
@@ -731,7 +609,6 @@ void game_render(Game *game)
         game_render_playing(game);
         game_render_pause(game);
         break;
-    case GAME_STATE_ENDING:    game_render_ending(game);    break;
     default: break;
     }
 
@@ -824,15 +701,9 @@ void game_render_playing(Game *game)
     ui_draw_hud(game->renderer, game->player);
 
     /* Chapter label */
-    if (game->story) {
-        static const char *ch_names[] = {
-            "Prologue","Chapter I","Chapter II","Chapter III","Finale"
-        };
-        int ch = game->story->current_chapter;
-        if (ch >= 0 && ch < 5)
-            render_text(game->renderer, ch_names[ch],
-                        WINDOW_W - 100, 12, 1, 110, 30, 30);
-    }
+    if (game->story)
+        render_text(game->renderer, "Prologue",
+                    WINDOW_W - 100, 12, 1, 110, 30, 30);
 
     render_text(game->renderer, "I:inv  ESC:pause",
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
@@ -1075,66 +946,6 @@ void game_render_pause(Game *game)
     for (int i = 0; i < 2; i++) draw_button(r, &game->pause_buttons[i]);
     render_text_centered(r, "[ESC] to resume",
                          WINDOW_W/2, qy+ph-20, 1, 78,22,22);
-}
-
-/* ── Ending ──────────────────────────────────────────────────────────────── */
-
-void game_render_ending(Game *game)
-{
-    if (!game) return;
-    SDL_Renderer *r = game->renderer;
-
-    static const char *titles[] = {
-        "", "ENDING: ESCAPE",
-        "ENDING: SACRIFICE", "ENDING: TRUTH", "ENDING: CORRUPTION"
-    };
-    static const char *texts[] = {
-        "",
-        "You sprint through the front door as dawn breaks. "
-        "The estate collapses behind you. Some horrors are best "
-        "left in the dark.",
-        "You face the creature alone, buying time for any chance of escape. "
-        "The last thing you feel is a strange peace. You chose this.",
-        "You speak the creature's true name aloud. The house shudders. "
-        "Light floods every shadow. The thing unravels, screaming. "
-        "You have broken a curse older than the house itself.",
-        "The darkness was patient. By the time you realise what you have become,"
-        " there is no one left – and neither are you."
-    };
-    static const Uint8 clrs[][3] = {
-        {60,60,60},{30,60,30},{70,30,30},{30,50,70},{50,10,55}
-    };
-
-    int et = game->ending_type;
-    if (et < 0 || et > 4) et = 0;
-
-    float fade = game->ending_timer / 2.5f;
-    if (fade > 1.0f) fade = 1.0f;
-
-    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H,
-                       (Uint8)((float)clrs[et][0] * fade),
-                       (Uint8)((float)clrs[et][1] * fade),
-                       (Uint8)((float)clrs[et][2] * fade), 255);
-
-    render_text_centered(r, titles[et], WINDOW_W/2, WINDOW_H/2 - 90, 3,
-                         (Uint8)(clrs[et][0] + 120),
-                         (Uint8)(clrs[et][1] + 120),
-                         (Uint8)(clrs[et][2] + 120));
-
-    render_filled_rect(r, WINDOW_W/2-180, WINDOW_H/2-32, 360, 2,
-                       120,30,30, 200);
-
-    if (game->ending_timer > 1.2f) {
-        render_text_wrapped(r, texts[et], 180, WINDOW_H/2-10,
-                            WINDOW_W-360, 1, 22, 195,115,115);
-    }
-
-    if (game->ending_timer > 3.0f) {
-        Uint64 t = SDL_GetTicks();
-        if ((t / 600) % 2 == 0)
-            render_text_centered(r, "[ Press any key to continue ]",
-                                 WINDOW_W/2, WINDOW_H-56, 1, 110,30,30);
-    }
 }
 
 /* ── Settings ────────────────────────────────────────────────────────────── */

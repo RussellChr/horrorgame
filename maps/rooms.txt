@@ -5,16 +5,33 @@
 #         TRIGGER <x> <y> <w> <h> <type> <dest_id_or_interaction_id>
 #         END
 #
-# Visual room geometry is generated procedurally in world.c (world_setup_rooms).
-# This file documents the intended layout for reference.
+# Visual room geometry is generated procedurally in world.c (world_setup_rooms)
+# using tile maps from maps/*.csv.  This file documents the intended layout for
+# reference and is NOT parsed at runtime.
 
 ROOM 0 Entrance Hall
-SPAWN 400 360
-# Left wall, right wall - only bottom half
-COLLIDER 0 400 40 320
-COLLIDER 760 400 40 320
-# Exit north
-TRIGGER 350 0 100 40 exit 1
-# Exit east
-TRIGGER 760 300 40 100 exit 2
+# Tile map: maps/logic archive tutup_logic.csv
+# Background: assets/room/archive_room.png
+SPAWN 500 400
+# Door to Kimia Lab (room 1) – built from tile map door trigger
+TRIGGER 0 0 0 0 exit 1
+# Portrait interaction
+TRIGGER 200 200 60 80 interact 30
+# Stranger NPC interaction
+TRIGGER 900 400 60 80 interact 40
+END
+
+ROOM 1 Kimia Lab
+# Tile map: maps/logic kimia_logic.csv
+# Background: assets/room/lab.png
+SPAWN 400 400
+# Door back to Entrance Hall (room 0) – built from tile map door trigger
+TRIGGER 0 0 0 0 exit 0
+END
+
+ROOM 2 Hallway
+# Tile map: maps/hallway.csv
+# Background: assets/room/hallway.png
+# Player start location
+SPAWN 500 500
 END

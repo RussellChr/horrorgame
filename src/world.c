@@ -274,6 +274,39 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+
+        /* ── 2: Hallway ─────────────────────────────────────────────────── */
+        case 2: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/hallway.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                /* Load collision map and find a spawn point on the walkable path. */
+                Map *m = map_load_csv("maps/hallway.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, m->rows / 2, m->cols / 2, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = 500.0f;
+                    loc->spawn_y = 500.0f;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
         default:
             break;
         }

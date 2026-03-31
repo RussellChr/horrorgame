@@ -830,19 +830,9 @@ void game_render_playing(Game *game)
     /* HUD */
     ui_draw_hud(game->renderer, game->player);
 
-    /* Chapter label */
-    if (game->story) {
-        static const char *ch_names[] = {
-            "Prologue","Chapter I","Chapter II","Chapter III","Finale"
-        };
-        int ch = game->story->current_chapter;
-        if (ch >= 0 && ch < 5)
-            render_text(game->renderer, ch_names[ch],
-                        WINDOW_W - 100, 12, 1, 110, 30, 30);
-    }
-
-    render_text(game->renderer, "I:inv  ESC:pause",
-                WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
+    /* Objective bar */
+    if (game->story)
+        ui_draw_objective_bar(game->renderer, game->story, game->player);
 
     /* ── Item pickup notification ── */
     if (game->pickup_notify_timer > 0.0f) {

@@ -3,6 +3,7 @@
 
 #include <SDL3/SDL.h>
 #include "player.h"
+#include "story.h"
 
 /* ── Button ───────────────────────────────────────────────────────────── */
 
@@ -36,6 +37,11 @@ void slider_render(SDL_Renderer *r, const Slider *s, const char *label);
 /* ── HUD (heads-up display drawn over the game scene) ────────────────── */
 
 void ui_draw_hud(SDL_Renderer *renderer, const Player *player);
+
+/* ── Objective bar (top-right, red-themed, shows current chapter goal) ── */
+
+void ui_draw_objective_bar(SDL_Renderer *renderer, const StoryState *story,
+                           const Player *player);
 
 /* ── Interaction prompt ───────────────────────────────────────────────── */
 

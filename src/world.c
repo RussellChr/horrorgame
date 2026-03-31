@@ -314,6 +314,42 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+        /* ── 3: Hibernation Room ────────────────────────────────────────── */
+        case 3: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/hibernation.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                /* Load collision map and find spawn near the entrance door.
+                 * Door tiles are at row 29, cols 30-39.  Hint one row above
+                 * the door (row 28, col 34) so the player lands on the floor
+                 * just in front of it. */
+                Map *m = map_load_csv("maps/hibernation.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 28, 34, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
+
         default:
             break;
         }
@@ -340,6 +376,32 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
             if (m2) {
                 map_build_door_triggers(m2, loc1, 0,
                                         loc0->spawn_x, loc0->spawn_y);
+                map_free(m2);
+            }
+        }
+    }
+
+    /* Link hallway (2) door → hibernation (3), and back. */
+    {
+        Location *loc2 = world_get_location(world, 2);
+        Location *loc3 = world_get_location(world, 3);
+        if (loc2 && loc3) {
+            /* Hallway door tiles (tile 1 in hallway.csv) lead to hibernation.
+             * Spawn the player near the hibernation door (loc3->spawn_x/y). */
+            Map *m = map_load_csv("maps/hallway.csv");
+            if (m) {
+                map_build_door_triggers(m, loc2, 3,
+                                        loc3->spawn_x, loc3->spawn_y);
+                map_free(m);
+            }
+
+            /* Hibernation door tiles (tile 1 in hibernation.csv) lead back
+             * to the hallway, spawning the player in front of the hallway
+             * door.  Door is at rows 25-27, cols 15-17 in hallway.csv
+             * (32 px tiles).  Floor tile at row 26, col 18 → world (592, 864). */
+            Map *m2 = map_load_csv("maps/hibernation.csv");
+            if (m2) {
+                map_build_door_triggers(m2, loc3, 2, 592.0f, 864.0f);
                 map_free(m2);
             }
         }

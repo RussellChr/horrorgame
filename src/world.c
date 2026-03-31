@@ -326,9 +326,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     }
                 }
 
-                /* Load collision map and find spawn near the entrance door.
-                 * Door tiles are at row 29, cols 30-39.  Hint one row above
-                 * the door (row 28, col 34) so the player lands on the floor
+                /* Load collision map and find spawn near the tile-5 portal.
+                 * Tile-5 tiles are at row 5, cols 32-37.  Hint one row below
+                 * (row 6, col 34) so the player lands on the floor
                  * just in front of it. */
                 Map *m = map_load_csv("maps/hibernation.csv");
                 if (m) {
@@ -336,7 +336,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                     float sx = (float)(loc->room_width  / 2);
                     float sy = (float)(loc->room_height / 2);
-                    map_find_spawn(m, 28, 34, &sx, &sy,
+                    map_find_spawn(m, 6, 34, &sx, &sy,
                                    loc->room_width, loc->room_height);
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
@@ -404,6 +404,12 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 map_build_door_triggers(m2, loc3, 2, 592.0f, 864.0f);
                 map_free(m2);
             }
+
+            /* Hibernation tile-5 portal (row 5, cols 32-37) → hallway in
+             * front of door 1.
+             * Tile dimensions: 2240/70 = 32 px wide, 1120/35 = 32 px tall.
+             * Trigger bounds: x=32*32=1024, y=5*32=160, w=6*32=192, h=32. */
+            ADD_EXIT_TRIGGER(loc3, 1024, 160, 192, 32, 2, 592.0f, 864.0f);
         }
     }
 }

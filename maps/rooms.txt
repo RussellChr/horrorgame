@@ -34,4 +34,14 @@ ROOM 2 Hallway
 # Background: assets/room/hallway.png
 # Player start location
 SPAWN 500 500
+# Door to Power Room (room 3) – tile 2 in hallway.csv (rows 15-18, cols 4-5)
+TRIGGER 0 0 0 0 exit 3
+END
+
+ROOM 3 Power Room
+# Tile map: maps/power.csv
+# Background: assets/room/power.png
+# Spawn near tile-5 door (rows 19-25, cols 54-56), found via map_find_spawn hint (21,53)
+# Door back to Hallway (room 2) – tile 5 in power.csv
+TRIGGER 0 0 0 0 exit 2
 END

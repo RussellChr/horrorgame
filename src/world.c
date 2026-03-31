@@ -314,6 +314,42 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+
+        /* ── 3: Power Room ───────────────────────────────────────────────── */
+        case 3: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/power.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                /* Load collision map and find a spawn point near the tile-5 door.
+                 * Tile 5 cluster is at rows 19-25, cols 54-56.
+                 * Hint at row 21, col 53 – floor tile just to the left of the cluster. */
+                Map *m = map_load_csv("maps/power.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 21, 53, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
+
         default:
             break;
         }
@@ -341,6 +377,44 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 map_build_door_triggers(m2, loc1, 0,
                                         loc0->spawn_x, loc0->spawn_y);
                 map_free(m2);
+            }
+        }
+    }
+
+    /* ── Link hallway (room 2) ↔ power room (room 3) ───────────────────── */
+    /* Hallway tile 2 (rows 15-18, cols 4-5) → Power Room.
+       Power room tile 5 (rows 19-25, cols 54-56) → Hallway near tile-2 door.
+       The return spawn in the hallway is found using a floor tile just to the
+       right of the tile-2 cluster (hint row 16, col 6). */
+    {
+        Location *loc2 = world_get_location(world, 2);
+        Location *loc3 = world_get_location(world, 3);
+        if (loc2 && loc3) {
+            float hallway_near_door2_x = loc2->spawn_x;
+            float hallway_near_door2_y = loc2->spawn_y;
+
+            Map *m_h = map_load_csv("maps/hallway.csv");
+            if (m_h) {
+                /* Compute a spawn position in the hallway just right of tile-2. */
+                map_find_spawn(m_h, 16, 6,
+                               &hallway_near_door2_x, &hallway_near_door2_y,
+                               loc2->room_width, loc2->room_height);
+
+                /* Hallway tile 2 → Power Room (spawn at power room's spawn). */
+                map_build_door_triggers_for_tile(m_h, loc2, MAP_TILE_DOOR2,
+                                                 3,
+                                                 loc3->spawn_x, loc3->spawn_y);
+                map_free(m_h);
+            }
+
+            Map *m_p = map_load_csv("maps/power.csv");
+            if (m_p) {
+                /* Power room tile 5 → Hallway (spawn near tile-2 door). */
+                map_build_door_triggers_for_tile(m_p, loc3, MAP_TILE_DOOR5,
+                                                 2,
+                                                 hallway_near_door2_x,
+                                                 hallway_near_door2_y);
+                map_free(m_p);
             }
         }
     }

@@ -120,7 +120,7 @@ void game_start_new(Game *game)
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
-    game->player->current_location_id = 2;  /* Start in the Hallway */
+    game->player->current_location_id = 0;  /* Start in the Hallway */
 
     Location *start = world_get_location(game->world,
                                          game->player->current_location_id);

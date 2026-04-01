@@ -71,4 +71,14 @@ int map_build_door_triggers_for_tile(const Map *map, Location *loc,
 int map_find_spawn(const Map *map, int hint_row, int hint_col,
                    float *out_x, float *out_y, int room_w, int room_h);
 
+/*
+ * Like map_build_door_triggers but creates interactive trigger zones
+ * (target_location_id = -1) instead of exit triggers.  trigger_id is stored
+ * in every zone.  spawn_x/spawn_y are stored for optional use by the caller
+ * (e.g. a locked door that becomes an exit once a flag is set).
+ */
+int map_build_interactive_triggers_for_tile(const Map *map, Location *loc,
+                                             int tile, int trigger_id,
+                                             float spawn_x, float spawn_y);
+
 #endif /* MAP_H */

@@ -168,6 +168,45 @@ int map_build_door_triggers(const Map *map, Location *loc,
                                             dest_id, dest_spawn_x, dest_spawn_y);
 }
 
+int map_build_interactive_triggers_for_tile(const Map *map, Location *loc,
+                                             int tile, int trigger_id,
+                                             float spawn_x, float spawn_y)
+{
+    if (!map || !map->cells || !loc) return 0;
+
+    int added = 0;
+    float tile_w = (float)loc->room_width  / (float)map->cols;
+    float tile_h = (float)loc->room_height / (float)map->rows;
+
+    for (int r = 0; r < map->rows; r++) {
+        int c = 0;
+        while (c < map->cols) {
+            if (map->cells[r * map->cols + c] == tile) {
+                int run_start = c;
+                while (c < map->cols &&
+                       map->cells[r * map->cols + c] == tile)
+                    c++;
+                if (loc->trigger_count < MAX_TRIGGER_ZONES) {
+                    TriggerZone *tz = &loc->triggers[loc->trigger_count++];
+                    tz->bounds.x           = (float)run_start * tile_w;
+                    tz->bounds.y           = (float)r          * tile_h;
+                    tz->bounds.w           = (float)(c - run_start) * tile_w;
+                    tz->bounds.h           = tile_h;
+                    tz->target_location_id = -1;
+                    tz->trigger_id         = trigger_id;
+                    tz->spawn_x            = spawn_x;
+                    tz->spawn_y            = spawn_y;
+                    added++;
+                }
+            } else {
+                c++;
+            }
+        }
+    }
+
+    return added;
+}
+
 /* ── Spawn search ─────────────────────────────────────────────────────── */
 
 int map_find_spawn(const Map *map, int hint_row, int hint_col,

@@ -344,6 +344,18 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
 
+                    /* Interactive triggers for tile 1 (zonk), 2 (powercell),
+                       3 (powercell slot), 4 (flavour description).
+                       Trigger IDs 71–74 are handled in game.c handle_interaction. */
+                    map_build_interactive_triggers_for_tile(m, loc, 1, 71, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 72, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 73, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 74, 0.0f, 0.0f);
+                    /* Tile-5 door: handled as interactive (trigger 75) so the game
+                       can show a locked message until the powercell is placed.
+                       Spawn coords are filled in below after hw1x/hw1y are known. */
+                    map_build_interactive_triggers_for_tile(m, loc, 5, 75, 0.0f, 0.0f);
+
                     map_free(m);
                 } else {
                     loc->spawn_x = (float)(loc->room_width  / 2);
@@ -519,12 +531,15 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
             }
         }
 
-        /* Hibernation tile-5 → Hallway (spawn near the tile-1 door). */
+        /* Hibernation tile-5 → Hallway (spawn near the tile-1 door).
+           Tile-5 zones were already created as interactive trigger 75 during
+           room setup; patch their spawn coords now that hw1x/hw1y are known. */
         if (loc3 && loc2) {
-            Map *m = map_load_csv("maps/hibernation.csv");
-            if (m) {
-                map_build_door_triggers_for_tile(m, loc3, 5, 2, hw1x, hw1y);
-                map_free(m);
+            for (int i = 0; i < loc3->trigger_count; i++) {
+                if (loc3->triggers[i].trigger_id == 75) {
+                    loc3->triggers[i].spawn_x = hw1x;
+                    loc3->triggers[i].spawn_y = hw1y;
+                }
             }
         }
 

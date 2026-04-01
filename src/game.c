@@ -248,6 +248,66 @@ static void handle_interaction(Game *game)
         return;
     }
 
+    /* ── Hibernation room interactions (loc 3) ─────────────────────────── */
+    if (loc_id == 3) {
+        if (tid == 71) {
+            /* Tile 1: zonk – nothing here */
+            set_dialogue_tree(game, "hibern_zonk", 3);
+        } else if (tid == 72) {
+            /* Tile 2: power cell pickup */
+            if (!player_check_flag(game->player, FLAG_HIBERN_POWERCELL_COLLECTED)) {
+                player_set_flag(game->player, FLAG_HIBERN_POWERCELL_COLLECTED);
+                Item pc;
+                strncpy(pc.name, "Power Cell", ITEM_NAME_MAX - 1);
+                pc.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(pc.description, "A cylindrical power cell.", ITEM_DESC_MAX - 1);
+                pc.description[ITEM_DESC_MAX - 1] = '\0';
+                pc.id     = ITEM_ID_POWERCELL;
+                pc.usable = 0;
+                player_add_item(game->player, &pc);
+                set_dialogue_tree(game, "hibern_powercell", 3);
+            } else {
+                set_dialogue_tree(game, "hibern_zonk", 3);
+            }
+        } else if (tid == 73) {
+            /* Tile 3: power cell slot */
+            if (player_has_item(game->player, ITEM_ID_POWERCELL)) {
+                player_remove_item(game->player, ITEM_ID_POWERCELL);
+                player_set_flag(game->player, FLAG_HIBERN_POWERCELL_PLACED);
+                set_dialogue_tree(game, "hibern_slot_place", 3);
+            } else {
+                set_dialogue_tree(game, "hibern_slot_empty", 3);
+            }
+        } else if (tid == 74) {
+            /* Tile 4: flavour description – accessible any time */
+            set_dialogue_tree(game, "hibern_pods_opened", 3);
+        } else if (tid == 75) {
+            /* Tile 5: door to hallway – locked until powercell placed */
+            if (player_check_flag(game->player, FLAG_HIBERN_POWERCELL_PLACED)) {
+                Location *hloc = world_get_location(game->world, 3);
+                if (hloc) {
+                    for (int i = 0; i < hloc->trigger_count; i++) {
+                        if (hloc->triggers[i].trigger_id == 75) {
+                            game_change_location(game, 2,
+                                hloc->triggers[i].spawn_x,
+                                hloc->triggers[i].spawn_y);
+                            return;
+                        }
+                    }
+                }
+                /* Fallback: use hallway default spawn */
+                Location *hw = world_get_location(game->world, 2);
+                if (hw) game_change_location(game, 2, hw->spawn_x, hw->spawn_y);
+                return;
+            } else {
+                set_dialogue_tree(game, "hibern_door_locked", 3);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
+
     /* Portrait interaction (Entrance Hall, trigger 30) */
     if (tid == 30 && loc_id == 0) {
         set_dialogue_tree(game, "portrait", 30);
@@ -588,9 +648,13 @@ void game_update(Game *game)
                     if (rect_overlaps(&pr, &near_zone)) {
                         game->near_interactive       = 1;
                         game->interactive_trigger_id = tz->trigger_id;
-                        const char *label = (tz->trigger_id == 60)
-                            ? "Press [E] to enter locker"
-                            : "Press E to talk";
+                        const char *label;
+                        if (tz->trigger_id == 60)
+                            label = "Press [E] to enter locker";
+                        else if (tz->trigger_id == 75)
+                            label = "Press [E] to interact";
+                        else
+                            label = "Press E to talk";
                         strncpy(game->interact_label, label,
                                 sizeof(game->interact_label) - 1);
                         game->interact_label[sizeof(game->interact_label) - 1] = '\0';

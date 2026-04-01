@@ -404,11 +404,12 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
-                    /* Spawn in the main floor area (rows 14-19, cols 12-47).
-                       Hint near the centre-left of the walkable floor. */
+                    /* Spawn just above the tile-3 connector (rows 20-21, cols 28-34).
+                       Hint one row above the block so the player stands in
+                       front of the connector when arriving from the hallway. */
                     float sx = (float)(loc->room_width  / 2);
                     float sy = (float)(loc->room_height / 2);
-                    map_find_spawn(m, 14, 14, &sx, &sy,
+                    map_find_spawn(m, 19, 31, &sx, &sy,
                                    loc->room_width, loc->room_height);
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
@@ -436,10 +437,12 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
      *   tile 2 (power):       rows 14-16, cols  3- 4  → hint (15,  6)
      *   tile 3 (security):    rows  6- 8, cols 14-15  → hint ( 9, 15)
      *
-     * In each sub-room, tile 5 is the connector back to the hallway.
-     * Lab and Archive use tile 1 (MAP_TILE_DOOR) for their exit doors.
-     * Security does not yet contain a tile-5 connector in its CSV; the
-     * return trigger will be added automatically once the map is updated.
+     * In each sub-room the connector back to the hallway:
+     *   Archive     → tile-1 (MAP_TILE_DOOR) in archive_close.csv
+     *   Lab         → tile-1 (MAP_TILE_DOOR) in lab.csv
+     *   Hibernation → tile-5 in hibernation.csv
+     *   Power       → tile-5 in power.csv
+     *   Security    → tile-3 in security.csv  (rows 20-21, cols 28-34)
      */
     {
         Location *loc0 = world_get_location(world, 0); /* Archive     */
@@ -531,14 +534,12 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
             }
         }
 
-        /* Security tile-5 → Hallway (spawn near the tile-3 door).
-           No tile-5 connector exists in security.csv yet, so no return
-           trigger is built.  Update security.csv to add tile-5 cells
-           at the desired exit position to enable the return trip. */
+        /* Security tile-3 → Hallway (spawn near the tile-3 door).
+           security.csv has tile-3 cells at rows 20-21, cols 28-34. */
         if (loc5 && loc2) {
             Map *m = map_load_csv("maps/security.csv");
             if (m) {
-                map_build_door_triggers_for_tile(m, loc5, 5, 2, hw3x, hw3y);
+                map_build_door_triggers_for_tile(m, loc5, 3, 2, hw3x, hw3y);
                 map_free(m);
             }
         }

@@ -10,7 +10,7 @@
 # reference and is NOT parsed at runtime.
 
 ROOM 0 Entrance Hall
-# Tile map: maps/logic archive tutup_logic.csv
+# Tile map: maps/archive_close.csv
 # Background: assets/room/archive_room.png
 SPAWN 500 400
 # Door to Kimia Lab (room 1) – built from tile map door trigger
@@ -22,7 +22,7 @@ TRIGGER 900 400 60 80 interact 40
 END
 
 ROOM 1 Kimia Lab
-# Tile map: maps/logic kimia_logic.csv
+# Tile map: maps/lab.csv
 # Background: assets/room/lab.png
 SPAWN 400 400
 # Door back to Entrance Hall (room 0) – built from tile map door trigger

@@ -25,8 +25,8 @@ collision, an inner-monologue dialogue system, and atmospheric room rendering.
 
 | ID | Name          | Map CSV                          | Background Texture        |
 |----|---------------|----------------------------------|---------------------------|
-| 0  | Entrance Hall | logic archive tutup_logic.csv    | assets/room/archive_room.png |
-| 1  | Kimia Lab     | logic kimia_logic.csv            | assets/room/lab.png       |
+| 0  | Entrance Hall | archive_close.csv                | assets/room/archive_room.png |
+| 1  | Kimia Lab     | lab.csv                          | assets/room/lab.png       |
 | 2  | Hallway       | hallway.csv                      | assets/room/hallway.png   |
 
 The player starts in the Hallway (location 2). Rooms 0 and 1 are connected
@@ -89,8 +89,9 @@ assets/
 
 maps/
   hallway.csv                    – Hallway tile map
-  logic archive tutup_logic.csv  – Entrance Hall tile map
-  logic kimia_logic.csv          – Kimia Lab tile map
+  archive_close.csv              – Entrance Hall tile map (closed state)
+  archive_open.csv               – Entrance Hall tile map (open state)
+  lab.csv                        – Kimia Lab tile map
   rooms.txt                      – Room layout reference
 
 docs/

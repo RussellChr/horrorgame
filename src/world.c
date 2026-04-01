@@ -218,7 +218,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 }
 
                 /* Load tile map and build collision from the CSV. */
-                Map *m = map_load_csv("maps/logic archive tutup_logic.csv");
+                Map *m = map_load_csv("maps/archive_close.csv");
                 if (m) {
                     map_build_colliders(m, loc);
 
@@ -253,7 +253,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 }
 
                 /* Load collision map and find spawn near the entrance door. */
-                Map *m = map_load_csv("maps/logic kimia_logic.csv");
+                Map *m = map_load_csv("maps/lab.csv");
                 if (m) {
                     map_build_colliders(m, loc);
 
@@ -331,7 +331,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
         Location *loc2 = world_get_location(world, 2);
         if (loc0 && loc2) {
             /* Archive tile-1 → Hallway: spawn near the tile-5 door. */
-            Map *m = map_load_csv("maps/logic archive tutup_logic.csv");
+            Map *m = map_load_csv("maps/archive_close.csv");
             if (m) {
                 map_build_door_triggers(m, loc0, 2,
                                         loc2->spawn_x, loc2->spawn_y);

@@ -302,18 +302,25 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
 
+                    /* Locker interactive triggers (tile 7 in hallway.csv).
+                     * Tile size: 1920/60 = 32 px wide, 960/30 = 32 px tall.
+                     * Group 1: rows 14-15, cols 41-44  → world (1312,448) 128×64
+                     * Group 2: rows 18-20, cols 35-39  → world (1120,576) 160×96 */
+                    ADD_TRIGGER(loc, 1312, 448, 128, 64, 60, 0, 0);
+                    ADD_TRIGGER(loc, 1120, 576, 160, 96, 60, 0, 0);
+
+                    /* Tile 8: interactable (nothing here), trigger 80.
+                     * Tile 9: gas mask pickup, trigger 81.
+                     * Tile 10: flashlight pickup, trigger 82. */
+                    map_build_interactive_triggers_for_tile(m, loc, 8,  80, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 9,  81, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 10, 82, 0.0f, 0.0f);
+
                     map_free(m);
                 } else {
                     loc->spawn_x = (float)(loc->room_width  / 2);
                     loc->spawn_y = (float)(loc->room_height / 2);
                 }
-
-                /* Locker interactive triggers (tile 7 in hallway.csv).
-                 * Tile size: 1920/60 = 32 px wide, 960/30 = 32 px tall.
-                 * Group 1: rows 14-15, cols 41-44  → world (1312,448) 128×64
-                 * Group 2: rows 18-20, cols 35-39  → world (1120,576) 160×96 */
-                ADD_TRIGGER(loc, 1312, 448, 128, 64, 60, 0, 0);
-                ADD_TRIGGER(loc, 1120, 576, 160, 96, 60, 0, 0);
 
                 break;
             }

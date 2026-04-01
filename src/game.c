@@ -248,6 +248,49 @@ static void handle_interaction(Game *game)
         return;
     }
 
+    /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
+    if (loc_id == 2) {
+        if (tid == 80) {
+            /* Tile 8: interactable – nothing here */
+            set_dialogue_tree(game, "hallway_nothing", 2);
+        } else if (tid == 81) {
+            /* Tile 9: gas mask pickup */
+            if (!player_check_flag(game->player, FLAG_HALLWAY_GASMASK_COLLECTED)) {
+                player_set_flag(game->player, FLAG_HALLWAY_GASMASK_COLLECTED);
+                Item gm;
+                strncpy(gm.name, "Gas Mask", ITEM_NAME_MAX - 1);
+                gm.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
+                gm.description[ITEM_DESC_MAX - 1] = '\0';
+                gm.id     = ITEM_ID_GASMASK;
+                gm.usable = 0;
+                player_add_item(game->player, &gm);
+                set_dialogue_tree(game, "hallway_gasmask", 2);
+            } else {
+                set_dialogue_tree(game, "hallway_nothing", 2);
+            }
+        } else if (tid == 82) {
+            /* Tile 10: flashlight pickup */
+            if (!player_check_flag(game->player, FLAG_HALLWAY_FLASHLIGHT_COLLECTED)) {
+                player_set_flag(game->player, FLAG_HALLWAY_FLASHLIGHT_COLLECTED);
+                Item fl;
+                strncpy(fl.name, "Flashlight", ITEM_NAME_MAX - 1);
+                fl.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fl.description, "flashlight found", ITEM_DESC_MAX - 1);
+                fl.description[ITEM_DESC_MAX - 1] = '\0';
+                fl.id     = ITEM_ID_FLASHLIGHT;
+                fl.usable = 0;
+                player_add_item(game->player, &fl);
+                set_dialogue_tree(game, "hallway_flashlight", 2);
+            } else {
+                set_dialogue_tree(game, "hallway_nothing", 2);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
+
     /* ── Hibernation room interactions (loc 3) ─────────────────────────── */
     if (loc_id == 3) {
         if (tid == 71) {

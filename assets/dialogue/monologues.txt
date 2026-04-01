@@ -79,3 +79,23 @@ Alex
 ---
 It looks like I have to find a way to turn the power on.
 ---
+
+# ── Hallway ────────────────────────────────────────────────────────────
+
+[hallway_nothing]
+Alex
+---
+There's nothing here.
+---
+
+[hallway_gasmask]
+Alex
+---
+GasMask found.
+---
+
+[hallway_flashlight]
+Alex
+---
+flashlight found.
+---

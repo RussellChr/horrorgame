@@ -21,6 +21,8 @@
 #define FLAG_ENTERED_HALLWAY            (1u << 1)   /* player visited the hallway         */
 #define FLAG_HIBERN_POWERCELL_COLLECTED (1u << 2)   /* power cell picked up in Hibernation */
 #define FLAG_HIBERN_POWERCELL_PLACED    (1u << 3)   /* power cell placed in slot (door unlocked) */
+#define FLAG_HALLWAY_GASMASK_COLLECTED  (1u << 4)   /* gas mask picked up in Hallway       */
+#define FLAG_HALLWAY_FLASHLIGHT_COLLECTED (1u << 5) /* flashlight picked up in Hallway     */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

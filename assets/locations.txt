@@ -9,3 +9,15 @@ ATMO The smell of chemicals lingers in the air.
 LOCATION 2 Hallway
 DESC A long, narrow hallway.
 ATMO The floorboards creak with every step.
+
+LOCATION 3 Hibernation
+DESC A cold, sterile hibernation chamber.
+ATMO The cryo-pods hum quietly in the darkness.
+
+LOCATION 4 Power
+DESC A massive power generation room.
+ATMO Machinery hums and sparks crackle in the air.
+
+LOCATION 5 Security
+DESC A bank of monitoring screens lines the walls.
+ATMO The screens flicker with static and surveillance footage.

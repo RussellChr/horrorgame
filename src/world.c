@@ -317,33 +317,229 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
 
                 break;
             }
+
+        /* ── 3: Hibernation ─────────────────────────────────────────────── */
+        case 3: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/hibernation.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                Map *m = map_load_csv("maps/hibernation.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    /* Spawn just below the tile-5 connector (rows 4-7, cols 33-36).
+                       Hint one row below the block so the player stands in front of
+                       the door when arriving from the hallway. */
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 9, 34, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
+
+        /* ── 4: Power ───────────────────────────────────────────────────── */
+        case 4: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/power.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                Map *m = map_load_csv("maps/power.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    /* Spawn to the left of the tile-5 connector (rows 19-25, cols 53-55).
+                       Hint into the floor area adjacent to the connector so the player
+                       stands in front of the door when arriving from the hallway. */
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 21, 50, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
+
+        /* ── 5: Security ────────────────────────────────────────────────── */
+        case 5: {
+                loc->background_texture = render_load_texture(
+                    renderer, "assets/room/monitoring_room.png");
+                if (loc->background_texture) {
+                    float tw = 0.0f, th = 0.0f;
+                    if (SDL_GetTextureSize(loc->background_texture, &tw, &th) && tw > 0 && th > 0) {
+                        loc->room_width  = (int)tw;
+                        loc->room_height = (int)th;
+                    }
+                }
+
+                Map *m = map_load_csv("maps/security.csv");
+                if (m) {
+                    map_build_colliders(m, loc);
+
+                    /* Spawn in the main floor area (rows 14-19, cols 12-47).
+                       Hint near the centre-left of the walkable floor. */
+                    float sx = (float)(loc->room_width  / 2);
+                    float sy = (float)(loc->room_height / 2);
+                    map_find_spawn(m, 14, 14, &sx, &sy,
+                                   loc->room_width, loc->room_height);
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
+
+                    map_free(m);
+                } else {
+                    loc->spawn_x = (float)(loc->room_width  / 2);
+                    loc->spawn_y = (float)(loc->room_height / 2);
+                }
+
+                break;
+            }
+
         default:
             break;
         }
     }
 
-    /* ── Post-setup: link door triggers between rooms ──────────────────── */
-    /* Archive room (Room 0) tile-1 door leads to Hallway (Room 2).
-       Hallway (Room 2) tile-5 door leads to Archive room (Room 0).
-       Both spawn positions are computed from the CSV during room setup. */
+    /* ── Post-setup: link door triggers between all rooms and the Hallway ── */
+    /*
+     * Tile mapping (hallway.csv, 0-indexed rows / cols):
+     *   tile 5 (archive):     rows 19-21, cols 45-47  → hint (18, 46)
+     *   tile 4 (lab):         rows 13-15, cols 29-30  → hint (16, 29)
+     *   tile 1 (hibernation): rows 25-27, cols 14-16  → hint (24, 15)
+     *   tile 2 (power):       rows 14-16, cols  3- 4  → hint (15,  6)
+     *   tile 3 (security):    rows  6- 8, cols 14-15  → hint ( 9, 15)
+     *
+     * In each sub-room, tile 5 is the connector back to the hallway.
+     * Lab and Archive use tile 1 (MAP_TILE_DOOR) for their exit doors.
+     * Security does not yet contain a tile-5 connector in its CSV; the
+     * return trigger will be added automatically once the map is updated.
+     */
     {
-        Location *loc0 = world_get_location(world, 0);
-        Location *loc2 = world_get_location(world, 2);
+        Location *loc0 = world_get_location(world, 0); /* Archive     */
+        Location *loc1 = world_get_location(world, 1); /* Lab         */
+        Location *loc2 = world_get_location(world, 2); /* Hallway     */
+        Location *loc3 = world_get_location(world, 3); /* Hibernation */
+        Location *loc4 = world_get_location(world, 4); /* Power       */
+        Location *loc5 = world_get_location(world, 5); /* Security    */
+
+        /* Compute return-spawn positions in the hallway near each door tile.
+         * Hints are one row/col outside the tile block so the player lands
+         * on walkable floor just in front of the door they came through.
+         *   tile 1 hint: (24, 15) – one row above the hibernation door
+         *   tile 2 hint: (15,  6) – one col right of the power door
+         *   tile 3 hint: ( 9, 15) – one row below the security door
+         *   tile 4 hint: (16, 29) – one row below the lab door        */
+        float hw5x = 0.0f, hw5y = 0.0f;
+        float hw1x = 0.0f, hw1y = 0.0f;
+        float hw2x = 0.0f, hw2y = 0.0f;
+        float hw3x = 0.0f, hw3y = 0.0f;
+        float hw4x = 0.0f, hw4y = 0.0f;
+
+        if (loc2) {
+            hw5x = hw1x = hw2x = hw3x = hw4x = loc2->spawn_x;
+            hw5y = hw1y = hw2y = hw3y = hw4y = loc2->spawn_y;
+
+            Map *mhw = map_load_csv("maps/hallway.csv");
+            if (mhw) {
+                /* tile 5 hint: (18, 46) – one row above the archive door */
+                map_find_spawn(mhw, 18, 46, &hw5x, &hw5y,
+                               loc2->room_width, loc2->room_height);
+                map_find_spawn(mhw, 24, 15, &hw1x, &hw1y,
+                               loc2->room_width, loc2->room_height);
+                map_find_spawn(mhw, 15,  6, &hw2x, &hw2y,
+                               loc2->room_width, loc2->room_height);
+                map_find_spawn(mhw,  9, 15, &hw3x, &hw3y,
+                               loc2->room_width, loc2->room_height);
+                map_find_spawn(mhw, 16, 29, &hw4x, &hw4y,
+                               loc2->room_width, loc2->room_height);
+
+                /* Hallway → each room (all tile values in a single CSV load). */
+                if (loc0) map_build_door_triggers_for_tile(mhw, loc2, 5, 0,
+                                                           loc0->spawn_x, loc0->spawn_y);
+                if (loc1) map_build_door_triggers_for_tile(mhw, loc2, 4, 1,
+                                                           loc1->spawn_x, loc1->spawn_y);
+                if (loc3) map_build_door_triggers_for_tile(mhw, loc2, 1, 3,
+                                                           loc3->spawn_x, loc3->spawn_y);
+                if (loc4) map_build_door_triggers_for_tile(mhw, loc2, 2, 4,
+                                                           loc4->spawn_x, loc4->spawn_y);
+                if (loc5) map_build_door_triggers_for_tile(mhw, loc2, 3, 5,
+                                                           loc5->spawn_x, loc5->spawn_y);
+                map_free(mhw);
+            }
+        }
+
+        /* Archive tile-1 → Hallway (spawn near the tile-5 door). */
         if (loc0 && loc2) {
-            /* Archive tile-1 → Hallway: spawn near the tile-5 door. */
             Map *m = map_load_csv("maps/archive_close.csv");
             if (m) {
-                map_build_door_triggers(m, loc0, 2,
-                                        loc2->spawn_x, loc2->spawn_y);
+                map_build_door_triggers(m, loc0, 2, hw5x, hw5y);
                 map_free(m);
             }
+        }
 
-            /* Hallway tile-5 → Archive: spawn in front of the tile-1 door. */
-            Map *m2 = map_load_csv("maps/hallway.csv");
-            if (m2) {
-                map_build_door_triggers_for_tile(m2, loc2, 5, 0,
-                                                 loc0->spawn_x, loc0->spawn_y);
-                map_free(m2);
+        /* Lab tile-1 → Hallway (spawn near the tile-4 door). */
+        if (loc1 && loc2) {
+            Map *m = map_load_csv("maps/lab.csv");
+            if (m) {
+                map_build_door_triggers(m, loc1, 2, hw4x, hw4y);
+                map_free(m);
+            }
+        }
+
+        /* Hibernation tile-5 → Hallway (spawn near the tile-1 door). */
+        if (loc3 && loc2) {
+            Map *m = map_load_csv("maps/hibernation.csv");
+            if (m) {
+                map_build_door_triggers_for_tile(m, loc3, 5, 2, hw1x, hw1y);
+                map_free(m);
+            }
+        }
+
+        /* Power tile-5 → Hallway (spawn near the tile-2 door). */
+        if (loc4 && loc2) {
+            Map *m = map_load_csv("maps/power.csv");
+            if (m) {
+                map_build_door_triggers_for_tile(m, loc4, 5, 2, hw2x, hw2y);
+                map_free(m);
+            }
+        }
+
+        /* Security tile-5 → Hallway (spawn near the tile-3 door).
+           No tile-5 connector exists in security.csv yet, so no return
+           trigger is built.  Update security.csv to add tile-5 cells
+           at the desired exit position to enable the return trip. */
+        if (loc5 && loc2) {
+            Map *m = map_load_csv("maps/security.csv");
+            if (m) {
+                map_build_door_triggers_for_tile(m, loc5, 5, 2, hw3x, hw3y);
+                map_free(m);
             }
         }
     }

@@ -52,6 +52,16 @@ int map_build_door_triggers(const Map *map, Location *loc,
                             float dest_spawn_x, float dest_spawn_y);
 
 /*
+ * Like map_build_door_triggers but scans for an arbitrary tile value instead
+ * of MAP_TILE_DOOR.  Use this when the CSV uses a non-standard tile number
+ * (e.g. 5) to mark a door.
+ */
+int map_build_door_triggers_for_tile(const Map *map, Location *loc,
+                                     int tile,
+                                     int dest_id,
+                                     float dest_spawn_x, float dest_spawn_y);
+
+/*
  * Find the world-space position of the first floor tile at or near
  * (hint_row, hint_col), searching outward in a spiral.
  * Writes the spawn coordinates into *out_x (tile centre x) and

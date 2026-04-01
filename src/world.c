@@ -287,17 +287,20 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     }
                 }
 
-                /* Load collision map and find a spawn point on the walkable path. */
+                /* Load collision map and find a spawn point in front of the
+                   tile-5 door (rows 19-21, cols 46-48 in hallway.csv).
+                   Hint one row above the door so the player stands just
+                   outside it when returning from the archive room. */
                 Map *m = map_load_csv("maps/hallway.csv");
                 if (m) {
                     map_build_colliders(m, loc);
 
                     float sx = (float)(loc->room_width  / 2);
                     float sy = (float)(loc->room_height / 2);
-                    map_find_spawn(m, m->rows / 2, m->cols / 2, &sx, &sy,
+                    map_find_spawn(m, 18, 47, &sx, &sy,
                                    loc->room_width, loc->room_height);
-                    loc->spawn_x = 500.0f;
-                    loc->spawn_y = 500.0f;
+                    loc->spawn_x = sx;
+                    loc->spawn_y = sy;
 
                     map_free(m);
                 } else {
@@ -320,26 +323,26 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
     }
 
     /* ── Post-setup: link door triggers between rooms ──────────────────── */
-    /* Room 0's entrance door (tile 1 in archive tutup_logic.csv) leads to
-       room 1 (kimia).  We reload the CSV here so the spawn coordinates from
-       room 1's setup can be used as the destination spawn position. */
+    /* Archive room (Room 0) tile-1 door leads to Hallway (Room 2).
+       Hallway (Room 2) tile-5 door leads to Archive room (Room 0).
+       Both spawn positions are computed from the CSV during room setup. */
     {
         Location *loc0 = world_get_location(world, 0);
-        Location *loc1 = world_get_location(world, 1);
-        if (loc0 && loc1) {
+        Location *loc2 = world_get_location(world, 2);
+        if (loc0 && loc2) {
+            /* Archive tile-1 → Hallway: spawn near the tile-5 door. */
             Map *m = map_load_csv("maps/logic archive tutup_logic.csv");
             if (m) {
-                map_build_door_triggers(m, loc0, 1,
-                                        loc1->spawn_x, loc1->spawn_y);
+                map_build_door_triggers(m, loc0, 2,
+                                        loc2->spawn_x, loc2->spawn_y);
                 map_free(m);
             }
 
-            /* Room 1's door tiles (tile 1 in logic kimia_logic.csv) lead back
-               to room 0, spawning the player in front of room 0's door. */
-            Map *m2 = map_load_csv("maps/logic kimia_logic.csv");
+            /* Hallway tile-5 → Archive: spawn in front of the tile-1 door. */
+            Map *m2 = map_load_csv("maps/hallway.csv");
             if (m2) {
-                map_build_door_triggers(m2, loc1, 0,
-                                        loc0->spawn_x, loc0->spawn_y);
+                map_build_door_triggers_for_tile(m2, loc2, 5, 0,
+                                                 loc0->spawn_x, loc0->spawn_y);
                 map_free(m2);
             }
         }

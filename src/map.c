@@ -119,9 +119,10 @@ int map_build_colliders(const Map *map, Location *loc)
 
 /* ── Door-trigger building ─────────────────────────────────────────────── */
 
-int map_build_door_triggers(const Map *map, Location *loc,
-                            int dest_id,
-                            float dest_spawn_x, float dest_spawn_y)
+int map_build_door_triggers_for_tile(const Map *map, Location *loc,
+                                     int tile,
+                                     int dest_id,
+                                     float dest_spawn_x, float dest_spawn_y)
 {
     if (!map || !map->cells || !loc) return 0;
 
@@ -132,11 +133,11 @@ int map_build_door_triggers(const Map *map, Location *loc,
     for (int r = 0; r < map->rows; r++) {
         int c = 0;
         while (c < map->cols) {
-            if (map->cells[r * map->cols + c] == MAP_TILE_DOOR) {
+            if (map->cells[r * map->cols + c] == tile) {
                 /* Start of a door run – extend right as far as possible. */
                 int run_start = c;
                 while (c < map->cols &&
-                       map->cells[r * map->cols + c] == MAP_TILE_DOOR)
+                       map->cells[r * map->cols + c] == tile)
                     c++;
                 if (loc->trigger_count < MAX_TRIGGER_ZONES) {
                     TriggerZone *tz = &loc->triggers[loc->trigger_count++];
@@ -157,6 +158,14 @@ int map_build_door_triggers(const Map *map, Location *loc,
     }
 
     return added;
+}
+
+int map_build_door_triggers(const Map *map, Location *loc,
+                            int dest_id,
+                            float dest_spawn_x, float dest_spawn_y)
+{
+    return map_build_door_triggers_for_tile(map, loc, MAP_TILE_DOOR,
+                                            dest_id, dest_spawn_x, dest_spawn_y);
 }
 
 /* ── Spawn search ─────────────────────────────────────────────────────── */

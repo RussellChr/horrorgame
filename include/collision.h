@@ -2,7 +2,7 @@
 #define COLLISION_H
 
 #define MAX_COLLISION_RECTS 512
-#define MAX_TRIGGER_ZONES   32
+#define MAX_TRIGGER_ZONES   128
 
 /* Axis-aligned bounding box. */
 typedef struct {

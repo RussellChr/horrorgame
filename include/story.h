@@ -17,8 +17,10 @@
 
 /* ── Story flags (bitmask values for player->flags) ───────────────────── */
 
-#define FLAG_ENTERED_LAB        (1u << 0)   /* player visited the lab      */
-#define FLAG_ENTERED_HALLWAY    (1u << 1)   /* player visited the hallway  */
+#define FLAG_ENTERED_LAB                (1u << 0)   /* player visited the lab             */
+#define FLAG_ENTERED_HALLWAY            (1u << 1)   /* player visited the hallway         */
+#define FLAG_HIBERN_POWERCELL_COLLECTED (1u << 2)   /* power cell picked up in Hibernation */
+#define FLAG_HIBERN_POWERCELL_PLACED    (1u << 3)   /* power cell placed in slot (door unlocked) */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

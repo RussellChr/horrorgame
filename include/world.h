@@ -72,6 +72,12 @@ typedef struct {
     Rect  colliders[MAX_COLLISION_RECTS];
     int   collider_count;
 
+    /* Door collider range (for removable door barriers).
+     * door_collider_start is the index of the first door collider;
+     * setting collider_count = door_collider_start removes them all. */
+    int   door_collider_start;
+    int   door_collider_count;
+
     /* Interactive trigger zones */
     TriggerZone triggers[MAX_TRIGGER_ZONES];
     int          trigger_count;

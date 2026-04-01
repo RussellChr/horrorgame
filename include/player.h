@@ -27,6 +27,10 @@
 #define DIRECTION_EAST  2
 #define DIRECTION_WEST  3
 
+/* ── Item IDs ──────────────────────────────────────────────────────────── */
+
+#define ITEM_ID_POWERCELL   12  /* Hibernation room power cell */
+
 /* ── Item ──────────────────────────────────────────────────────────────── */
 
 typedef struct {

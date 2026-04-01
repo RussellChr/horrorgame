@@ -41,3 +41,41 @@ Alex
 ---
 There is someone else in this house. That should be reassuring. It is not.
 ---
+
+# ── Hibernation Chamber ────────────────────────────────────────────────
+
+[hibern_zonk]
+Alex
+---
+There's nothing here.
+---
+
+[hibern_powercell]
+Alex
+---
+You found a power cell.
+---
+
+[hibern_slot_empty]
+Alex
+---
+It seems like something is needed here.
+---
+
+[hibern_slot_place]
+Alex
+---
+The power cell slots into place with a satisfying click.
+---
+
+[hibern_pods_opened]
+Alex
+---
+Some of these are already open — so someone woke up before me.
+---
+
+[hibern_door_locked]
+Alex
+---
+Low power? Great, I just woke up and I'm already trapped.
+---

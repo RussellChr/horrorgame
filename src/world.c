@@ -434,7 +434,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
      *   tile 5 (archive):     rows 19-21, cols 45-47  → hint (18, 46)
      *   tile 4 (lab):         rows 13-15, cols 29-30  → hint (16, 29)
      *   tile 1 (hibernation): rows 25-27, cols 14-16  → hint (24, 15)
-     *   tile 2 (power):       rows 14-16, cols  3- 4  → hint (15,  6)
+     *   tile 2 (power):       rows 14-16, cols  3- 4  → hint (19,  6)
      *   tile 3 (security):    rows  6- 8, cols 14-15  → hint ( 9, 15)
      *
      * In each sub-room the connector back to the hallway:
@@ -453,10 +453,13 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
         Location *loc5 = world_get_location(world, 5); /* Security    */
 
         /* Compute return-spawn positions in the hallway near each door tile.
-         * Hints are one row/col outside the tile block so the player lands
-         * on walkable floor just in front of the door they came through.
+         * Hints are placed safely outside the tile block so the player lands
+         * on walkable floor without overlapping a door trigger on arrival.
          *   tile 1 hint: (24, 15) – one row above the hibernation door
-         *   tile 2 hint: (15,  6) – one col right of the power door
+         *   tile 2 hint: (19,  6) – one row below the power door block
+         *                           (rows 15-18 are tile-2; row 19 col 6 is floor
+         *                            and avoids the feet-rect overlap that caused
+         *                            the Power-room teleport loop)
          *   tile 3 hint: ( 9, 15) – one row below the security door
          *   tile 4 hint: (16, 29) – one row below the lab door        */
         float hw5x = 0.0f, hw5y = 0.0f;
@@ -476,7 +479,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                                loc2->room_width, loc2->room_height);
                 map_find_spawn(mhw, 24, 15, &hw1x, &hw1y,
                                loc2->room_width, loc2->room_height);
-                map_find_spawn(mhw, 15,  6, &hw2x, &hw2y,
+                map_find_spawn(mhw, 19,  6, &hw2x, &hw2y,
                                loc2->room_width, loc2->room_height);
                 map_find_spawn(mhw,  9, 15, &hw3x, &hw3y,
                                loc2->room_width, loc2->room_height);

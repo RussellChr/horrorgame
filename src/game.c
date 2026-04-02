@@ -71,7 +71,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
     /* Load locker view */
-    g->locker_texture = render_load_texture(renderer, "assets/locker.png");
+    g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
+    g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
 
     return g;
 }
@@ -86,6 +87,7 @@ void game_cleanup(Game *game)
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
     render_texture_destroy(game->locker_texture);
+    render_texture_destroy(game->note_locker_texture);
     free(game);
 }
 
@@ -193,11 +195,24 @@ void game_start_dialogue(Game *game, int node_id)
 void game_end_dialogue(Game *game)
 {
     if (!game) return;
+
+    /* Check (and consume) the transient note flag before destroying the tree */
+    int show_note = game->player &&
+                    player_check_flag(game->player, FLAG_SECURITY_NOTE_READ);
+    if (show_note && game->player)
+        player_clear_flag(game->player, FLAG_SECURITY_NOTE_READ);
+
     if (game->dialogue_tree) {
         dialogue_tree_destroy(game->dialogue_tree);
         game->dialogue_tree = NULL;
     }
-    game->state = GAME_STATE_PLAYING;
+
+    if (show_note) {
+        game->show_note_locker = 1;
+        game->state = GAME_STATE_LOCKER;
+    } else {
+        game->state = GAME_STATE_PLAYING;
+    }
 }
 
 /* ── Interaction handler ───────────────────────────────────────────────── */
@@ -359,6 +374,37 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* ── Security room interactions (loc 5) ────────────────────────────── */
+    else if (loc_id == 5) {
+        if (tid == 91) {
+            /* Tile 2: readable note – Yes/No prompt */
+            DialogueTree *tree = dialogue_tree_create();
+            if (tree) {
+                DialogueNode *q = dialogue_add_node(tree, 0, "",
+                    "Would you like to read it?", 0);
+                if (q) {
+                    DialogueChoice yes;
+                    memset(&yes, 0, sizeof(yes));
+                    yes.id           = 0;
+                    yes.next_node_id = -1; /* sentinel: detected in event handler to end dialogue */
+                    yes.story_flag   = FLAG_SECURITY_NOTE_READ;
+                    strncpy(yes.text, "Yes", DIALOGUE_TEXT_MAX - 1);
+                    dialogue_add_choice(q, &yes);
+
+                    DialogueChoice no;
+                    memset(&no, 0, sizeof(no));
+                    no.id           = 1;
+                    no.next_node_id = -1; /* sentinel: detected in event handler to end dialogue */
+                    no.story_flag   = 0;
+                    strncpy(no.text, "No", DIALOGUE_TEXT_MAX - 1);
+                    dialogue_add_choice(q, &no);
+                }
+                game->dialogue_tree = tree;
+                game_start_dialogue(game, 0);
+            }
+        }
+        return;
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
@@ -440,8 +486,10 @@ void game_handle_event(Game *game, SDL_Event *event)
     case GAME_STATE_LOCKER:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
-                event->key.key == SDLK_E)
+                event->key.key == SDLK_E) {
+                game->show_note_locker = 0;
                 game->state = GAME_STATE_PLAYING;
+            }
         }
         break;
 
@@ -467,6 +515,10 @@ void game_handle_event(Game *game, SDL_Event *event)
                 /* Apply story flag from the chosen option before advancing */
                 apply_dialogue_choice_flag(game);
                 int cont = dialogue_state_advance(&game->dialogue_state, 0);
+                /* Also end dialogue if the next node doesn't exist (sentinel -1) */
+                if (cont && !dialogue_get_node(game->dialogue_state.tree,
+                                               game->dialogue_state.current_node_id))
+                    cont = 0;
                 if (!cont)
                     game_end_dialogue(game);
             }
@@ -477,6 +529,10 @@ void game_handle_event(Game *game, SDL_Event *event)
             /* Apply story flag before advancing on mouse click too */
             apply_dialogue_choice_flag(game);
             int cont = dialogue_state_advance(&game->dialogue_state, 0);
+            /* Also end dialogue if the next node doesn't exist (sentinel -1) */
+            if (cont && !dialogue_get_node(game->dialogue_state.tree,
+                                           game->dialogue_state.current_node_id))
+                cont = 0;
             if (!cont)
                 game_end_dialogue(game);
         }
@@ -1145,8 +1201,12 @@ void game_render_locker(Game *game)
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
-    if (game->locker_texture) {
-        render_texture(r, game->locker_texture, 0, 0, WINDOW_W, WINDOW_H);
+    SDL_Texture *tex = game->show_note_locker
+                       ? game->note_locker_texture
+                       : game->locker_texture;
+
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
     } else {
         render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
     }

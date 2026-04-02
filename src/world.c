@@ -429,6 +429,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
+                    /* Tile 2: readable note (trigger ID 91) */
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 91, 0.0f, 0.0f);
+
                     /* Spawn just above the tile-3 connector (rows 20-21, cols 28-34).
                        Hint one row above the block so the player stands in
                        front of the connector when arriving from the hallway. */

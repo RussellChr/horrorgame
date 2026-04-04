@@ -943,8 +943,9 @@ static float raycast_colliders(float ox, float oy, float dx, float dy,
 /* Radius (screen pixels) of the dim ambient circle around the player in the
  * archive room.  Within this radius the player can faintly see; outside it
  * is pitch black unless the flashlight cone covers the area. */
-#define AMBIENT_RADIUS 90.0f
-#define AMBIENT_SEGS   32
+#define AMBIENT_RADIUS      90.0f
+#define AMBIENT_SEGS        32
+#define AMBIENT_EDGE_ALPHA  (220.0f / 255.0f)  /* darkness at ambient circle edge */
 
 static void render_flashlight_beam(Game *game)
 {
@@ -1087,7 +1088,7 @@ static void render_archive_darkness(Game *game)
             verts[i + 1].color.r     = 0.0f;
             verts[i + 1].color.g     = 0.0f;
             verts[i + 1].color.b     = 0.0f;
-            verts[i + 1].color.a     = 220.0f / 255.0f;  /* dark edge */
+            verts[i + 1].color.a     = AMBIENT_EDGE_ALPHA;  /* dark edge */
             verts[i + 1].tex_coord.x = 0.0f;
             verts[i + 1].tex_coord.y = 0.0f;
         }

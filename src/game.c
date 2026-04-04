@@ -1367,6 +1367,10 @@ void game_render_playing(Game *game)
                            0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
     }
 
+    /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
+     * more atmospheric look without completely obscuring details. */
+    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 55);
+
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);
 

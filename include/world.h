@@ -89,13 +89,6 @@ typedef struct {
     /* Dynamic room dimensions (set from background texture at load time) */
     int room_width;
     int room_height;
-
-    /* Navigation grid retained from the map CSV for A* pathfinding.
-     * cells[row * nav_cols + col] = tile value (0 = wall, else walkable).
-     * Owned by the Location; freed in world_destroy(). */
-    int *nav_cells;
-    int  nav_rows;
-    int  nav_cols;
 } Location;
 
 /* ── World ────────────────────────────────────────────────────────────── */

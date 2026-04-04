@@ -22,7 +22,6 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
-    GAME_STATE_GAME_OVER,
     GAME_STATE_QUIT
 } GameState;
 
@@ -149,6 +148,5 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
-void game_render_game_over(Game *game);
 
 #endif /* GAME_H */

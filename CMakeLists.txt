@@ -54,7 +54,6 @@ add_executable(horrorgame
     src/animation.c
     src/camera.c
     src/collision.c
-    src/npc.c
 )
 
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})

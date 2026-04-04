@@ -17,9 +17,6 @@ World *world_create(void)
 
 void world_destroy(World *world)
 {
-    if (!world) return;
-    for (int i = 0; i < world->location_count; i++)
-        free(world->locations[i].nav_cells);
     free(world);
 }
 
@@ -322,12 +319,6 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_interactive_triggers_for_tile(m, loc, 8,  80, 0.0f, 0.0f);
                     map_build_interactive_triggers_for_tile(m, loc, 9,  81, 0.0f, 0.0f);
                     map_build_interactive_triggers_for_tile(m, loc, 10, 82, 0.0f, 0.0f);
-
-                    /* Retain nav grid for A* pathfinding (steal cells pointer). */
-                    loc->nav_cells = m->cells;
-                    loc->nav_rows  = m->rows;
-                    loc->nav_cols  = m->cols;
-                    m->cells = NULL;   /* prevent map_free from freeing the grid */
 
                     map_free(m);
                 } else {

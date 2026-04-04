@@ -158,8 +158,13 @@ NPCManager *npc_manager_create(void)
 void npc_manager_destroy(NPCManager *manager)
 {
     if (!manager) return;
-    for (int i = 0; i < manager->npc_count; i++)
-        npc_destroy(&manager->npcs[i]);
+    /* NPCs are value-copied into the manager's embedded array via
+     * npc_manager_add(), so they are NOT individually heap-allocated.
+     * Calling free() on &manager->npcs[i] would free a pointer into
+     * the middle of the manager allocation — undefined behaviour and
+     * the direct cause of the "pointer being freed was not allocated"
+     * crash on exit.  The NPC struct holds no pointer-typed resources
+     * of its own, so simply freeing the manager block is sufficient. */
     free(manager);
 }
 

@@ -11,6 +11,7 @@
 #include "ui.h"
 #include "npc.h"
 #include "monologue.h"
+#include "enemy.h"
 
 /* ── Game states ──────────────────────────────────────────────────────── */
 
@@ -22,6 +23,7 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_GAME_OVER,
     GAME_STATE_QUIT
 } GameState;
 
@@ -42,6 +44,7 @@ typedef struct {
     DialogueTree  *dialogue_tree;   /* current NPC dialogue tree    */
     DialogueState  dialogue_state;  /* visual dialogue playback     */
     NPCManager    *npc_manager;     /* NPC system                   */
+    Enemy         *enemy;           /* hallway enemy                */
 
     /* Inner monologue data loaded from assets/dialogue/monologues.txt */
     MonologueFile  monologue_file;
@@ -149,5 +152,6 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_game_over(Game *game);
 
 #endif /* GAME_H */

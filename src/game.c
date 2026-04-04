@@ -8,6 +8,7 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
+#include "enemy.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -119,6 +120,7 @@ void game_cleanup(Game *game)
     if (game->world)         world_destroy(game->world);
     if (game->story)         story_destroy(game->story);
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
+    if (game->enemy)         enemy_destroy(game->enemy);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
     render_texture_destroy(game->locker_texture);
@@ -136,6 +138,13 @@ void game_cleanup(Game *game)
 void game_start_new(Game *game)
 {
     if (!game) return;
+
+    /* Clean up any previous session before starting a new one */
+    if (game->player)        { player_destroy(game->player);               game->player        = NULL; }
+    if (game->world)         { world_destroy(game->world);                 game->world         = NULL; }
+    if (game->story)         { story_destroy(game->story);                 game->story         = NULL; }
+    if (game->dialogue_tree) { dialogue_tree_destroy(game->dialogue_tree); game->dialogue_tree = NULL; }
+    if (game->enemy)         { enemy_destroy(game->enemy);                 game->enemy         = NULL; }
 
     game->player = player_create("Alex");
     game->world  = world_create();
@@ -165,6 +174,14 @@ void game_start_new(Game *game)
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
+
+    /* Create the hallway enemy now that the room dimensions are known */
+    {
+        Location *hloc = world_get_location(game->world, LOCATION_HALLWAY);
+        float rw = hloc ? (float)hloc->room_width  : 1920.0f;
+        float rh = hloc ? (float)hloc->room_height : 960.0f;
+        game->enemy = enemy_create("maps/hallway.csv", rw, rh);
+    }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
@@ -838,6 +855,13 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_GAME_OVER:
+        if (event->type == SDL_EVENT_KEY_DOWN ||
+            event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            game->state = GAME_STATE_MENU;
+        }
+        break;
+
     default: break;
     }
 }
@@ -989,6 +1013,13 @@ void game_update(Game *game)
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
+        /* ── Hallway enemy update ── */
+        if (p->current_location_id == LOCATION_HALLWAY && game->enemy) {
+            int caught = enemy_update(game->enemy, p->x, p->y, dt);
+            if (caught)
+                game->state = GAME_STATE_GAME_OVER;
+        }
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     }
@@ -1016,6 +1047,7 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);
@@ -1413,6 +1445,13 @@ void game_render_playing(Game *game)
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* Hallway enemy */
+    if (game->player->current_location_id == LOCATION_HALLWAY && game->enemy) {
+        int ex = camera_to_screen_x(&game->camera, game->enemy->x);
+        int ey = camera_to_screen_y(&game->camera, game->enemy->y);
+        enemy_render(game->enemy, game->renderer, ex, ey);
+    }
 
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
@@ -1868,3 +1907,38 @@ void game_render_locker(Game *game)
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
 }
+
+/* ── Game Over ───────────────────────────────────────────────────────────── */
+
+void game_render_game_over(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Dark full-screen background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+
+    /* Outer panel */
+    int pw = 580, ph = 260;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 30, 5, 5, 240);
+    render_rect_outline(r, px, py, pw, ph, 160, 20, 20, 255);
+    render_rect_outline(r, px + 2, py + 2, pw - 4, ph - 4, 80, 10, 10, 180);
+
+    /* "GAME OVER" title */
+    render_text_centered(r, "GAME OVER",
+                         WINDOW_W / 2, py + 50, 4, 220, 30, 30);
+
+    /* Divider */
+    render_filled_rect(r, px + 20, py + 110, pw - 40, 2, 100, 15, 15, 200);
+
+    /* Subtitle */
+    render_text_centered(r, "You were caught.",
+                         WINDOW_W / 2, py + 130, 2, 180, 80, 80);
+
+    /* Prompt */
+    render_text_centered(r, "Press any key or click to return to menu",
+                         WINDOW_W / 2, py + ph - 30, 1, 110, 40, 40);
+}
+

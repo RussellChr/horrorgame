@@ -658,20 +658,6 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (Uint8)(d->b > 30 ? d->b - 30 : 0),
             200);
     }
-    /* ── Collision walls ── */
-    /* If wall colours have been explicitly set for this room (non-zero),
-     * draw the collision boxes as filled solid rectangles so they appear
-     * as visible walls when illuminated (e.g. by the archive flashlight).
-     * Otherwise fall back to the lightweight debug outline. */
-    if (loc->wall_r || loc->wall_g || loc->wall_b) {
-        for (int i = 0; i < loc->collider_count; i++) {
-            const Rect *col = &loc->colliders[i];
-            render_filled_rect(renderer,
-                (int)(col->x - cx), (int)(col->y - cy),
-                (int)col->w, (int)col->h,
-                loc->wall_r, loc->wall_g, loc->wall_b, 255);
-        }
-    }
     /* ── Danger zone vignette ── */
     if (loc->is_danger_zone) {
         /* Red border on all four edges */

@@ -81,10 +81,6 @@ typedef struct {
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
 
-    /* Gas mask vision effect */
-    int          gasmask_active;           /* 1 if gasmask is worn (limited vision) */
-    SDL_Texture *gasmask_vignette_texture; /* precomputed radial transparency mask  */
-
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */

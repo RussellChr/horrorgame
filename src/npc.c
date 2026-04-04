@@ -265,9 +265,9 @@ static void npc_patrol_update(NPC *npc)
     }
 
     /* Steer towards the current waypoint */
-    float inv = 1.0f / dist;
-    npc->vx = dx * inv * PATROL_SPEED;
-    npc->vy = dy * inv * PATROL_SPEED;
+    float inv_dist = 1.0f / dist;
+    npc->vx = dx * inv_dist * PATROL_SPEED;
+    npc->vy = dy * inv_dist * PATROL_SPEED;
     npc->facing_right  = (dx > 0) ? 1 : 0;
     npc->current_state = NPC_STATE_WALKING;
 }
@@ -432,9 +432,9 @@ void npc_update_chase(NPC *npc, float delta_time,
         float dy   = ty - npc->y;
         float dist = sqrtf(dx * dx + dy * dy);
         if (dist > 0.01f) {
-            float inv  = 1.0f / dist;
-            npc->vx    = dx * inv * CHASE_SPEED;
-            npc->vy    = dy * inv * CHASE_SPEED;
+            float inv_dist = 1.0f / dist;
+            npc->vx    = dx * inv_dist * CHASE_SPEED;
+            npc->vy    = dy * inv_dist * CHASE_SPEED;
             npc->facing_right = (dx > 0) ? 1 : 0;
         }
     } else {

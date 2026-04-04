@@ -435,10 +435,10 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_colliders_for_tile(m, loc, 1);
                     map_build_colliders_for_tile(m, loc, 2);
 
+                    /* Tile 1: monitor screen (trigger ID 92) */
                     /* Tile 2: readable note (trigger ID 91) */
-                    /* Tile 4: monitor screen (trigger ID 92) */
+                    map_build_interactive_triggers_for_tile(m, loc, 1, 92, 0.0f, 0.0f);
                     map_build_interactive_triggers_for_tile(m, loc, 2, 91, 0.0f, 0.0f);
-                    map_build_interactive_triggers_for_tile(m, loc, 4, 92, 0.0f, 0.0f);
 
 
                     /* Spawn just above the tile-3 connector (rows 20-21, cols 28-34).

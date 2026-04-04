@@ -9,7 +9,7 @@
 
 #define NPC_SPEED 150.0f
 #define NPC_W     20
-#define NPC_H     40
+#define NPC_SPRITE_H     40
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
@@ -47,7 +47,7 @@ NPC *npc_create(int id, const char *name, float x, float y, int npc_type)
     npc->collider.x = x;
     npc->collider.y = y;
     npc->collider.w = NPC_W;
-    npc->collider.h = NPC_H;
+    npc->collider.h = NPC_SPRITE_H;
 
     /* Initialize animations */
     animation_init(&npc->idle_anim, 2, 1.5f, 1);
@@ -152,13 +152,13 @@ void npc_render(NPC *npc, SDL_Renderer *renderer)
     /* Simple colored rectangle for NPC sprite */
     int color;
     if (npc->npc_type == NPC_TYPE_FRIENDLY)
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
+        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_SPRITE_H,
                           100, 200, 100, 255);  /* Green */
     else if (npc->npc_type == NPC_TYPE_HOSTILE)
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
+        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_SPRITE_H,
                           200, 100, 100, 255);  /* Red */
     else
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
+        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_SPRITE_H,
                           150, 150, 150, 255);  /* Gray */
 
     /* Draw name above NPC */

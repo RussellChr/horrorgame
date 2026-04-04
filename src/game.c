@@ -899,7 +899,7 @@ void game_render_menu(Game *game)
  * from the player's facing direction) and draws the lit area as a
  * triangle fan using additive blending. */
 #define FL_NUM_RAYS  48
-#define FL_MAX_DIST  500.0f
+#define FL_MAX_DIST  250.0f
 #define FL_HALF_CONE (M_PI / 4.0)   /* half-cone: 45° (π/4 radians) each side */
 
 static void render_flashlight_beam(Game *game)
@@ -937,7 +937,7 @@ static void render_flashlight_beam(Game *game)
     verts[0].color.r     = 1.0f;
     verts[0].color.g     = 1.0f;
     verts[0].color.b     = 0.8f;
-    verts[0].color.a     = 0.7f;
+    verts[0].color.a     = 0.45f;
     verts[0].tex_coord.x = 0.0f;
     verts[0].tex_coord.y = 0.0f;
 
@@ -961,7 +961,7 @@ static void render_flashlight_beam(Game *game)
         verts[i + 1].color.r     = 1.0f;
         verts[i + 1].color.g     = 1.0f;
         verts[i + 1].color.b     = 0.7f;
-        verts[i + 1].color.a     = 0.35f * edge;
+        verts[i + 1].color.a     = 0.20f * edge;
         verts[i + 1].tex_coord.x = 0.0f;
         verts[i + 1].tex_coord.y = 0.0f;
     }
@@ -1106,7 +1106,7 @@ static void render_archive_darkness(Game *game)
             fv[i + 1].color.r     = 1.0f;
             fv[i + 1].color.g     = 1.0f;
             fv[i + 1].color.b     = 0.9f;
-            fv[i + 1].color.a     = 0.9f * edge;
+            fv[i + 1].color.a     = 0.55f * edge;
             fv[i + 1].tex_coord.x = 0.0f;
             fv[i + 1].tex_coord.y = 0.0f;
         }

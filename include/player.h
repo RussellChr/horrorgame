@@ -32,6 +32,7 @@
 #define ITEM_ID_FLASHLIGHT  11  /* Hallway flashlight */
 #define ITEM_ID_POWERCELL   12  /* Hibernation room power cell */
 #define ITEM_ID_GASMASK     13  /* Hallway gas mask */
+#define ITEM_ID_KEYCARD     14  /* Kimia lab keycard */
 
 /* ── Item ──────────────────────────────────────────────────────────────── */
 

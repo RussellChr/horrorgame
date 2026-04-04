@@ -98,6 +98,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
+    g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
 
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
@@ -125,6 +126,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->monitor_zoom_texture);
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
+    render_texture_destroy(game->item_keycard_texture);
     render_texture_destroy(game->dark_overlay);
     free(game);
 }
@@ -312,6 +314,30 @@ static void handle_interaction(Game *game)
         return;
     }
 
+    /* ── Lab interactions (loc 1) ──────────────────────────────────────── */
+    if (loc_id == 1) {
+        if (tid == 61) {
+            /* Tile 2: keycard pickup */
+            if (!player_check_flag(game->player, FLAG_KEYCARD_COLLECTED)) {
+                player_set_flag(game->player, FLAG_KEYCARD_COLLECTED);
+                Item kc;
+                strncpy(kc.name, "Keycard", ITEM_NAME_MAX - 1);
+                kc.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(kc.description, "A keycard that grants access to the archive.", ITEM_DESC_MAX - 1);
+                kc.description[ITEM_DESC_MAX - 1] = '\0';
+                kc.id     = ITEM_ID_KEYCARD;
+                kc.usable = 0;
+                player_add_item(game->player, &kc);
+                set_dialogue_tree(game, "lab_keycard", 1);
+            } else {
+                set_dialogue_tree(game, "hallway_nothing", 1);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
+
     /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
     if (loc_id == 2) {
         if (tid == 80) {
@@ -348,6 +374,32 @@ static void handle_interaction(Game *game)
                 set_dialogue_tree(game, "hallway_flashlight", 2);
             } else {
                 set_dialogue_tree(game, "hallway_nothing", 2);
+            }
+        } else if (tid == 95) {
+            /* Tile 5: archive door – locked until player has keycard */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
+                player_has_item(game->player, ITEM_ID_KEYCARD)) {
+                /* Unlock the archive door permanently: remove door colliders
+                   and convert the interactive trigger into an exit trigger
+                   (trigger_id = -1 signals a room-transition trigger). */
+                player_set_flag(game->player, FLAG_ARCHIVE_UNLOCKED);
+                Location *hwloc = world_get_location(game->world, 2);
+                if (hwloc) {
+                    hwloc->collider_count = hwloc->door_collider_start;
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 95) {
+                            hwloc->triggers[i].target_location_id = 0;
+                            hwloc->triggers[i].trigger_id = -1;
+                        }
+                    }
+                }
+                /* Transport player to the archive immediately. */
+                Location *aloc = world_get_location(game->world, 0);
+                if (aloc)
+                    game_change_location(game, 0, aloc->spawn_x, aloc->spawn_y);
+                return;
+            } else if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
+                set_dialogue_tree(game, "archive_door_locked", 2);
             }
         }
         if (game->dialogue_tree)
@@ -890,12 +942,16 @@ void game_update(Game *game)
                         const char *label;
                         if (tz->trigger_id == 60)
                             label = "Press [E] to enter locker";
+                        else if (tz->trigger_id == 61)
+                            label = "Press [E] to examine";
                         else if (tz->trigger_id == 75)
                             label = "Press [E] to interact";
                         else if (tz->trigger_id == 91)
                             label = "Press [E] to examine";
                         else if (tz->trigger_id == 92)
                             label = "Press [E] to examine";
+                        else if (tz->trigger_id == 95)
+                            label = "Press [E] to interact";
                         else
                             label = "Press E to talk";
                         strncpy(game->interact_label, label,
@@ -1473,6 +1529,7 @@ static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
     switch (item_id) {
     case ITEM_ID_FLASHLIGHT: return game->item_flashlight_texture;
     case ITEM_ID_GASMASK:    return game->item_gasmask_texture;
+    case ITEM_ID_KEYCARD:    return game->item_keycard_texture;
     default:                 return NULL;
     }
 }

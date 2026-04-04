@@ -24,6 +24,8 @@
 #define FLAG_HALLWAY_GASMASK_COLLECTED  (1u << 4)   /* gas mask picked up in Hallway       */
 #define FLAG_HALLWAY_FLASHLIGHT_COLLECTED (1u << 5) /* flashlight picked up in Hallway     */
 #define FLAG_SECURITY_NOTE_READ           (1u << 6) /* player chose to read the note in Security room (transient) */
+#define FLAG_KEYCARD_COLLECTED            (1u << 7) /* keycard picked up in the lab */
+#define FLAG_ARCHIVE_UNLOCKED             (1u << 8) /* archive door unlocked with keycard */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

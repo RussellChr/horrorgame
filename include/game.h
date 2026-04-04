@@ -81,6 +81,12 @@ typedef struct {
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
 
+    /* Off-screen darkness mask used in the archive room.
+     * Filled with opaque black; transparent holes are punched for the
+     * ambient circle and the flashlight cone so the room texture shows
+     * through those areas when the mask is composited onto the screen. */
+    SDL_Texture *darkness_mask;
+
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */

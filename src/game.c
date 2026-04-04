@@ -23,6 +23,12 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Lab poisonous-gas constants ────────────────────────────────────────── */
+/* Seconds the player can stay in the lab without a gas mask before dying. */
+#define LAB_GAS_DEATH_DELAY  3.0f
+/* Alpha of the green gas overlay (0-255). */
+#define LAB_GAS_OVERLAY_ALPHA 70
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static Button make_button(float x, float y, float w, float h,
@@ -172,6 +178,8 @@ void game_start_new(Game *game)
     game->near_interactive        = 0;
     game->interactive_trigger_id  = -1;
     game->selected_inventory_slot = 0;
+    game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered     = 0;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -210,6 +218,10 @@ void game_change_location(Game *game, int location_id,
         game->camera.world_h = next->room_height;
     }
 
+    /* Reset lab gas death state whenever the player changes rooms */
+    game->lab_gas_timer      = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered = 0;
+
     camera_snap(&game->camera, spawn_x, spawn_y);
 }
 
@@ -238,6 +250,11 @@ void game_end_dialogue(Game *game)
     if (show_note) {
         game->show_note_locker = 1;
         game->state = GAME_STATE_LOCKER;
+    } else if (game->lab_death_triggered) {
+        /* Player died from the lab gas — return to main menu */
+        game->lab_death_triggered = 0;
+        game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
+        game->state               = GAME_STATE_MENU;
     } else {
         game->state = GAME_STATE_PLAYING;
     }
@@ -892,6 +909,17 @@ void game_update(Game *game)
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
+        /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
+        if (p->current_location_id == LOCATION_LAB &&
+            !game->gasmask_active &&
+            !game->lab_death_triggered) {
+            game->lab_gas_timer -= dt;
+            if (game->lab_gas_timer <= 0.0f) {
+                game->lab_death_triggered = 1;
+                set_dialogue_tree(game, "lab_gas_death", LOCATION_LAB);
+            }
+        }
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     }
@@ -1323,6 +1351,12 @@ void game_render_playing(Game *game)
         render_gasmask_vignette(game);
     else
         render_archive_darkness(game);
+
+    /* Lab poisonous gas: green tint overlay when in the lab */
+    if (game->player->current_location_id == LOCATION_LAB) {
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                           0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
+    }
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);

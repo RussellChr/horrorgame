@@ -73,6 +73,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load locker view */
     g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
+    g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
 
     return g;
 }
@@ -88,6 +89,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->title_screen_texture);
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
+    render_texture_destroy(game->monitor_zoom_texture);
     free(game);
 }
 
@@ -402,6 +404,10 @@ static void handle_interaction(Game *game)
                 game->dialogue_tree = tree;
                 game_start_dialogue(game, 0);
             }
+        } else if (tid == 92) {
+            /* Tile 4: monitor screen – show zoomed image */
+            game->show_monitor_zoom = 1;
+            game->state = GAME_STATE_LOCKER;
         }
         return;
     }
@@ -487,7 +493,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
-                game->show_note_locker = 0;
+                game->show_note_locker  = 0;
+                game->show_monitor_zoom = 0;
                 game->state = GAME_STATE_PLAYING;
             }
         }
@@ -752,6 +759,10 @@ void game_update(Game *game)
                             label = "Press [E] to enter locker";
                         else if (tz->trigger_id == 75)
                             label = "Press [E] to interact";
+                        else if (tz->trigger_id == 91)
+                            label = "Press [E] to examine";
+                        else if (tz->trigger_id == 92)
+                            label = "Press [E] to examine";
                         else
                             label = "Press E to talk";
                         strncpy(game->interact_label, label,
@@ -1201,9 +1212,10 @@ void game_render_locker(Game *game)
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
-    SDL_Texture *tex = game->show_note_locker
-                       ? game->note_locker_texture
-                       : game->locker_texture;
+    /* Only one of these flags is ever set at a time; note takes priority. */
+    SDL_Texture *tex = game->show_note_locker   ? game->note_locker_texture  :
+                       game->show_monitor_zoom  ? game->monitor_zoom_texture :
+                                                  game->locker_texture;
 
     if (tex) {
         render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);

@@ -84,6 +84,8 @@ typedef struct {
     SDL_Texture *locker_texture;
     SDL_Texture *note_locker_texture;   /* shown when reading the security note */
     int          show_note_locker;      /* 1 = show note_locker_texture instead of locker_texture */
+    SDL_Texture *monitor_zoom_texture;  /* shown when examining the security monitor */
+    int          show_monitor_zoom;     /* 1 = show monitor_zoom_texture             */
 
     /* Timing */
     Uint64 last_ticks;

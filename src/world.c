@@ -430,7 +430,16 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_colliders(m, loc);
 
                     /* Tile 2: readable note (trigger ID 91) */
+                    /* Tile 4: monitor screen (trigger ID 92) */
                     map_build_interactive_triggers_for_tile(m, loc, 2, 91, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 92, 0.0f, 0.0f);
+
+                    /* Tile 2 (note) and tile 4 (monitor) are solid objects –
+                       add collision so the player cannot walk through them.
+                       The interactive proximity zone is expanded ±40px so the
+                       player can still trigger the interaction while adjacent. */
+                    map_build_colliders_for_tile(m, loc, 2);
+                    map_build_colliders_for_tile(m, loc, 4);
 
                     /* Spawn just above the tile-3 connector (rows 20-21, cols 28-34).
                        Hint one row above the block so the player stands in

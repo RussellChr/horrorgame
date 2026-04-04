@@ -160,12 +160,12 @@ void game_start_new(Game *game)
     game->npc_manager = npc_manager_create();
     if (game->npc_manager) {
         static const PatrolWaypoint hallway_wps[] = {
-            {1094.0f, 316.0f},
-            {1091.0f, 580.0f},
-            { 650.0f, 388.0f},
-            { 650.0f, 544.0f},
-            { 261.0f, 542.0f},
-            { 261.0f, 236.0f},
+            {1734.0f, 319.0f},
+            {1731.0f, 583.0f},
+            { 710.0f, 579.0f},
+            { 712.0f, 735.0f},
+            { 321.0f, 733.0f},
+            { 321.0f, 427.0f},
         };
         NPC *enemy = npc_create(100, "Enemy", hallway_wps[0].x, hallway_wps[0].y,
                                 NPC_TYPE_HOSTILE);

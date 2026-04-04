@@ -73,12 +73,17 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load locker view */
     g->locker_texture = render_load_texture(renderer, "assets/locker.png");
 
+    /* Load security room image views */
+    g->note_locker_texture  = render_load_texture(renderer, "assets/note_locker.png");
+    g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
+
     return g;
 }
 
 void game_cleanup(Game *game)
 {
     if (!game) return;
+    SDL_ShowCursor();   /* restore OS cursor in case we're in playing mode */
     if (game->player)        player_destroy(game->player);
     if (game->world)         world_destroy(game->world);
     if (game->story)         story_destroy(game->story);
@@ -86,6 +91,8 @@ void game_cleanup(Game *game)
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
     render_texture_destroy(game->locker_texture);
+    render_texture_destroy(game->note_locker_texture);
+    render_texture_destroy(game->monitor_zoom_texture);
     free(game);
 }
 
@@ -142,6 +149,9 @@ void game_start_new(Game *game)
     game->near_interactive        = 0;
     game->interactive_trigger_id  = -1;
     game->selected_inventory_slot = 0;
+
+    /* Hide the OS cursor so our debug crosshair is the only cursor visible */
+    SDL_HideCursor();
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -359,6 +369,19 @@ static void handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         set_dialogue_tree(game, "stranger", 40);
     }
+    /* ── Security room interactions (loc 5) ─────────────────────────────── */
+    else if (loc_id == 5) {
+        if (tid == 90) {
+            /* Tile 1: monitor screen */
+            game->state = GAME_STATE_MONITOR_ZOOM;
+            return;
+        } else if (tid == 91) {
+            /* Tile 2: locker note */
+            game->state = GAME_STATE_NOTE_LOCKER;
+            return;
+        }
+        game->dialogue_tree = dialogue_build_for_location(loc_id);
+    }
     /* Default interaction */
     else {
         game->dialogue_tree = dialogue_build_for_location(loc_id);
@@ -438,6 +461,22 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            if (event->key.key == SDLK_ESCAPE ||
+                event->key.key == SDLK_E)
+                game->state = GAME_STATE_PLAYING;
+        }
+        break;
+
+    case GAME_STATE_NOTE_LOCKER:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            if (event->key.key == SDLK_ESCAPE ||
+                event->key.key == SDLK_E)
+                game->state = GAME_STATE_PLAYING;
+        }
+        break;
+
+    case GAME_STATE_MONITOR_ZOOM:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E)
@@ -525,6 +564,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->state = GAME_STATE_PLAYING;
             if (button_is_clicked(&game->pause_buttons[1],
                                   game->mouse_x, game->mouse_y)) {
+                SDL_ShowCursor();
                 game->state = GAME_STATE_MENU;
             }
         }
@@ -739,7 +779,9 @@ void game_render(Game *game)
         game_render_dialogue_overlay(game);
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
-    case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_LOCKER:    game_render_locker(game);       break;
+    case GAME_STATE_NOTE_LOCKER:   game_render_note_locker(game);  break;
+    case GAME_STATE_MONITOR_ZOOM:  game_render_monitor_zoom(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);
@@ -887,6 +929,34 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* ── Debug cursor: crosshair + world/screen coordinates ── */
+    {
+        int mx = (int)game->mouse_x;
+        int my = (int)game->mouse_y;
+        float wx = camera_to_world_x(&game->camera, mx);
+        float wy = camera_to_world_y(&game->camera, my);
+
+        /* Crosshair lines (bright cyan) */
+        int arm = 8;
+        render_line(game->renderer, mx - arm, my, mx + arm, my, 0, 220, 220, 255);
+        render_line(game->renderer, mx, my - arm, mx, my + arm, 0, 220, 220, 255);
+
+        /* Coordinate label: keep it on-screen */
+        char dbg_buf[48];
+        snprintf(dbg_buf, sizeof(dbg_buf),
+                 "S%d,%d W%.0f,%.0f", mx, my, wx, wy);
+        int label_x = mx + 12;
+        int label_y = my + 4;
+        int label_w = render_text_width(dbg_buf, 1) + 6;
+        int label_h = 11;
+        if (label_x + label_w > WINDOW_W) label_x = mx - label_w - 4;
+        if (label_y + label_h > WINDOW_H)  label_y = my - label_h - 4;
+        render_filled_rect(game->renderer, label_x - 2, label_y - 1,
+                           label_w, label_h, 0, 0, 0, 180);
+        render_text(game->renderer, dbg_buf, label_x, label_y,
+                    1, 0, 220, 220);
     }
 }
 
@@ -1147,6 +1217,40 @@ void game_render_locker(Game *game)
 
     if (game->locker_texture) {
         render_texture(r, game->locker_texture, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    render_text_centered(r, "Press E or ESC to exit",
+                         WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+}
+
+/* ── Note locker view (Security room, tile 2) ──────────────────────────── */
+
+void game_render_note_locker(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    if (game->note_locker_texture) {
+        render_texture(r, game->note_locker_texture, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    render_text_centered(r, "Press E or ESC to exit",
+                         WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+}
+
+/* ── Monitor zoom view (Security room, tile 1) ──────────────────────────── */
+
+void game_render_monitor_zoom(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    if (game->monitor_zoom_texture) {
+        render_texture(r, game->monitor_zoom_texture, 0, 0, WINDOW_W, WINDOW_H);
     } else {
         render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
     }

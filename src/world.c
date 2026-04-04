@@ -439,6 +439,11 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
 
+                    /* Tile 1: monitor screens – trigger 90 (monitor_zoom.png).
+                       Tile 2: locker note     – trigger 91 (note_locker.png). */
+                    map_build_interactive_triggers_for_tile(m, loc, 1, 90, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 91, 0.0f, 0.0f);
+
                     map_free(m);
                 } else {
                     loc->spawn_x = (float)(loc->room_width  / 2);

@@ -664,28 +664,12 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
      * as visible walls when illuminated (e.g. by the archive flashlight).
      * Otherwise fall back to the lightweight debug outline. */
     if (loc->wall_r || loc->wall_g || loc->wall_b) {
-        Uint8 shadow_r = (Uint8)(loc->wall_r > 20 ? loc->wall_r - 20 : 0);
-        Uint8 shadow_g = (Uint8)(loc->wall_g > 20 ? loc->wall_g - 20 : 0);
-        Uint8 shadow_b = (Uint8)(loc->wall_b > 20 ? loc->wall_b - 20 : 0);
         for (int i = 0; i < loc->collider_count; i++) {
             const Rect *col = &loc->colliders[i];
             render_filled_rect(renderer,
                 (int)(col->x - cx), (int)(col->y - cy),
                 (int)col->w, (int)col->h,
                 loc->wall_r, loc->wall_g, loc->wall_b, 255);
-            render_rect_outline(renderer,
-                (int)(col->x - cx), (int)(col->y - cy),
-                (int)col->w, (int)col->h,
-                shadow_r, shadow_g, shadow_b, 200);
-        }
-    } else {
-        /* Debug outline only (rooms with no explicit wall colour). */
-        for (int i = 0; i < loc->collider_count; i++) {
-            const Rect *col = &loc->colliders[i];
-            render_rect_outline(renderer,
-                (int)(col->x - cx), (int)(col->y - cy),
-                (int)col->w, (int)col->h,
-                255, 0, 0, 255);  /* Red outline */
         }
     }
     /* ── Danger zone vignette ── */

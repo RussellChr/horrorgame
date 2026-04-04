@@ -611,11 +611,11 @@ void game_handle_event(Game *game, SDL_Event *event)
                     const Item *it = &game->player->inventory[sel];
                     if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
                         game->flashlight_active = !game->flashlight_active;
-                        game->state = GAME_STATE_PLAYING;
                     } else if (it->usable && it->id == ITEM_ID_GASMASK) {
                         game->gasmask_active = !game->gasmask_active;
-                        game->state = GAME_STATE_PLAYING;
                     }
+                    if (it->usable)
+                        game->state = GAME_STATE_PLAYING;
                 }
             }
 

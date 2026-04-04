@@ -911,13 +911,20 @@ void game_update(Game *game)
 
         /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
         if (p->current_location_id == LOCATION_LAB &&
-            !game->gasmask_active &&
             !game->lab_death_triggered) {
-            game->lab_gas_timer -= dt;
-            if (game->lab_gas_timer <= 0.0f) {
-                game->lab_death_triggered = 1;
-                set_dialogue_tree(game, "lab_gas_death", LOCATION_LAB);
+            if (!game->gasmask_active) {
+                game->lab_gas_timer -= dt;
+                if (game->lab_gas_timer <= 0.0f) {
+                    game->lab_death_triggered = 1;
+                    set_dialogue_tree(game, "lab_gas_death", LOCATION_LAB);
+                }
+            } else {
+                /* Gas mask is on — replenish the timer */
+                game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
             }
+        } else if (p->current_location_id != LOCATION_LAB) {
+            /* Outside the lab — reset the timer for the next visit */
+            game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {

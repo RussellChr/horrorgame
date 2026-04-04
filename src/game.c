@@ -306,7 +306,7 @@ static void handle_interaction(Game *game)
                 strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
                 gm.description[ITEM_DESC_MAX - 1] = '\0';
                 gm.id     = ITEM_ID_GASMASK;
-                gm.usable = 0;
+                gm.usable = 1;
                 player_add_item(game->player, &gm);
                 set_dialogue_tree(game, "hallway_gasmask", 2);
             } else {

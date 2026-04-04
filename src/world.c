@@ -428,6 +428,8 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/security.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 1);
+                    map_build_colliders_for_tile(m, loc, 2);
 
                     /* Tile 2: readable note (trigger ID 91) */
                     /* Tile 4: monitor screen (trigger ID 92) */

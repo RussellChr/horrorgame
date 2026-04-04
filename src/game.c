@@ -14,6 +14,15 @@
 #include <stdio.h>
 #include <math.h>
 
+/* ── Monitor passcode constants ────────────────────────────────────────── */
+#define MONITOR_PANEL_X      685
+#define MONITOR_PANEL_Y      415
+#define MONITOR_PANEL_W       75
+#define MONITOR_PANEL_H      119
+#define PASSCODE_CORRECT     "3643"
+/* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
+#define PASSCODE_DISPLAY_SIZE  8
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static Button make_button(float x, float y, float w, float h,
@@ -543,11 +552,63 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
+        if (game->show_monitor_zoom && !game->passcode_active) {
+            /* Check if the invisible monitor panel rect was clicked */
+            if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                float mx = game->mouse_x, my = game->mouse_y;
+                if (mx >= MONITOR_PANEL_X && mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
+                    my >= MONITOR_PANEL_Y && my <= MONITOR_PANEL_Y + MONITOR_PANEL_H) {
+                    game->passcode_active    = 1;
+                    game->passcode_input_len = 0;
+                    game->passcode_input[0]  = '\0';
+                    game->passcode_wrong     = 0;
+                }
+            }
+        }
+        if (game->passcode_active) {
+            if (event->type == SDL_EVENT_KEY_DOWN) {
+                SDL_Keycode k = event->key.key;
+                if (k == SDLK_ESCAPE) {
+                    /* Close passcode overlay */
+                    game->passcode_active    = 0;
+                    game->passcode_input_len = 0;
+                    game->passcode_input[0]  = '\0';
+                    game->passcode_wrong     = 0;
+                } else if (k == SDLK_BACKSPACE && game->passcode_input_len > 0) {
+                    game->passcode_input_len--;
+                    game->passcode_input[game->passcode_input_len] = '\0';
+                    game->passcode_wrong = 0;
+                } else if (k >= SDLK_0 && k <= SDLK_9 &&
+                           game->passcode_input_len < 4) {
+                    game->passcode_input[game->passcode_input_len++] =
+                        (char)('0' + (k - SDLK_0));
+                    game->passcode_input[game->passcode_input_len] = '\0';
+                    game->passcode_wrong = 0;
+                    /* Auto-submit when 4 digits entered */
+                    if (game->passcode_input_len == 4) {
+                        if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
+                            /* Correct code – close passcode overlay */
+                            game->passcode_active    = 0;
+                            game->passcode_input_len = 0;
+                            game->passcode_input[0]  = '\0';
+                            game->passcode_wrong     = 0;
+                        } else {
+                            game->passcode_wrong = 1;
+                        }
+                    }
+                }
+            }
+            break;  /* Consume all events while passcode is open */
+        }
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
                 game->show_note_locker  = 0;
                 game->show_monitor_zoom = 0;
+                game->passcode_active    = 0;
+                game->passcode_input_len = 0;
+                game->passcode_input[0]  = '\0';
+                game->passcode_wrong     = 0;
                 game->state = GAME_STATE_PLAYING;
             }
         }
@@ -1463,6 +1524,40 @@ void game_render_locker(Game *game)
         render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
     }
 
-    render_text_centered(r, "Press E or ESC to exit",
-                         WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+    if (game->show_monitor_zoom) {
+        /* Text bar: "Use mouse button to select" */
+        render_filled_rect(r, 0, WINDOW_H - 48, WINDOW_W, 48, 0, 0, 0, 200);
+        render_text_centered(r, "Use mouse button to select",
+                             WINDOW_W / 2, WINDOW_H - 36, 2, 220, 220, 220);
+
+        /* Passcode overlay */
+        if (game->passcode_active) {
+            int pw = 320, ph = 180;
+            int px = (WINDOW_W - pw) / 2;
+            int py = (WINDOW_H - ph) / 2;
+            render_filled_rect(r, px, py, pw, ph, 0, 0, 0, 210);
+            render_rect_outline(r, px, py, pw, ph, 0, 180, 0, 255);
+
+            render_text_centered(r, "ENTER CODE",
+                                 WINDOW_W / 2, py + 16, 2, 0, 220, 0);
+
+            /* Display entered digits, blanks shown as underscore */
+            char display[PASSCODE_DISPLAY_SIZE] = "_ _ _ _";
+            for (int i = 0; i < game->passcode_input_len; i++)
+                display[i * 2] = game->passcode_input[i];
+            render_text_centered(r, display,
+                                 WINDOW_W / 2, py + 60, 3, 0, 220, 0);
+
+            if (game->passcode_wrong) {
+                render_text_centered(r, "passcode is wrong",
+                                     WINDOW_W / 2, py + 120, 2, 220, 60, 60);
+            }
+
+            render_text_centered(r, "ESC: cancel",
+                                 WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
+        }
+    } else {
+        render_text_centered(r, "Press E or ESC to exit",
+                             WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+    }
 }

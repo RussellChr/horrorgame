@@ -1057,7 +1057,9 @@ static void render_gasmask_vision(Game *game)
      * drawing alpha=0 lines replaces the black with full transparency. */
     SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
     for (int dy = -GM_CIRCLE_R; dy <= GM_CIRCLE_R; dy++) {
-        int dx = (int)sqrtf((float)(GM_CIRCLE_R * GM_CIRCLE_R - dy * dy));
+        int sq = GM_CIRCLE_R * GM_CIRCLE_R - dy * dy;
+        if (sq < 0) continue;
+        int dx = (int)sqrtf((float)sq);
         SDL_RenderLine(r,
                        (float)(cx - dx), (float)(cy + dy),
                        (float)(cx + dx), (float)(cy + dy));

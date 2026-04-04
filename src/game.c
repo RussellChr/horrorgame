@@ -1024,6 +1024,12 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
+    /* Archive room is completely dark – black out the whole screen first so
+     * the flashlight's additive-blend cone is the only source of light. */
+    if (game->player->current_location_id == LOCATION_ARCHIVE) {
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
     /* Flashlight beam (rendered on top of the player sprite) */
     render_flashlight_beam(game);
 

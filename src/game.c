@@ -76,6 +76,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
 
+    /* Load inventory item icons */
+    g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
+    g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
+
     return g;
 }
 
@@ -91,6 +95,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    render_texture_destroy(game->item_flashlight_texture);
+    render_texture_destroy(game->item_gasmask_texture);
     free(game);
 }
 
@@ -1110,6 +1116,16 @@ void game_render_dialogue_overlay(Game *game)
 
 /* ── Inventory ───────────────────────────────────────────────────────────── */
 
+static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
+{
+    if (!game) return NULL;
+    switch (item_id) {
+    case ITEM_ID_FLASHLIGHT: return game->item_flashlight_texture;
+    case ITEM_ID_GASMASK:    return game->item_gasmask_texture;
+    default:                 return NULL;
+    }
+}
+
 void game_render_inventory(Game *game)
 {
     if (!game || !game->player) return;
@@ -1188,6 +1204,11 @@ void game_render_inventory(Game *game)
             render_rect_outline(r, ix, icon_y, icon_size, icon_size,
                                 155, 35, 35, 200);
 
+            /* Item icon texture (flashlight / gasmask) */
+            SDL_Texture *item_tex = get_item_icon_texture(game, p->inventory[i].id);
+            if (item_tex)
+                render_texture(r, item_tex, ix, icon_y, icon_size, icon_size);
+
             /* Item name (1-2 words, clipped) below icon */
             char short_name[18];
             strncpy(short_name, p->inventory[i].name, sizeof(short_name) - 1);
@@ -1226,6 +1247,13 @@ void game_render_inventory(Game *game)
                            130, 28, 28, 240);
         render_rect_outline(r, bix, grid_y + 14, big_icon, big_icon,
                             170, 40, 40, 220);
+
+        /* Item icon texture in detail pane */
+        {
+            SDL_Texture *item_tex = get_item_icon_texture(game, it->id);
+            if (item_tex)
+                render_texture(r, item_tex, bix, grid_y + 14, big_icon, big_icon);
+        }
 
         /* Item name */
         render_text_centered(r, it->name,

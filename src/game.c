@@ -1257,4 +1257,26 @@ void game_render_monitor_zoom(Game *game)
 
     render_text_centered(r, "Press E or ESC to exit",
                          WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+
+    /* ── Debug cursor: crosshair + screen coordinates for rect placement ── */
+    {
+        int mx = (int)game->mouse_x;
+        int my = (int)game->mouse_y;
+
+        int arm = 8;
+        render_line(r, mx - arm, my, mx + arm, my, 0, 220, 220, 255);
+        render_line(r, mx, my - arm, mx, my + arm, 0, 220, 220, 255);
+
+        char dbg_buf[32];
+        snprintf(dbg_buf, sizeof(dbg_buf), "%d, %d", mx, my);
+        int label_x = mx + 12;
+        int label_y = my + 4;
+        int label_w = render_text_width(dbg_buf, 1) + 6;
+        int label_h = 11;
+        if (label_x + label_w > WINDOW_W) label_x = mx - label_w - 4;
+        if (label_y + label_h > WINDOW_H)  label_y = my - label_h - 4;
+        render_filled_rect(r, label_x - 2, label_y - 1,
+                           label_w, label_h, 0, 0, 0, 180);
+        render_text(r, dbg_buf, label_x, label_y, 1, 0, 220, 220);
+    }
 }

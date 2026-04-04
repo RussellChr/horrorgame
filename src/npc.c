@@ -100,7 +100,7 @@ void npc_manager_remove(NPCManager *manager, int npc_id)
 
 /* ── Patrol waypoint update (internal) ─────────────────────────────────── */
 
-static void npc_patrol_update(NPC *npc, float delta_time)
+static void npc_patrol_update(NPC *npc)
 {
     if (!npc || npc->patrol_wp_count < 2) return;
 
@@ -109,6 +109,7 @@ static void npc_patrol_update(NPC *npc, float delta_time)
     float dy   = target->y - npc->y;
     float dist = sqrtf(dx * dx + dy * dy);
 
+    /* Guard against degenerate near-zero distance before dividing */
     if (dist < PATROL_ARRIVE) {
         /* Arrived — advance to next waypoint, reversing at the ends */
         if (npc->patrol_state == PATROL_STATE_FORWARD) {
@@ -137,8 +138,6 @@ static void npc_patrol_update(NPC *npc, float delta_time)
     npc->vy = dy * inv * PATROL_SPEED;
     npc->facing_right  = (dx > 0) ? 1 : 0;
     npc->current_state = NPC_STATE_WALKING;
-
-    (void)delta_time;
 }
 
 /* ── Update ────────────────────────────────────────────────────────────── */
@@ -149,7 +148,7 @@ void npc_update(NPC *npc, float delta_time)
 
     /* Drive patrol movement before applying velocity */
     if (npc->has_patrol)
-        npc_patrol_update(npc, delta_time);
+        npc_patrol_update(npc);
 
     switch (npc->current_state) {
         case NPC_STATE_IDLE:

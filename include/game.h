@@ -80,6 +80,7 @@ typedef struct {
 
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
+    SDL_Texture *darkness_mask;  /* darkness overlay texture for lighting effects */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */

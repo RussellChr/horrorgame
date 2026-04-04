@@ -917,6 +917,8 @@ void game_update(Game *game)
                 if (game->lab_gas_timer <= 0.0f) {
                     game->lab_death_triggered = 1;
                     set_dialogue_tree(game, "lab_gas_death", LOCATION_LAB);
+                    if (game->dialogue_tree)
+                        game_start_dialogue(game, 0);
                 }
             } else {
                 /* Gas mask is on — replenish the timer */

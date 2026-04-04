@@ -567,7 +567,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         if (game->passcode_active) {
             if (event->type == SDL_EVENT_KEY_DOWN) {
-                SDL_Keycode k = event->key.key;
+                SDL_Keycode  k  = event->key.key;
+                SDL_Scancode sc = event->key.scancode;
                 if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
@@ -578,22 +579,35 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len--;
                     game->passcode_input[game->passcode_input_len] = '\0';
                     game->passcode_wrong = 0;
-                } else if (k >= SDLK_0 && k <= SDLK_9 &&
-                           game->passcode_input_len < 4) {
-                    game->passcode_input[game->passcode_input_len++] =
-                        (char)('0' + (k - SDLK_0));
-                    game->passcode_input[game->passcode_input_len] = '\0';
-                    game->passcode_wrong = 0;
-                    /* Auto-submit when 4 digits entered */
-                    if (game->passcode_input_len == 4) {
-                        if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
-                            /* Correct code – close passcode overlay */
-                            game->passcode_active    = 0;
-                            game->passcode_input_len = 0;
-                            game->passcode_input[0]  = '\0';
-                            game->passcode_wrong     = 0;
-                        } else {
-                            game->passcode_wrong = 1;
+                } else if (game->passcode_input_len < 4) {
+                    /* Use scancode for digit detection – reliable across SDL3
+                       keycode convention changes.
+                       SDL_SCANCODE_1-9 = 30-38, SDL_SCANCODE_0 = 39
+                       SDL_SCANCODE_KP_1-9 = 89-97, SDL_SCANCODE_KP_0 = 98 */
+                    char digit = 0;
+                    if (sc >= SDL_SCANCODE_1 && sc <= SDL_SCANCODE_9)
+                        digit = (char)('1' + (sc - SDL_SCANCODE_1));
+                    else if (sc == SDL_SCANCODE_0)
+                        digit = '0';
+                    else if (sc >= SDL_SCANCODE_KP_1 && sc <= SDL_SCANCODE_KP_9)
+                        digit = (char)('1' + (sc - SDL_SCANCODE_KP_1));
+                    else if (sc == SDL_SCANCODE_KP_0)
+                        digit = '0';
+                    if (digit) {
+                        game->passcode_input[game->passcode_input_len++] = digit;
+                        game->passcode_input[game->passcode_input_len] = '\0';
+                        game->passcode_wrong = 0;
+                        /* Auto-submit when 4 digits entered */
+                        if (game->passcode_input_len == 4) {
+                            if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
+                                /* Correct code – close passcode overlay */
+                                game->passcode_active    = 0;
+                                game->passcode_input_len = 0;
+                                game->passcode_input[0]  = '\0';
+                                game->passcode_wrong     = 0;
+                            } else {
+                                game->passcode_wrong = 1;
+                            }
                         }
                     }
                 }
@@ -1525,6 +1539,26 @@ void game_render_locker(Game *game)
     }
 
     if (game->show_monitor_zoom) {
+        /* Hover indicator on the clickable monitor panel rect */
+        if (!game->passcode_active) {
+            float mx = game->mouse_x, my = game->mouse_y;
+            int hovering = (mx >= MONITOR_PANEL_X &&
+                            mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
+                            my >= MONITOR_PANEL_Y &&
+                            my <= MONITOR_PANEL_Y + MONITOR_PANEL_H);
+            /* Always show a subtle outline so the player knows it's there */
+            render_rect_outline(r,
+                MONITOR_PANEL_X, MONITOR_PANEL_Y,
+                MONITOR_PANEL_W, MONITOR_PANEL_H,
+                0, hovering ? 255 : 160, hovering ? 80 : 0,
+                hovering ? 255 : 140);
+            if (hovering) {
+                render_text_centered(r, "Click to enter code",
+                    MONITOR_PANEL_X + MONITOR_PANEL_W / 2,
+                    MONITOR_PANEL_Y - 16, 1, 0, 220, 255);
+            }
+        }
+
         /* Text bar: "Use mouse button to select" */
         render_filled_rect(r, 0, WINDOW_H - 48, WINDOW_W, 48, 0, 0, 0, 200);
         render_text_centered(r, "Use mouse button to select",

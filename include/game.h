@@ -79,6 +79,10 @@ typedef struct {
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
 
+    /* Gas mask */
+    int          gasmask_active;   /* 1 if the gas mask is worn (circle vision) */
+    SDL_Texture *gasmask_overlay;  /* render-target texture for the circle vignette */
+
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */

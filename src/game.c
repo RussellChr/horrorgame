@@ -76,6 +76,14 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
 
+    /* Gasmask circle-vision overlay (render target, full-screen size) */
+    g->gasmask_overlay = SDL_CreateTexture(renderer,
+                                           SDL_PIXELFORMAT_RGBA8888,
+                                           SDL_TEXTUREACCESS_TARGET,
+                                           WINDOW_W, WINDOW_H);
+    if (g->gasmask_overlay)
+        SDL_SetTextureBlendMode(g->gasmask_overlay, SDL_BLENDMODE_BLEND);
+
     return g;
 }
 
@@ -91,6 +99,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    if (game->gasmask_overlay) SDL_DestroyTexture(game->gasmask_overlay);
     free(game);
 }
 
@@ -278,10 +287,10 @@ static void handle_interaction(Game *game)
                 Item gm;
                 strncpy(gm.name, "Gas Mask", ITEM_NAME_MAX - 1);
                 gm.name[ITEM_NAME_MAX - 1] = '\0';
-                strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
+                strncpy(gm.description, "Filters out toxic gas. Press U to wear/remove.", ITEM_DESC_MAX - 1);
                 gm.description[ITEM_DESC_MAX - 1] = '\0';
                 gm.id     = ITEM_ID_GASMASK;
-                gm.usable = 0;
+                gm.usable = 1;
                 player_add_item(game->player, &gm);
                 set_dialogue_tree(game, "hallway_gasmask", 2);
             } else {
@@ -560,6 +569,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
                         game->flashlight_active = !game->flashlight_active;
                         game->state = GAME_STATE_PLAYING;
+                    } else if (it->usable && it->id == ITEM_ID_GASMASK) {
+                        game->gasmask_active = !game->gasmask_active;
+                        game->state = GAME_STATE_PLAYING;
                     }
                 }
             }
@@ -827,6 +839,12 @@ void game_render(Game *game)
     default: break;
     }
 
+    /* Apply gasmask circle-vision overlay (PLAYING and DIALOGUE states only) */
+    if (game->state == GAME_STATE_PLAYING ||
+        game->state == GAME_STATE_DIALOGUE) {
+        render_gasmask_vision(game);
+    }
+
     /* Apply brightness: draw a black overlay when brightness < 100
      * (skipped in settings so sliders remain visible at all brightness levels)
      * Alpha is capped at 220 rather than 255 so some scene detail is still
@@ -1000,6 +1018,57 @@ static void render_flashlight_beam(Game *game)
                        verts, FL_NUM_RAYS + 2,
                        indices, FL_NUM_RAYS * 3);
     SDL_SetRenderDrawBlendMode(game->renderer, SDL_BLENDMODE_BLEND);
+}
+
+
+/* ── Gasmask circle-vision overlay ──────────────────────────────────────── */
+/* When the gas mask is active the player can only see through a small
+ * circular porthole.  We implement this by drawing a full-screen opaque-black
+ * texture onto a render-target and punching a transparent circle through it
+ * centred on the player before blitting it on top of the scene. */
+
+#define GM_CIRCLE_R  150   /* visible-circle radius in pixels */
+
+static void render_gasmask_vision(Game *game)
+{
+    if (!game->gasmask_active)   return;
+    if (!game->gasmask_overlay)  return;
+    if (!game->player)           return;
+
+    SDL_Renderer *r = game->renderer;
+
+    /* Player screen-space centre (same origin used by the flashlight) */
+    float px = game->player->x;
+    float py = game->player->y - (float)PLAYER_COLLIDER_OFFSET_Y
+               + (float)PLAYER_COLLIDER_H * 0.5f;
+    int cx = camera_to_screen_x(&game->camera, px);
+    int cy = camera_to_screen_y(&game->camera, py);
+
+    /* ── Build the overlay on the render-target texture ── */
+    SDL_SetRenderTarget(r, game->gasmask_overlay);
+
+    /* Fill entire texture with opaque black */
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+
+    /* Punch a transparent circle using scanlines.
+     * SDL_BLENDMODE_NONE overwrites the destination pixel entirely, so
+     * drawing alpha=0 lines replaces the black with full transparency. */
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 0);
+    for (int dy = -GM_CIRCLE_R; dy <= GM_CIRCLE_R; dy++) {
+        int dx = (int)sqrtf((float)(GM_CIRCLE_R * GM_CIRCLE_R - dy * dy));
+        SDL_RenderLine(r,
+                       (float)(cx - dx), (float)(cy + dy),
+                       (float)(cx + dx), (float)(cy + dy));
+    }
+
+    /* ── Blit the overlay onto the screen ── */
+    SDL_SetRenderTarget(r, NULL);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_FRect dst = {0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H};
+    SDL_RenderTexture(r, game->gasmask_overlay, NULL, &dst);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
 }
 
 

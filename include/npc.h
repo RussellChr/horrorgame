@@ -9,6 +9,7 @@
 #define NPC_NAME_MAX          64
 #define MAX_NPCS              16
 #define MAX_PATROL_WAYPOINTS   8
+#define MAX_CHASE_PATH        64
 
 /* ── NPC Types/Roles ──────────────────────────────────────────────────── */
 
@@ -25,7 +26,8 @@ typedef enum {
     NPC_STATE_WALKING,
     NPC_STATE_TALKING,
     NPC_STATE_FOLLOWING,
-    NPC_STATE_ATTACKING
+    NPC_STATE_ATTACKING,
+    NPC_STATE_CHASING
 } NPCState;
 
 /* ── Patrol State ─────────────────────────────────────────────────────── */
@@ -82,6 +84,13 @@ typedef struct {
     int   patrol_wp_index;    /* index of current target waypoint */
     int   patrol_state;       /* PatrolState enum */
     int   has_patrol;         /* 1 if waypoint patrol is active */
+
+    /* Chase (A*) path */
+    float chase_path_x[MAX_CHASE_PATH];
+    float chase_path_y[MAX_CHASE_PATH];
+    int   chase_path_len;     /* number of valid path nodes */
+    int   chase_path_idx;     /* current node being followed */
+    float chase_repath_timer; /* seconds until next A* recompute */
 } NPC;
 
 /* ── NPC Manager (store in Game struct) ────────────────────────────── */
@@ -107,6 +116,18 @@ void        npc_manager_remove(NPCManager *manager, int npc_id);
 /* Per-frame updates */
 void npc_update(NPC *npc, float delta_time);
 void npc_manager_update(NPCManager *manager, float delta_time);
+
+/*
+ * Chase update using A* pathfinding.
+ * Sets the NPC into NPC_STATE_CHASING and steers it toward the player
+ * via the navigation grid stored in nav_cells[nav_rows * nav_cols].
+ * tile_w/tile_h are derived from room_w/h divided by nav_cols/rows.
+ * May be called with nav_cells == NULL to fall back to direct pursuit.
+ */
+void npc_update_chase(NPC *npc, float delta_time,
+                      float player_x, float player_y,
+                      const int *nav_cells, int nav_rows, int nav_cols,
+                      int room_w, int room_h);
 
 /* Rendering */
 void npc_render(NPC *npc, SDL_Renderer *renderer, const Camera *cam);

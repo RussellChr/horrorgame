@@ -979,6 +979,13 @@ static float raycast_colliders(float ox, float oy, float dx, float dy,
 #define FL_MAX_DIST  500.0f
 #define FL_HALF_CONE (M_PI / 4.0)   /* half-cone: 45° (π/4 radians) each side */
 
+/* Radius (screen pixels) of the dim ambient circle around the player in the
+ * archive room.  Within this radius the player can faintly see; outside it
+ * is pitch black unless the flashlight cone covers the area. */
+#define AMBIENT_RADIUS      90.0f
+#define AMBIENT_SEGS        32
+#define AMBIENT_EDGE_ALPHA  (220.0f / 255.0f)  /* darkness at ambient circle edge */
+
 static void render_flashlight_beam(Game *game)
 {
     if (!game->flashlight_active) return;
@@ -1058,6 +1065,147 @@ static void render_flashlight_beam(Game *game)
 }
 
 
+/* Build and composite a darkness mask for the archive room.
+ *
+ * Technique:
+ *   1. Set render target to an off-screen RGBA texture (darkness_mask).
+ *   2. Fill it completely with opaque black (alpha = 255).
+ *   3. Using SDL_BLENDMODE_NONE (direct pixel write), draw transparent shapes
+ *      that "punch holes" in the black mask:
+ *        a. Ambient circle – a small gradient fan around the player so the
+ *           immediate surroundings are faintly visible even without a torch.
+ *        b. Flashlight cone – a full-transparent triangle fan matching the
+ *           raycasted beam so the actual room texture shows through there.
+ *   4. Restore the render target to the screen and composite the mask with
+ *      SDL_BLENDMODE_BLEND.  Transparent pixels let the already-drawn room
+ *      and player sprite show through; opaque black pixels hide them.
+ */
+static void render_archive_darkness(Game *game)
+{
+    if (game->player->current_location_id != LOCATION_ARCHIVE) return;
+    if (!game->darkness_mask) return;
+
+    SDL_Renderer *r = game->renderer;
+    Player       *p = game->player;
+
+    /* World-space origin (vertical centre of player collider) */
+    float ox = p->x;
+    float oy = p->y - (float)PLAYER_COLLIDER_OFFSET_Y
+               + (float)PLAYER_COLLIDER_H * 0.5f;
+
+    /* Corresponding screen-space position */
+    float sx0 = (float)camera_to_screen_x(&game->camera, ox);
+    float sy0 = (float)camera_to_screen_y(&game->camera, oy);
+
+    /* ── 1. Switch to off-screen darkness mask ── */
+    SDL_SetRenderTarget(r, game->darkness_mask);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+
+    /* ── 2a. Ambient circle (triangle fan, BLENDMODE_NONE) ──
+     * Centre vertex is fully transparent; edge vertices are nearly opaque.
+     * The interpolated alpha creates a soft radial gradient so you can just
+     * barely make out objects in the immediate vicinity. */
+    {
+        SDL_Vertex verts[AMBIENT_SEGS + 2];
+        int        indices[AMBIENT_SEGS * 3];
+
+        verts[0].position.x  = sx0;
+        verts[0].position.y  = sy0;
+        verts[0].color.r     = 0.0f;
+        verts[0].color.g     = 0.0f;
+        verts[0].color.b     = 0.0f;
+        verts[0].color.a     = 0.0f;   /* fully transparent at player centre */
+        verts[0].tex_coord.x = 0.0f;
+        verts[0].tex_coord.y = 0.0f;
+
+        for (int i = 0; i <= AMBIENT_SEGS; i++) {
+            double angle = 2.0 * M_PI * i / AMBIENT_SEGS;
+            verts[i + 1].position.x  = sx0 + AMBIENT_RADIUS * (float)cos(angle);
+            verts[i + 1].position.y  = sy0 + AMBIENT_RADIUS * (float)sin(angle);
+            verts[i + 1].color.r     = 0.0f;
+            verts[i + 1].color.g     = 0.0f;
+            verts[i + 1].color.b     = 0.0f;
+            verts[i + 1].color.a     = AMBIENT_EDGE_ALPHA;  /* dark edge */
+            verts[i + 1].tex_coord.x = 0.0f;
+            verts[i + 1].tex_coord.y = 0.0f;
+        }
+
+        for (int i = 0; i < AMBIENT_SEGS; i++) {
+            indices[i * 3 + 0] = 0;
+            indices[i * 3 + 1] = i + 1;
+            indices[i * 3 + 2] = i + 2;
+        }
+
+        SDL_RenderGeometry(r, NULL, verts, AMBIENT_SEGS + 2,
+                           indices, AMBIENT_SEGS * 3);
+    }
+
+    /* ── 2b. Flashlight cone (transparent hole) ──
+     * Same raycasted triangle fan as render_flashlight_beam(), but all
+     * vertices are fully transparent so the cone area shows the real room. */
+    if (game->flashlight_active) {
+        Location *loc = world_get_location(game->world, p->current_location_id);
+        if (loc) {
+            double base_angle;
+            switch (p->current_direction) {
+            case DIRECTION_EAST:  base_angle =  0.0;         break;
+            case DIRECTION_WEST:  base_angle =  M_PI;        break;
+            case DIRECTION_NORTH: base_angle = -M_PI / 2.0;  break;
+            case DIRECTION_SOUTH: base_angle =  M_PI / 2.0;  break;
+            default:              base_angle =  0.0;         break;
+            }
+
+            SDL_Vertex verts[FL_NUM_RAYS + 2];
+            int        indices[FL_NUM_RAYS * 3];
+
+            verts[0].position.x  = sx0;
+            verts[0].position.y  = sy0;
+            verts[0].color.r     = 0.0f;
+            verts[0].color.g     = 0.0f;
+            verts[0].color.b     = 0.0f;
+            verts[0].color.a     = 0.0f;   /* transparent */
+            verts[0].tex_coord.x = 0.0f;
+            verts[0].tex_coord.y = 0.0f;
+
+            for (int i = 0; i <= FL_NUM_RAYS; i++) {
+                double angle = base_angle - FL_HALF_CONE
+                               + (2.0 * FL_HALF_CONE * i) / FL_NUM_RAYS;
+                float dx   = (float)cos(angle);
+                float dy   = (float)sin(angle);
+                float dist = raycast_colliders(ox, oy, dx, dy, loc, FL_MAX_DIST);
+                float hx   = ox + dx * dist;
+                float hy   = oy + dy * dist;
+
+                verts[i + 1].position.x  = (float)camera_to_screen_x(&game->camera, hx);
+                verts[i + 1].position.y  = (float)camera_to_screen_y(&game->camera, hy);
+                verts[i + 1].color.r     = 0.0f;
+                verts[i + 1].color.g     = 0.0f;
+                verts[i + 1].color.b     = 0.0f;
+                verts[i + 1].color.a     = 0.0f;   /* fully transparent throughout cone */
+                verts[i + 1].tex_coord.x = 0.0f;
+                verts[i + 1].tex_coord.y = 0.0f;
+            }
+
+            for (int i = 0; i < FL_NUM_RAYS; i++) {
+                indices[i * 3 + 0] = 0;
+                indices[i * 3 + 1] = i + 1;
+                indices[i * 3 + 2] = i + 2;
+            }
+
+            SDL_RenderGeometry(r, NULL, verts, FL_NUM_RAYS + 2,
+                               indices, FL_NUM_RAYS * 3);
+        }
+    }
+
+    /* ── 3. Composite darkness mask onto the screen ── */
+    SDL_SetRenderTarget(r, NULL);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_RenderTexture(r, game->darkness_mask, NULL, NULL);
+}
+
+
 void game_render_playing(Game *game)
 {
     if (!game || !game->player || !game->world) return;
@@ -1073,8 +1221,12 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
-    /* Flashlight beam (rendered on top of the player sprite) */
-    render_flashlight_beam(game);
+    /* Archive room: darkness mask with transparent holes for ambient glow
+     * and the flashlight cone so the actual room texture is revealed.
+     * Non-archive rooms keep the simple additive flashlight beam. */
+    render_archive_darkness(game);
+    if (game->player->current_location_id != LOCATION_ARCHIVE)
+        render_flashlight_beam(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.

@@ -893,44 +893,6 @@ void game_render_menu(Game *game)
 
 /* ── Playing ─────────────────────────────────────────────────────────────── */
 
-/* Cast a ray from (ox, oy) in direction (dx, dy) against all colliders in loc.
- * Returns the hit distance, or max_dist if no wall is hit. */
-#define RAY_DIR_EPSILON  1e-6f   /* threshold for treating a direction component as zero */
-
-static float raycast_colliders(float ox, float oy, float dx, float dy,
-                                const Location *loc, float max_dist)
-{
-    float t = max_dist;
-    for (int i = 0; i < loc->collider_count; i++) {
-        const Rect *rc = &loc->colliders[i];
-        float tx1, tx2, ty1, ty2, tmin, tmax;
-
-        if (fabsf(dx) < RAY_DIR_EPSILON) {
-            if (ox < rc->x || ox > rc->x + rc->w) continue;
-            tx1 = -INFINITY; tx2 = INFINITY;
-        } else {
-            tx1 = (rc->x          - ox) / dx;
-            tx2 = (rc->x + rc->w  - ox) / dx;
-            if (tx1 > tx2) { float tmp = tx1; tx1 = tx2; tx2 = tmp; }
-        }
-
-        if (fabsf(dy) < RAY_DIR_EPSILON) {
-            if (oy < rc->y || oy > rc->y + rc->h) continue;
-            ty1 = -INFINITY; ty2 = INFINITY;
-        } else {
-            ty1 = (rc->y          - oy) / dy;
-            ty2 = (rc->y + rc->h  - oy) / dy;
-            if (ty1 > ty2) { float tmp = ty1; ty1 = ty2; ty2 = tmp; }
-        }
-
-        tmin = tx1 > ty1 ? tx1 : ty1;
-        tmax = tx2 < ty2 ? tx2 : ty2;
-        if (tmax < 0.0f || tmin > tmax) continue;
-        if (tmin < 0.0f) tmin = 0.0f;
-        if (tmin < t)    t    = tmin;
-    }
-    return t;
-}
 
 /* Render the flashlight cone when the flashlight is active.
  * Casts FL_NUM_RAYS rays within a 90-degree cone (±45°, i.e. π/4 radians,
@@ -984,9 +946,8 @@ static void render_flashlight_beam(Game *game)
                        + (2.0 * FL_HALF_CONE * i) / FL_NUM_RAYS;
         float dx    = (float)cos(angle);
         float dy    = (float)sin(angle);
-        float dist  = raycast_colliders(ox, oy, dx, dy, loc, FL_MAX_DIST);
-        float hx    = ox + dx * dist;
-        float hy    = oy + dy * dist;
+        float hx    = ox + dx * FL_MAX_DIST;
+        float hy    = oy + dy * FL_MAX_DIST;
 
         int sx = camera_to_screen_x(&game->camera, hx);
         int sy = camera_to_screen_y(&game->camera, hy);
@@ -1135,9 +1096,8 @@ static void render_archive_darkness(Game *game)
                            + (2.0 * FL_HALF_CONE * i) / FL_NUM_RAYS;
             float dx   = (float)cos(angle);
             float dy   = (float)sin(angle);
-            float dist = raycast_colliders(ox, oy, dx, dy, loc, FL_MAX_DIST);
-            float hx   = ox + dx * dist;
-            float hy   = oy + dy * dist;
+            float hx   = ox + dx * FL_MAX_DIST;
+            float hy   = oy + dy * FL_MAX_DIST;
 
             float edge = 1.0f - 2.0f * fabsf((float)i / FL_NUM_RAYS - 0.5f);
 

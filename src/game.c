@@ -1021,8 +1021,8 @@ static void render_flashlight_beam(Game *game)
 
 /* Number of triangle-fan segments for the ambient glow circle. */
 #define DARK_AMBIENT_NUM_SEGS  48
-/* Screen-space radius (pixels) of the dim ambient circle around the player. */
-#define DARK_AMBIENT_RADIUS    90
+/* Screen-space radius (pixels) of the ambient circle around the player. */
+#define DARK_AMBIENT_RADIUS    120
 
 /* Renders the archive room darkness effect (location 0 only).
  *
@@ -1066,16 +1066,18 @@ static void render_archive_darkness(Game *game)
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
 
     /* Ambient glow: a dim warm circle centred on the player.
-     * Brightness 0.15 (~38/255) – shapes are barely visible, text is not. */
+     * Centre brightness 0.45 – nearby shapes are visible but colours are
+     * heavily muted.  Falls off to black at the edge so vision is clearly
+     * limited to a small radius. */
     {
         SDL_Vertex av[DARK_AMBIENT_NUM_SEGS + 2];
         int        ai[DARK_AMBIENT_NUM_SEGS * 3];
 
         av[0].position.x  = (float)sx0;
         av[0].position.y  = (float)sy0;
-        av[0].color.r     = 0.15f;
-        av[0].color.g     = 0.15f;
-        av[0].color.b     = 0.12f;
+        av[0].color.r     = 0.45f;
+        av[0].color.g     = 0.42f;
+        av[0].color.b     = 0.35f;
         av[0].color.a     = 1.0f;
         av[0].tex_coord.x = 0.0f;
         av[0].tex_coord.y = 0.0f;

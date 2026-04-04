@@ -75,6 +75,12 @@ if(MINGW)
     target_link_options(horrorgame PRIVATE -static-libgcc -static-libstdc++)
 endif()
 
+# MSVC does not expose M_PI and other math constants by default; _USE_MATH_DEFINES
+# must be set before any system header is included.
+if(MSVC)
+    target_compile_definitions(horrorgame PRIVATE _USE_MATH_DEFINES)
+endif()
+
 # Copy assets folder to the build output directory after each build
 add_custom_command(TARGET horrorgame POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

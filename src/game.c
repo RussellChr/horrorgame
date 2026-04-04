@@ -934,6 +934,9 @@ static float raycast_colliders(float ox, float oy, float dx, float dy,
     return t;
 }
 
+/* ── Gasmask circle-vision overlay – forward declaration ──────────────────── */
+static void render_gasmask_vision(Game *game);
+
 /* Render the flashlight cone when the flashlight is active.
  * Casts FL_NUM_RAYS rays within a 90-degree cone (±45°, i.e. π/4 radians,
  * from the player's facing direction) and draws the lit area as a

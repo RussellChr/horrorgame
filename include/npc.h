@@ -4,9 +4,12 @@
 #include <SDL3/SDL.h>
 #include "animation.h"
 #include "collision.h"
+#include "camera.h"
 
-#define NPC_NAME_MAX      64
-#define MAX_NPCS          16
+#define NPC_NAME_MAX          64
+#define MAX_NPCS              16
+#define MAX_PATROL_WAYPOINTS   8
+#define MAX_CHASE_PATH        64
 
 /* ── NPC Types/Roles ──────────────────────────────────────────────────── */
 
@@ -23,8 +26,22 @@ typedef enum {
     NPC_STATE_WALKING,
     NPC_STATE_TALKING,
     NPC_STATE_FOLLOWING,
-    NPC_STATE_ATTACKING
+    NPC_STATE_ATTACKING,
+    NPC_STATE_CHASING
 } NPCState;
+
+/* ── Patrol State ─────────────────────────────────────────────────────── */
+
+typedef enum {
+    PATROL_STATE_FORWARD,
+    PATROL_STATE_BACKWARD
+} PatrolState;
+
+/* ── Patrol Waypoint ──────────────────────────────────────────────────── */
+
+typedef struct {
+    float x, y;
+} PatrolWaypoint;
 
 /* ── NPC Structure ────────────────────────────────────────────────────── */
 
@@ -34,10 +51,12 @@ typedef struct {
     char  name[NPC_NAME_MAX];
     int   npc_type;           /* NPCType enum */
     int   current_state;      /* NPCState enum */
-    
+    int   location_id;        /* room this NPC belongs to */
+
     /* Physical properties */
     float x, y;               /* world-space position */
     float vx, vy;             /* velocity in pixels/second */
+    int   w, h;               /* sprite/rect size */
     int   facing_right;       /* 1 = right, 0 = left */
     int   is_moving;
     
@@ -55,9 +74,23 @@ typedef struct {
     float interaction_range;  /* pixels within which player can trigger */
     
     /* AI/Behavior */
-    float patrol_x1, patrol_x2;  /* patrol bounds */
+    float patrol_x1, patrol_x2;  /* patrol bounds (legacy 1D) */
     float move_timer;            /* timer for AI decisions */
     int   target_id;             /* ID of target (player or another NPC) */
+
+    /* Waypoint patrol */
+    PatrolWaypoint patrol_waypoints[MAX_PATROL_WAYPOINTS];
+    int   patrol_wp_count;    /* number of valid waypoints */
+    int   patrol_wp_index;    /* index of current target waypoint */
+    int   patrol_state;       /* PatrolState enum */
+    int   has_patrol;         /* 1 if waypoint patrol is active */
+
+    /* Chase (A*) path */
+    float chase_path_x[MAX_CHASE_PATH];
+    float chase_path_y[MAX_CHASE_PATH];
+    int   chase_path_len;     /* number of valid path nodes */
+    int   chase_path_idx;     /* current node being followed */
+    float chase_repath_timer; /* seconds until next A* recompute */
 } NPC;
 
 /* ── NPC Manager (store in Game struct) ────────────────────────────── */
@@ -84,12 +117,25 @@ void        npc_manager_remove(NPCManager *manager, int npc_id);
 void npc_update(NPC *npc, float delta_time);
 void npc_manager_update(NPCManager *manager, float delta_time);
 
+/*
+ * Chase update using A* pathfinding.
+ * Sets the NPC into NPC_STATE_CHASING and steers it toward the player
+ * via the navigation grid stored in nav_cells[nav_rows * nav_cols].
+ * tile_w/tile_h are derived from room_w/h divided by nav_cols/rows.
+ * May be called with nav_cells == NULL to fall back to direct pursuit.
+ */
+void npc_update_chase(NPC *npc, float delta_time,
+                      float player_x, float player_y,
+                      const int *nav_cells, int nav_rows, int nav_cols,
+                      int room_w, int room_h);
+
 /* Rendering */
-void npc_render(NPC *npc, SDL_Renderer *renderer);
-void npc_manager_render(NPCManager *manager, SDL_Renderer *renderer);
+void npc_render(NPC *npc, SDL_Renderer *renderer, const Camera *cam);
+void npc_manager_render(NPCManager *manager, SDL_Renderer *renderer, const Camera *cam);
 
 /* Behavior/AI */
 void npc_set_patrol(NPC *npc, float x1, float x2);
+void npc_set_patrol_waypoints(NPC *npc, const PatrolWaypoint *wps, int count);
 void npc_move_towards(NPC *npc, float target_x, float delta_time);
 int  npc_check_player_interaction(NPC *npc, float player_x, float player_y);
 

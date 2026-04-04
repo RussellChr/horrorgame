@@ -80,6 +80,51 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
 
+    /* Create gasmask vignette: a precomputed radial transparency mask.
+     * The texture is twice the window size so that the black border always
+     * covers the entire screen regardless of the player's screen position.
+     * The centre of the texture is fully transparent (the visible circle);
+     * pixels beyond outer_r are fully opaque black. */
+    {
+        static const int   mw      = WINDOW_W * 2;
+        static const int   mh      = WINDOW_H * 2;
+        static const float inner_r = 220.0f;   /* fully clear within this radius */
+        static const float outer_r = 310.0f;   /* fully opaque beyond this radius */
+
+        SDL_Surface *surf = SDL_CreateSurface(mw, mh, SDL_PIXELFORMAT_RGBA8888);
+        if (surf) {
+            const SDL_PixelFormatDetails *fmt =
+                SDL_GetPixelFormatDetails(SDL_PIXELFORMAT_RGBA8888);
+            int    pitch_px = surf->pitch / 4;
+            Uint32 *pixels  = (Uint32 *)surf->pixels;
+            int cx = mw / 2, cy = mh / 2;
+
+            for (int py = 0; py < mh; py++) {
+                for (int px = 0; px < mw; px++) {
+                    float dx   = (float)(px - cx);
+                    float dy   = (float)(py - cy);
+                    float dist = sqrtf(dx * dx + dy * dy);
+                    Uint8 alpha;
+                    if (dist <= inner_r)
+                        alpha = 0;
+                    else if (dist >= outer_r)
+                        alpha = 255;
+                    else
+                        alpha = (Uint8)(((dist - inner_r) /
+                                         (outer_r - inner_r)) * 255.0f);
+                    pixels[py * pitch_px + px] =
+                        SDL_MapRGBA(fmt, NULL, 0, 0, 0, alpha);
+                }
+            }
+            g->gasmask_vignette_texture =
+                SDL_CreateTextureFromSurface(renderer, surf);
+            if (g->gasmask_vignette_texture)
+                SDL_SetTextureBlendMode(g->gasmask_vignette_texture,
+                                        SDL_BLENDMODE_BLEND);
+            SDL_DestroySurface(surf);
+        }
+    }
+
     return g;
 }
 
@@ -97,6 +142,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->monitor_zoom_texture);
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
+    render_texture_destroy(game->gasmask_vignette_texture);
     free(game);
 }
 
@@ -287,7 +333,7 @@ static void handle_interaction(Game *game)
                 strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
                 gm.description[ITEM_DESC_MAX - 1] = '\0';
                 gm.id     = ITEM_ID_GASMASK;
-                gm.usable = 0;
+                gm.usable = 1;
                 player_add_item(game->player, &gm);
                 set_dialogue_tree(game, "hallway_gasmask", 2);
             } else {
@@ -565,6 +611,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     const Item *it = &game->player->inventory[sel];
                     if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
                         game->flashlight_active = !game->flashlight_active;
+                        game->state = GAME_STATE_PLAYING;
+                    } else if (it->usable && it->id == ITEM_ID_GASMASK) {
+                        game->gasmask_active = !game->gasmask_active;
                         game->state = GAME_STATE_PLAYING;
                     }
                 }
@@ -1102,6 +1151,27 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* Gasmask vignette: black screen with a transparent circle around the
+     * player, simulating limited vision through a gas mask lens.
+     * The precomputed texture is twice the window size and centred on the
+     * player's screen position so the opaque border always fills every edge
+     * regardless of where on screen the player stands. */
+    if (game->gasmask_active && game->gasmask_vignette_texture) {
+        int cx = camera_to_screen_x(&game->camera, game->player->x);
+        int cy = camera_to_screen_y(&game->camera, game->player->y)
+                 - PLAYER_SPRITE_H / 2;
+        int mw = WINDOW_W * 2;
+        int mh = WINDOW_H * 2;
+        SDL_FRect dst = {
+            (float)(cx - mw / 2),
+            (float)(cy - mh / 2),
+            (float)mw,
+            (float)mh
+        };
+        SDL_RenderTexture(game->renderer, game->gasmask_vignette_texture,
+                          NULL, &dst);
     }
 }
 

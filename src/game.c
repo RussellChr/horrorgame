@@ -83,6 +83,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 void game_cleanup(Game *game)
 {
     if (!game) return;
+    SDL_ShowCursor();   /* restore OS cursor in case we're in playing mode */
     if (game->player)        player_destroy(game->player);
     if (game->world)         world_destroy(game->world);
     if (game->story)         story_destroy(game->story);
@@ -148,6 +149,9 @@ void game_start_new(Game *game)
     game->near_interactive        = 0;
     game->interactive_trigger_id  = -1;
     game->selected_inventory_slot = 0;
+
+    /* Hide the OS cursor so our debug crosshair is the only cursor visible */
+    SDL_HideCursor();
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -560,6 +564,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->state = GAME_STATE_PLAYING;
             if (button_is_clicked(&game->pause_buttons[1],
                                   game->mouse_x, game->mouse_y)) {
+                SDL_ShowCursor();
                 game->state = GAME_STATE_MENU;
             }
         }
@@ -924,6 +929,34 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* ── Debug cursor: crosshair + world/screen coordinates ── */
+    {
+        int mx = (int)game->mouse_x;
+        int my = (int)game->mouse_y;
+        float wx = camera_to_world_x(&game->camera, mx);
+        float wy = camera_to_world_y(&game->camera, my);
+
+        /* Crosshair lines (bright cyan) */
+        int arm = 8;
+        render_line(game->renderer, mx - arm, my, mx + arm, my, 0, 220, 220, 255);
+        render_line(game->renderer, mx, my - arm, mx, my + arm, 0, 220, 220, 255);
+
+        /* Coordinate label: keep it on-screen */
+        char dbg_buf[48];
+        snprintf(dbg_buf, sizeof(dbg_buf),
+                 "S%d,%d W%.0f,%.0f", mx, my, wx, wy);
+        int label_x = mx + 12;
+        int label_y = my + 4;
+        int label_w = render_text_width(dbg_buf, 1) + 6;
+        int label_h = 11;
+        if (label_x + label_w > WINDOW_W) label_x = mx - label_w - 4;
+        if (label_y + label_h > WINDOW_H)  label_y = my - label_h - 4;
+        render_filled_rect(game->renderer, label_x - 2, label_y - 1,
+                           label_w, label_h, 0, 0, 0, 180);
+        render_text(game->renderer, dbg_buf, label_x, label_y,
+                    1, 0, 220, 220);
     }
 }
 

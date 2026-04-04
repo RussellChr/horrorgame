@@ -94,8 +94,13 @@ Alex
 GasMask found.
 ---
 
-[hallway_flashlight]
+# ── Lab ─────────────────────────────────────────────────────────────────
+
+[lab_gas_death]
 Alex
 ---
-flashlight found.
+The air... it burns. I can't breathe.
+I should have worn that gas mask.
+Everything is going dark...
 ---
+

@@ -82,6 +82,13 @@ typedef struct {
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
 
+    /* Gas mask */
+    int gasmask_active;       /* 1 if the gas mask vignette is on */
+
+    /* Lab poisonous gas */
+    float lab_gas_timer;      /* counts down from LAB_GAS_DEATH_DELAY when in lab without mask */
+    int   lab_death_triggered; /* 1 after the gas-death dialogue has been queued */
+
     /* Archive room darkness: full-screen light-mask render target */
     SDL_Texture *dark_overlay;
 

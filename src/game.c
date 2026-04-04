@@ -27,6 +27,11 @@
 /* ── Enemy AI constants ────────────────────────────────────────────────── */
 #define CHASE_TRIGGER_DIST  300.0f   /* px: NPC starts chasing within this range */
 #define ENEMY_HIT_DIST       40.0f   /* px: game-over when NPC gets this close   */
+/* ── Lab poisonous-gas constants ────────────────────────────────────────── */
+/* Seconds the player can stay in the lab without a gas mask before dying. */
+#define LAB_GAS_DEATH_DELAY  3.0f
+/* Alpha of the green gas overlay (0-255). */
+#define LAB_GAS_OVERLAY_ALPHA 70
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -215,6 +220,8 @@ void game_start_new(Game *game)
     game->near_interactive        = 0;
     game->interactive_trigger_id  = -1;
     game->selected_inventory_slot = 0;
+    game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered     = 0;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -253,6 +260,10 @@ void game_change_location(Game *game, int location_id,
         game->camera.world_h = next->room_height;
     }
 
+    /* Reset lab gas death state whenever the player changes rooms */
+    game->lab_gas_timer      = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered = 0;
+
     camera_snap(&game->camera, spawn_x, spawn_y);
 }
 
@@ -281,6 +292,11 @@ void game_end_dialogue(Game *game)
     if (show_note) {
         game->show_note_locker = 1;
         game->state = GAME_STATE_LOCKER;
+    } else if (game->lab_death_triggered) {
+        /* Player died from the lab gas — return to main menu */
+        game->lab_death_triggered = 0;
+        game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
+        game->state               = GAME_STATE_MENU;
     } else {
         game->state = GAME_STATE_PLAYING;
     }
@@ -349,7 +365,7 @@ static void handle_interaction(Game *game)
                 strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
                 gm.description[ITEM_DESC_MAX - 1] = '\0';
                 gm.id     = ITEM_ID_GASMASK;
-                gm.usable = 0;
+                gm.usable = 1;
                 player_add_item(game->player, &gm);
                 set_dialogue_tree(game, "hallway_gasmask", 2);
             } else {
@@ -708,6 +724,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
                         game->flashlight_active = !game->flashlight_active;
                         game->state = GAME_STATE_PLAYING;
+                    } else if (it->usable && it->id == ITEM_ID_GASMASK) {
+                        game->gasmask_active = !game->gasmask_active;
+                        game->state = GAME_STATE_PLAYING;
                     }
                 }
             }
@@ -983,6 +1002,24 @@ void game_update(Game *game)
 
                 npc_update(n, dt);
             }
+        /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
+        if (p->current_location_id == LOCATION_LAB &&
+            !game->lab_death_triggered) {
+            if (!game->gasmask_active) {
+                game->lab_gas_timer -= dt;
+                if (game->lab_gas_timer <= 0.0f) {
+                    game->lab_death_triggered = 1;
+                    set_dialogue_tree(game, "lab_gas_death", LOCATION_LAB);
+                    if (game->dialogue_tree)
+                        game_start_dialogue(game, 0);
+                }
+            } else {
+                /* Gas mask is on — replenish the timer */
+                game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
+            }
+        } else if (p->current_location_id != LOCATION_LAB) {
+            /* Outside the lab — reset the timer for the next visit */
+            game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
@@ -1332,6 +1369,96 @@ static void render_archive_darkness(Game *game)
 }
 
 
+/* Number of triangle-fan segments for the gas mask vignette circle. */
+#define GM_VIGNETTE_NUM_SEGS  64
+/* Screen-space radius (pixels) of the visible circle when wearing the gas mask. */
+#define GM_VIGNETTE_RADIUS    200
+
+/* Renders a radial vignette effect when the gas mask is active.
+ *
+ * Uses the same dark_overlay render-target approach as render_archive_darkness():
+ *   – Fills the overlay with opaque black.
+ *   – Draws a smooth white circle (triangle fan, full-white centre fading to
+ *     black at the edge) centred on the player using additive blending.
+ *
+ * The overlay is then composited onto the screen with SDL_BLENDMODE_MOD:
+ *   black mask → hidden, white mask → fully visible.
+ * This restricts the player's view to a circle around their character.
+ */
+static void render_gasmask_vignette(Game *game)
+{
+    if (!game->gasmask_active) return;
+    if (!game->dark_overlay)   return;
+
+    SDL_Renderer *r = game->renderer;
+    Player       *p = game->player;
+
+    /* World-space origin: vertical centre of the player collider */
+    float ox = p->x;
+    float oy = p->y - (float)PLAYER_COLLIDER_OFFSET_Y
+                    + (float)PLAYER_COLLIDER_H * 0.5f;
+    int sx0 = camera_to_screen_x(&game->camera, ox);
+    int sy0 = camera_to_screen_y(&game->camera, oy);
+
+    /* ── Build the vignette mask ────────────────────────────────────────── */
+    SDL_SetRenderTarget(r, game->dark_overlay);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+
+    /* Draw a smooth gradient circle: white centre → black edge.
+     * ADD blend on the (black) overlay so only the circle region
+     * becomes visible after the MOD composite step. */
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+    {
+        SDL_Vertex av[GM_VIGNETTE_NUM_SEGS + 2];
+        int        ai[GM_VIGNETTE_NUM_SEGS * 3];
+
+        /* Centre vertex: fully white (reveals the scene directly under it) */
+        av[0].position.x  = (float)sx0;
+        av[0].position.y  = (float)sy0;
+        av[0].color.r     = 1.0f;
+        av[0].color.g     = 1.0f;
+        av[0].color.b     = 1.0f;
+        av[0].color.a     = 1.0f;
+        av[0].tex_coord.x = 0.0f;
+        av[0].tex_coord.y = 0.0f;
+
+        /* Edge vertices: fully black (hides the scene at the perimeter) */
+        for (int i = 0; i <= GM_VIGNETTE_NUM_SEGS; i++) {
+            double angle = (2.0 * M_PI * i) / GM_VIGNETTE_NUM_SEGS;
+            av[i + 1].position.x  = (float)sx0
+                                    + GM_VIGNETTE_RADIUS * (float)cos(angle);
+            av[i + 1].position.y  = (float)sy0
+                                    + GM_VIGNETTE_RADIUS * (float)sin(angle);
+            av[i + 1].color.r     = 0.0f;
+            av[i + 1].color.g     = 0.0f;
+            av[i + 1].color.b     = 0.0f;
+            av[i + 1].color.a     = 1.0f;
+            av[i + 1].tex_coord.x = 0.0f;
+            av[i + 1].tex_coord.y = 0.0f;
+        }
+
+        for (int i = 0; i < GM_VIGNETTE_NUM_SEGS; i++) {
+            ai[i * 3 + 0] = 0;
+            ai[i * 3 + 1] = i + 1;
+            ai[i * 3 + 2] = i + 2;
+        }
+
+        SDL_RenderGeometry(r, NULL,
+                           av, GM_VIGNETTE_NUM_SEGS + 2,
+                           ai, GM_VIGNETTE_NUM_SEGS * 3);
+    }
+
+    /* ── Apply the mask to the screen via multiply blend ───────────────── */
+    SDL_SetRenderTarget(r, NULL);
+    SDL_SetTextureBlendMode(game->dark_overlay, SDL_BLENDMODE_MOD);
+    SDL_FRect dst = { 0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H };
+    SDL_RenderTexture(r, game->dark_overlay, NULL, &dst);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+}
+
+
 void game_render_playing(Game *game)
 {
     if (!game || !game->player || !game->world) return;
@@ -1360,6 +1487,22 @@ void game_render_playing(Game *game)
     /* Archive room darkness: MOD-blend light mask (only in location 0).
      * Must run after the scene is drawn but before the additive beam. */
     render_archive_darkness(game);
+    /* Overlay: gas mask vignette takes precedence when active; otherwise
+     * the archive room applies its own darkness (location 0 only). */
+    if (game->gasmask_active)
+        render_gasmask_vignette(game);
+    else
+        render_archive_darkness(game);
+
+    /* Lab poisonous gas: green tint overlay when in the lab */
+    if (game->player->current_location_id == LOCATION_LAB) {
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                           0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
+    }
+
+    /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
+     * more atmospheric look without completely obscuring details. */
+    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 55);
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);

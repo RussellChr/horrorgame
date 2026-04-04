@@ -8,6 +8,7 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
+#include "audio.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,9 @@
 #define LAB_GAS_OVERLAY_ALPHA 70
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
+
+/* Convert the 0–100 volume setting to the 0–128 range used by SDL3_mixer. */
+#define VOLUME_TO_MIX(v)  ((int)((v) / 100.0f * 128))
 
 static Button make_button(float x, float y, float w, float h,
                           const char *text)
@@ -109,6 +113,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to create dark_overlay texture: %s",
                 SDL_GetError());
 
+    /* Initialise audio subsystem */
+    audio_init();
+
     return g;
 }
 
@@ -128,6 +135,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
     render_texture_destroy(game->dark_overlay);
+    audio_stop_music();
+    audio_cleanup();
     free(game);
 }
 
@@ -613,6 +622,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len = 0;
                     game->passcode_input[0]  = '\0';
                     game->passcode_wrong     = 0;
+                    /* Play the experiment audio recording */
+                    audio_play_music("assets/AM.mp3");
+                    game->audio_playing = 1;
                 } else if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
@@ -797,6 +809,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value - 5.0f);
                     game->volume = game->settings_volume_slider.value;
+                    audio_set_volume(VOLUME_TO_MIX(game->volume));
                 } else {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value - 5.0f);
@@ -808,6 +821,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value + 5.0f);
                     game->volume = game->settings_volume_slider.value;
+                    audio_set_volume(VOLUME_TO_MIX(game->volume));
                 } else {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value + 5.0f);
@@ -828,6 +842,7 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (slider_handle_click(&game->settings_volume_slider,
                                     game->mouse_x, game->mouse_y)) {
                 game->volume = game->settings_volume_slider.value;
+                audio_set_volume(VOLUME_TO_MIX(game->volume));
                 game->settings_focus = 0;
             }
             if (slider_handle_click(&game->settings_brightness_slider,
@@ -999,6 +1014,10 @@ void game_update(Game *game)
         if (game->pickup_notify_timer < 0.0f)
             game->pickup_notify_timer = 0.0f;
     }
+
+    /* Keep audio_playing in sync with the actual mixer state */
+    if (game->audio_playing && !audio_is_playing())
+        game->audio_playing = 0;
 }
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
@@ -1031,6 +1050,27 @@ void game_render(Game *game)
         Uint8 alpha = (Uint8)((1.0f - game->brightness / 100.0f) * 220.0f);
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
                            0, 0, 0, alpha);
+    }
+
+    /* ── Audio playback banner ──
+     * Shown whenever the experiment record is playing. */
+    if (game->audio_playing) {
+        const char *label   = "Playing experiment record #1";
+        int text_scale      = 2;
+        int text_w          = (int)(strlen(label) * 8 * text_scale);
+        int text_h          = 8 * text_scale;
+        int pad_x           = 14;
+        int pad_y           = 8;
+        int bx              = (WINDOW_W - text_w) / 2 - pad_x;
+        int by              = WINDOW_H - text_h - pad_y * 2 - 12;
+        int bw              = text_w + pad_x * 2;
+        int bh              = text_h + pad_y * 2;
+
+        render_filled_rect(game->renderer, bx, by, bw, bh, 8, 2, 2, 210);
+        render_rect_outline(game->renderer, bx, by, bw, bh, 160, 60, 60, 220);
+        render_text(game->renderer, label,
+                    bx + pad_x, by + pad_y, text_scale,
+                    220, 140, 140);
     }
 }
 

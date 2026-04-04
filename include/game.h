@@ -110,6 +110,9 @@ typedef struct {
     int  passcode_wrong;           /* 1 = wrong code was submitted, show error */
     int  passcode_correct;         /* 1 = correct code just entered, show success */
 
+    /* Audio playback */
+    int  audio_playing;            /* 1 while AM.mp3 experiment record is playing */
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;

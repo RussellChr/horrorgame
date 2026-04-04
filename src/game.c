@@ -8,6 +8,7 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
+#include "npc.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -116,6 +117,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->dark_overlay);
+    if (game->npc_manager) npc_manager_destroy(game->npc_manager);
     free(game);
 }
 
@@ -153,6 +155,30 @@ void game_start_new(Game *game)
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
+
+    /* ── Hallway patrol enemy ── */
+    game->npc_manager = npc_manager_create();
+    if (game->npc_manager) {
+        static const PatrolWaypoint hallway_wps[] = {
+            {1094.0f, 316.0f},
+            {1091.0f, 580.0f},
+            { 650.0f, 388.0f},
+            { 650.0f, 544.0f},
+            { 261.0f, 542.0f},
+            { 261.0f, 236.0f},
+        };
+        NPC *enemy = npc_create(100, "Enemy", hallway_wps[0].x, hallway_wps[0].y,
+                                NPC_TYPE_HOSTILE);
+        if (enemy) {
+            enemy->location_id = 2;   /* Hallway */
+            enemy->w = 16;
+            enemy->h = 16;
+            npc_set_patrol_waypoints(enemy, hallway_wps,
+                                     (int)(sizeof(hallway_wps) / sizeof(hallway_wps[0])));
+            npc_manager_add(game->npc_manager, enemy);
+            npc_destroy(enemy);
+        }
+    }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
@@ -889,6 +915,15 @@ void game_update(Game *game)
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
+        /* ── Update NPCs that belong to the current location ── */
+        if (game->npc_manager) {
+            for (int i = 0; i < game->npc_manager->npc_count; i++) {
+                NPC *n = &game->npc_manager->npcs[i];
+                if (n->location_id == p->current_location_id)
+                    npc_update(n, dt);
+            }
+        }
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     }
@@ -1223,6 +1258,16 @@ void game_render_playing(Game *game)
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* Render NPCs that belong to the current location */
+    if (game->npc_manager) {
+        int loc_id = game->player->current_location_id;
+        for (int i = 0; i < game->npc_manager->npc_count; i++) {
+            NPC *n = &game->npc_manager->npcs[i];
+            if (n->location_id == loc_id)
+                npc_render(n, game->renderer, &game->camera);
+        }
+    }
 
     /* Archive room darkness: MOD-blend light mask (only in location 0).
      * Must run after the scene is drawn but before the additive beam. */

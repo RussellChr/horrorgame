@@ -7,9 +7,11 @@
 #include <string.h>
 #include <math.h>
 
-#define NPC_SPEED 150.0f
-#define NPC_W     20
-#define NPC_H     40
+#define NPC_SPEED      150.0f
+#define NPC_W           20
+#define NPC_H           40
+#define PATROL_SPEED    80.0f
+#define PATROL_ARRIVE   8.0f
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
@@ -42,6 +44,9 @@ NPC *npc_create(int id, const char *name, float x, float y, int npc_type)
     npc->current_state = NPC_STATE_IDLE;
     npc->facing_right = 1;
     npc->interaction_range = 80.0f;
+    npc->location_id = 0;
+    npc->w = NPC_W;
+    npc->h = NPC_H;
     
     /* Setup collider */
     npc->collider.x = x;
@@ -93,11 +98,58 @@ void npc_manager_remove(NPCManager *manager, int npc_id)
     }
 }
 
+/* ── Patrol waypoint update (internal) ─────────────────────────────────── */
+
+static void npc_patrol_update(NPC *npc, float delta_time)
+{
+    if (!npc || npc->patrol_wp_count < 2) return;
+
+    PatrolWaypoint *target = &npc->patrol_waypoints[npc->patrol_wp_index];
+    float dx   = target->x - npc->x;
+    float dy   = target->y - npc->y;
+    float dist = sqrtf(dx * dx + dy * dy);
+
+    if (dist < PATROL_ARRIVE) {
+        /* Arrived — advance to next waypoint, reversing at the ends */
+        if (npc->patrol_state == PATROL_STATE_FORWARD) {
+            if (npc->patrol_wp_index < npc->patrol_wp_count - 1) {
+                npc->patrol_wp_index++;
+            } else {
+                npc->patrol_state = PATROL_STATE_BACKWARD;
+                npc->patrol_wp_index--;
+            }
+        } else {
+            if (npc->patrol_wp_index > 0) {
+                npc->patrol_wp_index--;
+            } else {
+                npc->patrol_state = PATROL_STATE_FORWARD;
+                npc->patrol_wp_index++;
+            }
+        }
+        npc->vx = 0.0f;
+        npc->vy = 0.0f;
+        return;
+    }
+
+    /* Steer towards the current waypoint */
+    float inv = 1.0f / dist;
+    npc->vx = dx * inv * PATROL_SPEED;
+    npc->vy = dy * inv * PATROL_SPEED;
+    npc->facing_right  = (dx > 0) ? 1 : 0;
+    npc->current_state = NPC_STATE_WALKING;
+
+    (void)delta_time;
+}
+
 /* ── Update ────────────────────────────────────────────────────────────── */
 
 void npc_update(NPC *npc, float delta_time)
 {
     if (!npc) return;
+
+    /* Drive patrol movement before applying velocity */
+    if (npc->has_patrol)
+        npc_patrol_update(npc, delta_time);
 
     switch (npc->current_state) {
         case NPC_STATE_IDLE:
@@ -145,36 +197,54 @@ void npc_manager_update(NPCManager *manager, float delta_time)
 
 /* ── Rendering ────────────────────────────────────────────────────────── */
 
-void npc_render(NPC *npc, SDL_Renderer *renderer)
+void npc_render(NPC *npc, SDL_Renderer *renderer, const Camera *cam)
 {
     if (!npc || !renderer) return;
 
+    int sx = cam ? camera_to_screen_x(cam, npc->x) : (int)npc->x;
+    int sy = cam ? camera_to_screen_y(cam, npc->y) : (int)npc->y;
+
     /* Simple colored rectangle for NPC sprite */
-    int color;
     if (npc->npc_type == NPC_TYPE_FRIENDLY)
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
+        render_filled_rect(renderer, sx, sy, npc->w, npc->h,
                           100, 200, 100, 255);  /* Green */
     else if (npc->npc_type == NPC_TYPE_HOSTILE)
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
-                          200, 100, 100, 255);  /* Red */
+        render_filled_rect(renderer, sx, sy, npc->w, npc->h,
+                          200, 50, 50, 255);    /* Red */
     else
-        render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_H,
+        render_filled_rect(renderer, sx, sy, npc->w, npc->h,
                           150, 150, 150, 255);  /* Gray */
 
     /* Draw name above NPC */
     render_text_centered(renderer, npc->name,
-                        (int)(npc->x + NPC_W/2), (int)(npc->y - 20),
+                        sx + npc->w / 2, sy - 20,
                         1, 255, 255, 255);
 }
 
-void npc_manager_render(NPCManager *manager, SDL_Renderer *renderer)
+void npc_manager_render(NPCManager *manager, SDL_Renderer *renderer, const Camera *cam)
 {
     if (!manager || !renderer) return;
     for (int i = 0; i < manager->npc_count; i++)
-        npc_render(&manager->npcs[i], renderer);
+        npc_render(&manager->npcs[i], renderer, cam);
 }
 
 /* ── Behavior ──────────────────────────────────────────────────────────── */
+
+void npc_set_patrol_waypoints(NPC *npc, const PatrolWaypoint *wps, int count)
+{
+    if (!npc || !wps || count <= 0) return;
+    if (count > MAX_PATROL_WAYPOINTS) count = MAX_PATROL_WAYPOINTS;
+
+    for (int i = 0; i < count; i++)
+        npc->patrol_waypoints[i] = wps[i];
+    npc->patrol_wp_count = count;
+    npc->patrol_wp_index = 0;
+    npc->patrol_state    = PATROL_STATE_FORWARD;
+    npc->has_patrol      = 1;
+
+    /* Start moving towards the first waypoint */
+    npc->current_state = NPC_STATE_WALKING;
+}
 
 void npc_set_patrol(NPC *npc, float x1, float x2)
 {

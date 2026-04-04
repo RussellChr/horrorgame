@@ -76,6 +76,9 @@ typedef struct {
     /* Inventory */
     int selected_inventory_slot;
 
+    /* Flashlight */
+    int flashlight_active;    /* 1 if the flashlight beam is on */
+
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */

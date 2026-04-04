@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -296,7 +297,7 @@ static void handle_interaction(Game *game)
                 strncpy(fl.description, "flashlight found", ITEM_DESC_MAX - 1);
                 fl.description[ITEM_DESC_MAX - 1] = '\0';
                 fl.id     = ITEM_ID_FLASHLIGHT;
-                fl.usable = 0;
+                fl.usable = 1;
                 player_add_item(game->player, &fl);
                 set_dialogue_tree(game, "hallway_flashlight", 2);
             } else {
@@ -550,6 +551,18 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_I)
                 game->state = GAME_STATE_PLAYING;
+
+            /* Use selected item */
+            if (event->key.key == SDLK_U) {
+                int sel = game->selected_inventory_slot;
+                if (sel >= 0 && sel < game->player->inventory_count) {
+                    const Item *it = &game->player->inventory[sel];
+                    if (it->usable && it->id == ITEM_ID_FLASHLIGHT) {
+                        game->flashlight_active = !game->flashlight_active;
+                        game->state = GAME_STATE_PLAYING;
+                    }
+                }
+            }
 
             /* Grid navigation: 4 columns */
 #define INV_NAV_COLS 4
@@ -864,6 +877,128 @@ void game_render_menu(Game *game)
 
 /* ── Playing ─────────────────────────────────────────────────────────────── */
 
+/* Cast a ray from (ox, oy) in direction (dx, dy) against all colliders in loc.
+ * Returns the hit distance, or max_dist if no wall is hit. */
+static float raycast_colliders(float ox, float oy, float dx, float dy,
+                                const Location *loc, float max_dist)
+{
+    float t = max_dist;
+    for (int i = 0; i < loc->collider_count; i++) {
+        const Rect *rc = &loc->colliders[i];
+        float tx1, tx2, ty1, ty2, tmin, tmax;
+
+        if (fabsf(dx) < 1e-6f) {
+            if (ox < rc->x || ox > rc->x + rc->w) continue;
+            tx1 = -1e9f; tx2 = 1e9f;
+        } else {
+            tx1 = (rc->x          - ox) / dx;
+            tx2 = (rc->x + rc->w  - ox) / dx;
+            if (tx1 > tx2) { float tmp = tx1; tx1 = tx2; tx2 = tmp; }
+        }
+
+        if (fabsf(dy) < 1e-6f) {
+            if (oy < rc->y || oy > rc->y + rc->h) continue;
+            ty1 = -1e9f; ty2 = 1e9f;
+        } else {
+            ty1 = (rc->y          - oy) / dy;
+            ty2 = (rc->y + rc->h  - oy) / dy;
+            if (ty1 > ty2) { float tmp = ty1; ty1 = ty2; ty2 = tmp; }
+        }
+
+        tmin = tx1 > ty1 ? tx1 : ty1;
+        tmax = tx2 < ty2 ? tx2 : ty2;
+        if (tmax < 0.0f || tmin > tmax) continue;
+        if (tmin < 0.0f) tmin = 0.0f;
+        if (tmin < t)    t    = tmin;
+    }
+    return t;
+}
+
+/* Render the flashlight cone when the flashlight is active.
+ * Casts NUM_RAYS rays within a 90-degree cone (±45° from the player's
+ * facing direction) and draws the lit area as a triangle fan. */
+#define FL_NUM_RAYS  48
+#define FL_MAX_DIST  500.0f
+#define FL_HALF_CONE (M_PI / 4.0)   /* 45 degrees */
+
+static void render_flashlight_beam(Game *game)
+{
+    if (!game->flashlight_active) return;
+    Player   *p   = game->player;
+    Location *loc = world_get_location(game->world, p->current_location_id);
+    if (!loc) return;
+
+    /* World-space origin: centre of the player collider */
+    float ox = p->x;
+    float oy = p->y - (float)PLAYER_COLLIDER_OFFSET_Y
+               + (float)PLAYER_COLLIDER_H * 0.5f;
+
+    /* Base angle from the player's facing direction */
+    double base_angle;
+    switch (p->current_direction) {
+    case DIRECTION_EAST:  base_angle =  0.0;          break;
+    case DIRECTION_WEST:  base_angle =  M_PI;         break;
+    case DIRECTION_NORTH: base_angle = -M_PI / 2.0;  break;
+    case DIRECTION_SOUTH: base_angle =  M_PI / 2.0;  break;
+    default:              base_angle =  0.0;          break;
+    }
+
+    /* Build a triangle-fan in screen space:
+     *   verts[0]          = ray origin (player centre)
+     *   verts[1..N+1]     = hit points for each ray */
+    SDL_Vertex verts[FL_NUM_RAYS + 2];
+    int        indices[FL_NUM_RAYS * 3];
+
+    int sx0 = camera_to_screen_x(&game->camera, ox);
+    int sy0 = camera_to_screen_y(&game->camera, oy);
+    verts[0].position.x  = (float)sx0;
+    verts[0].position.y  = (float)sy0;
+    verts[0].color.r     = 1.0f;
+    verts[0].color.g     = 1.0f;
+    verts[0].color.b     = 0.8f;
+    verts[0].color.a     = 0.7f;
+    verts[0].tex_coord.x = 0.0f;
+    verts[0].tex_coord.y = 0.0f;
+
+    for (int i = 0; i <= FL_NUM_RAYS; i++) {
+        double angle = base_angle - FL_HALF_CONE
+                       + (2.0 * FL_HALF_CONE * i) / FL_NUM_RAYS;
+        float dx    = (float)cos(angle);
+        float dy    = (float)sin(angle);
+        float dist  = raycast_colliders(ox, oy, dx, dy, loc, FL_MAX_DIST);
+        float hx    = ox + dx * dist;
+        float hy    = oy + dy * dist;
+
+        int sx = camera_to_screen_x(&game->camera, hx);
+        int sy = camera_to_screen_y(&game->camera, hy);
+
+        /* Fade toward the edges of the cone */
+        float edge = 1.0f - 2.0f * fabsf((float)i / FL_NUM_RAYS - 0.5f);
+
+        verts[i + 1].position.x  = (float)sx;
+        verts[i + 1].position.y  = (float)sy;
+        verts[i + 1].color.r     = 1.0f;
+        verts[i + 1].color.g     = 1.0f;
+        verts[i + 1].color.b     = 0.7f;
+        verts[i + 1].color.a     = 0.35f * edge;
+        verts[i + 1].tex_coord.x = 0.0f;
+        verts[i + 1].tex_coord.y = 0.0f;
+    }
+
+    for (int i = 0; i < FL_NUM_RAYS; i++) {
+        indices[i * 3 + 0] = 0;
+        indices[i * 3 + 1] = i + 1;
+        indices[i * 3 + 2] = i + 2;
+    }
+
+    SDL_SetRenderDrawBlendMode(game->renderer, SDL_BLENDMODE_ADD);
+    SDL_RenderGeometry(game->renderer, NULL,
+                       verts, FL_NUM_RAYS + 2,
+                       indices, FL_NUM_RAYS * 3);
+    SDL_SetRenderDrawBlendMode(game->renderer, SDL_BLENDMODE_BLEND);
+}
+
+
 void game_render_playing(Game *game)
 {
     if (!game || !game->player || !game->world) return;
@@ -878,6 +1013,9 @@ void game_render_playing(Game *game)
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* Flashlight beam (rendered on top of the player sprite) */
+    render_flashlight_beam(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.

@@ -8,7 +8,6 @@
 #include "render.h"
 #include "camera.h"
 #include "collision.h"
-#include "npc.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -24,9 +23,6 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
-/* ── Enemy AI constants ────────────────────────────────────────────────── */
-#define CHASE_TRIGGER_DIST  300.0f   /* px: NPC starts chasing within this range */
-#define ENEMY_HIT_DIST       40.0f   /* px: game-over when NPC gets this close   */
 /* ── Lab poisonous-gas constants ────────────────────────────────────────── */
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
@@ -111,19 +107,6 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     return g;
 }
 
-/* Destroy all per-session objects and NULL the pointers, leaving the
- * window/renderer and persistent UI data intact so the main menu can
- * be shown again without reinitialising the whole Game struct. */
-static void game_end_session(Game *game)
-{
-    if (!game) return;
-    if (game->player)        { player_destroy(game->player);           game->player        = NULL; }
-    if (game->world)         { world_destroy(game->world);             game->world         = NULL; }
-    if (game->story)         { story_destroy(game->story);             game->story         = NULL; }
-    if (game->dialogue_tree) { dialogue_tree_destroy(game->dialogue_tree); game->dialogue_tree = NULL; }
-    if (game->npc_manager)   { npc_manager_destroy(game->npc_manager); game->npc_manager   = NULL; }
-}
-
 void game_cleanup(Game *game)
 {
     if (!game) return;
@@ -139,7 +122,6 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->dark_overlay);
-    if (game->npc_manager) npc_manager_destroy(game->npc_manager);
     free(game);
 }
 
@@ -177,30 +159,6 @@ void game_start_new(Game *game)
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
-
-    /* ── Hallway patrol enemy ── */
-    game->npc_manager = npc_manager_create();
-    if (game->npc_manager) {
-        static const PatrolWaypoint hallway_wps[] = {
-            {1734.0f, 319.0f},
-            {1731.0f, 583.0f},
-            { 710.0f, 579.0f},
-            { 712.0f, 735.0f},
-            { 321.0f, 733.0f},
-            { 321.0f, 427.0f},
-        };
-        NPC *enemy = npc_create(100, "Enemy", hallway_wps[0].x, hallway_wps[0].y,
-                                NPC_TYPE_HOSTILE);
-        if (enemy) {
-            enemy->location_id = 2;   /* Hallway */
-            enemy->w = 16;
-            enemy->h = 16;
-            npc_set_patrol_waypoints(enemy, hallway_wps,
-                                     (int)(sizeof(hallway_wps) / sizeof(hallway_wps[0])));
-            npc_manager_add(game->npc_manager, enemy);
-            npc_destroy(enemy);
-        }
-    }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
@@ -570,15 +528,6 @@ void game_handle_event(Game *game, SDL_Event *event)
                     handle_interaction(game);
                 break;
             default: break;
-            }
-        }
-        break;
-
-    case GAME_STATE_GAME_OVER:
-        if (event->type == SDL_EVENT_KEY_DOWN) {
-            if (event->key.key == SDLK_SPACE || event->key.key == SDLK_RETURN) {
-                game_end_session(game);
-                game->state = GAME_STATE_MENU;
             }
         }
         break;
@@ -960,48 +909,6 @@ void game_update(Game *game)
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
-        /* ── Update NPCs that belong to the current location ── */
-        if (game->npc_manager) {
-            Location *cloc = world_get_location(game->world, p->current_location_id);
-            int player_caught = 0;
-
-            for (int i = 0; i < game->npc_manager->npc_count && !player_caught; i++) {
-                NPC *n = &game->npc_manager->npcs[i];
-                if (n->location_id != p->current_location_id) continue;
-
-                /* Hostile NPC proximity checks. */
-                if (n->npc_type == NPC_TYPE_HOSTILE) {
-                    float nx   = n->x + n->w * 0.5f;
-                    float ny   = n->y + n->h * 0.5f;
-                    float pdx  = nx - p->x;
-                    float pdy  = ny - (p->y - (float)PLAYER_SPRITE_H * 0.5f);
-                    float dist = sqrtf(pdx * pdx + pdy * pdy);
-
-                    if (dist < ENEMY_HIT_DIST) {
-                        /* Player caught — trigger game over. */
-                        player_caught = 1;
-                        game->state = GAME_STATE_GAME_OVER;
-                        break;
-                    }
-
-                    if (dist < CHASE_TRIGGER_DIST) {
-                        /* Switch to A* chase mode. */
-                        npc_update_chase(n, dt, p->x, p->y,
-                                         cloc ? cloc->nav_cells  : NULL,
-                                         cloc ? cloc->nav_rows   : 0,
-                                         cloc ? cloc->nav_cols   : 0,
-                                         cloc ? cloc->room_width  : ROOM_W,
-                                         cloc ? cloc->room_height : ROOM_H);
-                    } else if (n->current_state == NPC_STATE_CHASING) {
-                        /* Out of range — resume patrol. */
-                        n->current_state    = NPC_STATE_WALKING;
-                        n->chase_path_len   = 0;
-                        n->chase_repath_timer = 0.0f;
-                    }
-                }
-
-                npc_update(n, dt);
-            }
         /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
         if (p->current_location_id == LOCATION_LAB &&
             !game->lab_death_triggered) {
@@ -1049,7 +956,6 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
-    case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);
@@ -1103,32 +1009,6 @@ void game_render_menu(Game *game)
 
     /* top-left debug text */
     render_text(r, buf, 10, 10, 2, 255, 255, 255);
-}
-
-/* ── Game Over ───────────────────────────────────────────────────────────── */
-
-void game_render_game_over(Game *game)
-{
-    if (!game) return;
-    SDL_Renderer *r = game->renderer;
-
-    /* Deep red-black background */
-    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 8, 0, 0, 255);
-
-    /* "GAME OVER" — large centred text */
-    render_text_centered(r, "GAME OVER",
-                         WINDOW_W / 2, WINDOW_H / 2 - 60,
-                         4, 200, 30, 30);
-
-    /* Flavour subtitle */
-    render_text_centered(r, "You were caught...",
-                         WINDOW_W / 2, WINDOW_H / 2,
-                         2, 180, 80, 80);
-
-    /* Return prompt */
-    render_text_centered(r, "Press SPACE to return to menu",
-                         WINDOW_W / 2, WINDOW_H / 2 + 60,
-                         1, 130, 60, 60);
 }
 
 /* ── Playing ─────────────────────────────────────────────────────────────── */
@@ -1474,19 +1354,6 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
-    /* Render NPCs that belong to the current location */
-    if (game->npc_manager) {
-        int loc_id = game->player->current_location_id;
-        for (int i = 0; i < game->npc_manager->npc_count; i++) {
-            NPC *n = &game->npc_manager->npcs[i];
-            if (n->location_id == loc_id)
-                npc_render(n, game->renderer, &game->camera);
-        }
-    }
-
-    /* Archive room darkness: MOD-blend light mask (only in location 0).
-     * Must run after the scene is drawn but before the additive beam. */
-    render_archive_darkness(game);
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
     if (game->gasmask_active)

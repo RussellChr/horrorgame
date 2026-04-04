@@ -428,6 +428,14 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/security.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 1);
+                    map_build_colliders_for_tile(m, loc, 2);
+
+                    /* Tile 2: readable note (trigger ID 91) */
+                    /* Tile 4: monitor screen (trigger ID 92) */
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 91, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 92, 0.0f, 0.0f);
+
 
                     /* Spawn just above the tile-3 connector (rows 20-21, cols 28-34).
                        Hint one row above the block so the player stands in

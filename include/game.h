@@ -77,6 +77,7 @@ typedef struct {
     int selected_inventory_slot;
     SDL_Texture *item_flashlight_texture;  /* icon shown in inventory for flashlight */
     SDL_Texture *item_gasmask_texture;     /* icon shown in inventory for gas mask   */
+    SDL_Texture *item_keycard_texture;     /* icon shown in inventory for keycard    */
 
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */

@@ -94,7 +94,19 @@ Alex
 GasMask found.
 ---
 
+[archive_door_locked]
+Alex
+---
+Keycard is required.
+---
+
 # ── Lab ─────────────────────────────────────────────────────────────────
+
+[lab_keycard]
+Alex
+---
+You found a keycard.
+---
 
 [lab_gas_death]
 Alex

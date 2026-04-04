@@ -261,6 +261,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
+                    /* Tile 2: keycard pickup, interactive trigger 61 */
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 61, 0.0f, 0.0f);
+
                     /* Hint one row above the door tiles (rows 23-25, cols 11-14)
                        so the player spawns just in front of the door. */
                     float sx = (float)(loc->room_width  / 2);
@@ -524,8 +527,21 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                                loc2->room_width, loc2->room_height);
 
                 /* Hallway → each room (all tile values in a single CSV load). */
-                if (loc0) map_build_door_triggers_for_tile(mhw, loc2, 5, 0,
-                                                           loc0->spawn_x, loc0->spawn_y);
+                /* Tile 5 → archive: locked behind keycard.
+                   Build physical door colliders so the player cannot walk
+                   through, then add interactive trigger 95 so game.c can
+                   show the "keycard required" message and, once the player
+                   presents the keycard, remove the colliders and convert
+                   the trigger into a normal exit trigger. */
+                if (loc0) {
+                    loc2->door_collider_start = loc2->collider_count;
+                    map_build_colliders_for_tile(mhw, loc2, 5);
+                    loc2->door_collider_count =
+                        loc2->collider_count - loc2->door_collider_start;
+                    map_build_interactive_triggers_for_tile(mhw, loc2, 5, 95,
+                                                            loc0->spawn_x,
+                                                            loc0->spawn_y);
+                }
                 if (loc1) map_build_door_triggers_for_tile(mhw, loc2, 4, 1,
                                                            loc1->spawn_x, loc1->spawn_y);
                 if (loc3) map_build_door_triggers_for_tile(mhw, loc2, 1, 3,

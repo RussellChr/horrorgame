@@ -569,7 +569,14 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (event->type == SDL_EVENT_KEY_DOWN) {
                 SDL_Keycode  k  = event->key.key;
                 SDL_Scancode sc = event->key.scancode;
-                if (k == SDLK_ESCAPE) {
+                /* If correct code was just shown, any key dismisses the overlay */
+                if (game->passcode_correct) {
+                    game->passcode_active    = 0;
+                    game->passcode_correct   = 0;
+                    game->passcode_input_len = 0;
+                    game->passcode_input[0]  = '\0';
+                    game->passcode_wrong     = 0;
+                } else if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
                     game->passcode_input_len = 0;
@@ -600,11 +607,8 @@ void game_handle_event(Game *game, SDL_Event *event)
                         /* Auto-submit when 4 digits entered */
                         if (game->passcode_input_len == 4) {
                             if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
-                                /* Correct code – close passcode overlay */
-                                game->passcode_active    = 0;
-                                game->passcode_input_len = 0;
-                                game->passcode_input[0]  = '\0';
-                                game->passcode_wrong     = 0;
+                                /* Correct – show success message; overlay stays open */
+                                game->passcode_correct = 1;
                             } else {
                                 game->passcode_wrong = 1;
                             }
@@ -623,6 +627,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->passcode_input_len = 0;
                 game->passcode_input[0]  = '\0';
                 game->passcode_wrong     = 0;
+                game->passcode_correct   = 0;
                 game->state = GAME_STATE_PLAYING;
             }
         }
@@ -1570,25 +1575,35 @@ void game_render_locker(Game *game)
             int px = (WINDOW_W - pw) / 2;
             int py = (WINDOW_H - ph) / 2;
             render_filled_rect(r, px, py, pw, ph, 0, 0, 0, 210);
-            render_rect_outline(r, px, py, pw, ph, 0, 180, 0, 255);
+            render_rect_outline(r, px, py, pw, ph,
+                game->passcode_correct ? 0 : 0,
+                game->passcode_correct ? 255 : 180,
+                game->passcode_correct ? 100 : 0, 255);
 
-            render_text_centered(r, "ENTER CODE",
-                                 WINDOW_W / 2, py + 16, 2, 0, 220, 0);
+            if (game->passcode_correct) {
+                render_text_centered(r, "PASSWORD CORRECT",
+                                     WINDOW_W / 2, py + 50, 2, 0, 255, 100);
+                render_text_centered(r, "Press any key to continue",
+                                     WINDOW_W / 2, py + ph - 20, 1, 120, 180, 120);
+            } else {
+                render_text_centered(r, "ENTER CODE",
+                                     WINDOW_W / 2, py + 16, 2, 0, 220, 0);
 
-            /* Display entered digits, blanks shown as underscore */
-            char display[PASSCODE_DISPLAY_SIZE] = "_ _ _ _";
-            for (int i = 0; i < game->passcode_input_len; i++)
-                display[i * 2] = game->passcode_input[i];
-            render_text_centered(r, display,
-                                 WINDOW_W / 2, py + 60, 3, 0, 220, 0);
+                /* Display entered digits, blanks shown as underscore */
+                char display[PASSCODE_DISPLAY_SIZE] = "_ _ _ _";
+                for (int i = 0; i < game->passcode_input_len; i++)
+                    display[i * 2] = game->passcode_input[i];
+                render_text_centered(r, display,
+                                     WINDOW_W / 2, py + 60, 3, 0, 220, 0);
 
-            if (game->passcode_wrong) {
-                render_text_centered(r, "passcode is wrong",
-                                     WINDOW_W / 2, py + 120, 2, 220, 60, 60);
+                if (game->passcode_wrong) {
+                    render_text_centered(r, "passcode is wrong",
+                                         WINDOW_W / 2, py + 120, 2, 220, 60, 60);
+                }
+
+                render_text_centered(r, "ESC: cancel",
+                                     WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
             }
-
-            render_text_centered(r, "ESC: cancel",
-                                 WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
         }
     } else {
         render_text_centered(r, "Press E or ESC to exit",

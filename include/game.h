@@ -101,6 +101,7 @@ typedef struct {
     char passcode_input[5];        /* null-terminated 4-digit input buffer */
     int  passcode_input_len;       /* number of digits entered so far */
     int  passcode_wrong;           /* 1 = wrong code was submitted, show error */
+    int  passcode_correct;         /* 1 = correct code just entered, show success */
 
     /* Timing */
     Uint64 last_ticks;

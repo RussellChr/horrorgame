@@ -879,6 +879,8 @@ void game_render_menu(Game *game)
 
 /* Cast a ray from (ox, oy) in direction (dx, dy) against all colliders in loc.
  * Returns the hit distance, or max_dist if no wall is hit. */
+#define RAY_DIR_EPSILON  1e-6f   /* threshold for treating a direction component as zero */
+
 static float raycast_colliders(float ox, float oy, float dx, float dy,
                                 const Location *loc, float max_dist)
 {
@@ -887,18 +889,18 @@ static float raycast_colliders(float ox, float oy, float dx, float dy,
         const Rect *rc = &loc->colliders[i];
         float tx1, tx2, ty1, ty2, tmin, tmax;
 
-        if (fabsf(dx) < 1e-6f) {
+        if (fabsf(dx) < RAY_DIR_EPSILON) {
             if (ox < rc->x || ox > rc->x + rc->w) continue;
-            tx1 = -1e9f; tx2 = 1e9f;
+            tx1 = -INFINITY; tx2 = INFINITY;
         } else {
             tx1 = (rc->x          - ox) / dx;
             tx2 = (rc->x + rc->w  - ox) / dx;
             if (tx1 > tx2) { float tmp = tx1; tx1 = tx2; tx2 = tmp; }
         }
 
-        if (fabsf(dy) < 1e-6f) {
+        if (fabsf(dy) < RAY_DIR_EPSILON) {
             if (oy < rc->y || oy > rc->y + rc->h) continue;
-            ty1 = -1e9f; ty2 = 1e9f;
+            ty1 = -INFINITY; ty2 = INFINITY;
         } else {
             ty1 = (rc->y          - oy) / dy;
             ty2 = (rc->y + rc->h  - oy) / dy;
@@ -915,11 +917,12 @@ static float raycast_colliders(float ox, float oy, float dx, float dy,
 }
 
 /* Render the flashlight cone when the flashlight is active.
- * Casts NUM_RAYS rays within a 90-degree cone (±45° from the player's
- * facing direction) and draws the lit area as a triangle fan. */
+ * Casts FL_NUM_RAYS rays within a 90-degree cone (±45°, i.e. π/4 radians,
+ * from the player's facing direction) and draws the lit area as a
+ * triangle fan using additive blending. */
 #define FL_NUM_RAYS  48
 #define FL_MAX_DIST  500.0f
-#define FL_HALF_CONE (M_PI / 4.0)   /* 45 degrees */
+#define FL_HALF_CONE (M_PI / 4.0)   /* half-cone: 45° (π/4 radians) each side */
 
 static void render_flashlight_beam(Game *game)
 {
@@ -928,7 +931,7 @@ static void render_flashlight_beam(Game *game)
     Location *loc = world_get_location(game->world, p->current_location_id);
     if (!loc) return;
 
-    /* World-space origin: centre of the player collider */
+    /* World-space origin: vertical centre of the player collider */
     float ox = p->x;
     float oy = p->y - (float)PLAYER_COLLIDER_OFFSET_Y
                + (float)PLAYER_COLLIDER_H * 0.5f;
@@ -972,7 +975,8 @@ static void render_flashlight_beam(Game *game)
         int sx = camera_to_screen_x(&game->camera, hx);
         int sy = camera_to_screen_y(&game->camera, hy);
 
-        /* Fade toward the edges of the cone */
+        /* Fade alpha toward the cone edges: 1.0 at centre, 0.0 at ±45°.
+         * Formula: edge = 1 - |2*(i/N) - 1|, mapping [0,N] → [0,1,0]. */
         float edge = 1.0f - 2.0f * fabsf((float)i / FL_NUM_RAYS - 0.5f);
 
         verts[i + 1].position.x  = (float)sx;

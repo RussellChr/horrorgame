@@ -22,6 +22,8 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_NOTE_LOCKER,
+    GAME_STATE_MONITOR_ZOOM,
     GAME_STATE_QUIT
 } GameState;
 
@@ -83,6 +85,10 @@ typedef struct {
     /* Locker view */
     SDL_Texture *locker_texture;
 
+    /* Security room image views */
+    SDL_Texture *note_locker_texture;
+    SDL_Texture *monitor_zoom_texture;
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;
@@ -122,5 +128,7 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_note_locker(Game *game);
+void game_render_monitor_zoom(Game *game);
 
 #endif /* GAME_H */

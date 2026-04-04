@@ -75,6 +75,8 @@ typedef struct {
 
     /* Inventory */
     int selected_inventory_slot;
+    SDL_Texture *item_flashlight_texture;  /* icon shown in inventory for flashlight */
+    SDL_Texture *item_gasmask_texture;     /* icon shown in inventory for gas mask   */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */

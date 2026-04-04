@@ -373,9 +373,11 @@ static void handle_interaction(Game *game)
             }
         } else if (tid == 95) {
             /* Tile 5: archive door – locked until player has keycard */
-            if (player_has_item(game->player, ITEM_ID_KEYCARD)) {
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
+                player_has_item(game->player, ITEM_ID_KEYCARD)) {
                 /* Unlock the archive door permanently: remove door colliders
-                   and convert the interactive trigger into an exit trigger. */
+                   and convert the interactive trigger into an exit trigger
+                   (trigger_id = -1 signals a room-transition trigger). */
                 player_set_flag(game->player, FLAG_ARCHIVE_UNLOCKED);
                 Location *hwloc = world_get_location(game->world, 2);
                 if (hwloc) {
@@ -392,7 +394,7 @@ static void handle_interaction(Game *game)
                 if (aloc)
                     game_change_location(game, 0, aloc->spawn_x, aloc->spawn_y);
                 return;
-            } else {
+            } else if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
                 set_dialogue_tree(game, "archive_door_locked", 2);
             }
         }

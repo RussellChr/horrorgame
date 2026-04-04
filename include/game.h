@@ -81,6 +81,9 @@ typedef struct {
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
 
+    /* Gas mask */
+    int gasmask_active;       /* 1 if the gas mask vignette is on */
+
     /* Archive room darkness: full-screen light-mask render target */
     SDL_Texture *dark_overlay;
 

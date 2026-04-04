@@ -80,6 +80,15 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
 
+    /* Create full-screen light-mask render target for archive room darkness */
+    g->dark_overlay = SDL_CreateTexture(renderer,
+                                        SDL_PIXELFORMAT_RGBA8888,
+                                        SDL_TEXTUREACCESS_TARGET,
+                                        WINDOW_W, WINDOW_H);
+    if (!g->dark_overlay)
+        SDL_Log("game_init: failed to create dark_overlay texture: %s",
+                SDL_GetError());
+
     return g;
 }
 
@@ -97,6 +106,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->monitor_zoom_texture);
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
+    render_texture_destroy(game->dark_overlay);
     free(game);
 }
 
@@ -1009,6 +1019,154 @@ static void render_flashlight_beam(Game *game)
 }
 
 
+/* Number of triangle-fan segments for the ambient glow circle. */
+#define DARK_AMBIENT_NUM_SEGS  48
+/* Screen-space radius (pixels) of the dim ambient circle around the player. */
+#define DARK_AMBIENT_RADIUS    90
+
+/* Renders the archive room darkness effect (location 0 only).
+ *
+ * Builds a light-mask on the dark_overlay render-target:
+ *   – Starts fully black (opaque).
+ *   – Adds a small, very dim ambient circle around the player so nearby
+ *     shapes are faintly visible.
+ *   – If the flashlight is active, adds a bright white triangle fan in the
+ *     player's facing direction (same raycast geometry as the beam).
+ *
+ * The finished mask is then composited onto the screen with
+ * SDL_BLENDMODE_MOD, which multiplies every screen pixel by the mask colour:
+ *   black mask  → screen pixel becomes black (hidden)
+ *   white mask  → screen pixel is unchanged (fully revealed)
+ *
+ * The additive flashlight beam drawn afterwards by render_flashlight_beam()
+ * adds the warm yellowish glow on top of the revealed scene.
+ */
+static void render_archive_darkness(Game *game)
+{
+    if (!game->dark_overlay) return;
+    if (game->player->current_location_id != 0) return;
+
+    SDL_Renderer *r   = game->renderer;
+    Player       *p   = game->player;
+    Location     *loc = world_get_location(game->world, p->current_location_id);
+
+    /* World-space origin: vertical centre of the player collider */
+    float ox = p->x;
+    float oy = p->y - (float)PLAYER_COLLIDER_OFFSET_Y
+                    + (float)PLAYER_COLLIDER_H * 0.5f;
+    int sx0 = camera_to_screen_x(&game->camera, ox);
+    int sy0 = camera_to_screen_y(&game->camera, oy);
+
+    /* ── Build the light mask ──────────────────────────────────────────── */
+    SDL_SetRenderTarget(r, game->dark_overlay);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+
+    /* Ambient glow: a dim warm circle centred on the player.
+     * Brightness 0.15 (~38/255) – shapes are barely visible, text is not. */
+    {
+        SDL_Vertex av[DARK_AMBIENT_NUM_SEGS + 2];
+        int        ai[DARK_AMBIENT_NUM_SEGS * 3];
+
+        av[0].position.x  = (float)sx0;
+        av[0].position.y  = (float)sy0;
+        av[0].color.r     = 0.15f;
+        av[0].color.g     = 0.15f;
+        av[0].color.b     = 0.12f;
+        av[0].color.a     = 1.0f;
+        av[0].tex_coord.x = 0.0f;
+        av[0].tex_coord.y = 0.0f;
+
+        for (int i = 0; i <= DARK_AMBIENT_NUM_SEGS; i++) {
+            double angle = (2.0 * M_PI * i) / DARK_AMBIENT_NUM_SEGS;
+            av[i + 1].position.x  = (float)sx0
+                                    + DARK_AMBIENT_RADIUS * (float)cos(angle);
+            av[i + 1].position.y  = (float)sy0
+                                    + DARK_AMBIENT_RADIUS * (float)sin(angle);
+            av[i + 1].color.r     = 0.0f;
+            av[i + 1].color.g     = 0.0f;
+            av[i + 1].color.b     = 0.0f;
+            av[i + 1].color.a     = 1.0f;
+            av[i + 1].tex_coord.x = 0.0f;
+            av[i + 1].tex_coord.y = 0.0f;
+        }
+        for (int i = 0; i < DARK_AMBIENT_NUM_SEGS; i++) {
+            ai[i * 3 + 0] = 0;
+            ai[i * 3 + 1] = i + 1;
+            ai[i * 3 + 2] = i + 2;
+        }
+        SDL_RenderGeometry(r, NULL,
+                           av, DARK_AMBIENT_NUM_SEGS + 2,
+                           ai, DARK_AMBIENT_NUM_SEGS * 3);
+    }
+
+    /* Flashlight cone: reveal the scene in the illuminated area.
+     * Uses the same raycasting geometry as render_flashlight_beam() but
+     * draws in bright white so MOD blend fully uncovers the room texture. */
+    if (game->flashlight_active && loc) {
+        double base_angle;
+        switch (p->current_direction) {
+        case DIRECTION_EAST:  base_angle =  0.0;         break;
+        case DIRECTION_WEST:  base_angle =  M_PI;        break;
+        case DIRECTION_NORTH: base_angle = -M_PI / 2.0;  break;
+        case DIRECTION_SOUTH: base_angle =  M_PI / 2.0;  break;
+        default:              base_angle =  0.0;         break;
+        }
+
+        SDL_Vertex fv[FL_NUM_RAYS + 2];
+        int        fi[FL_NUM_RAYS * 3];
+
+        fv[0].position.x  = (float)sx0;
+        fv[0].position.y  = (float)sy0;
+        fv[0].color.r     = 1.0f;
+        fv[0].color.g     = 1.0f;
+        fv[0].color.b     = 1.0f;
+        fv[0].color.a     = 1.0f;
+        fv[0].tex_coord.x = 0.0f;
+        fv[0].tex_coord.y = 0.0f;
+
+        for (int i = 0; i <= FL_NUM_RAYS; i++) {
+            double angle = base_angle - FL_HALF_CONE
+                           + (2.0 * FL_HALF_CONE * i) / FL_NUM_RAYS;
+            float dx   = (float)cos(angle);
+            float dy   = (float)sin(angle);
+            float dist = raycast_colliders(ox, oy, dx, dy, loc, FL_MAX_DIST);
+            float hx   = ox + dx * dist;
+            float hy   = oy + dy * dist;
+
+            float edge = 1.0f - 2.0f * fabsf((float)i / FL_NUM_RAYS - 0.5f);
+
+            fv[i + 1].position.x  = (float)camera_to_screen_x(&game->camera, hx);
+            fv[i + 1].position.y  = (float)camera_to_screen_y(&game->camera, hy);
+            fv[i + 1].color.r     = 1.0f;
+            fv[i + 1].color.g     = 1.0f;
+            fv[i + 1].color.b     = 0.9f;
+            fv[i + 1].color.a     = 0.9f * edge;
+            fv[i + 1].tex_coord.x = 0.0f;
+            fv[i + 1].tex_coord.y = 0.0f;
+        }
+        for (int i = 0; i < FL_NUM_RAYS; i++) {
+            fi[i * 3 + 0] = 0;
+            fi[i * 3 + 1] = i + 1;
+            fi[i * 3 + 2] = i + 2;
+        }
+        SDL_RenderGeometry(r, NULL,
+                           fv, FL_NUM_RAYS + 2,
+                           fi, FL_NUM_RAYS * 3);
+    }
+
+    /* ── Apply the mask to the screen via multiply blend ──────────────── */
+    SDL_SetRenderTarget(r, NULL);
+    SDL_SetTextureBlendMode(game->dark_overlay, SDL_BLENDMODE_MOD);
+    SDL_FRect dst = { 0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H };
+    SDL_RenderTexture(r, game->dark_overlay, NULL, &dst);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+}
+
+
 void game_render_playing(Game *game)
 {
     if (!game || !game->player || !game->world) return;
@@ -1024,7 +1182,11 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
-    /* Flashlight beam (rendered on top of the player sprite) */
+    /* Archive room darkness: MOD-blend light mask (only in location 0).
+     * Must run after the scene is drawn but before the additive beam. */
+    render_archive_darkness(game);
+
+    /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head

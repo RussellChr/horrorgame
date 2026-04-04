@@ -207,6 +207,10 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 loc->spawn_x = 500.0f;    // X coordinate in pixels
                 loc->spawn_y = 400.0f;    // Y coordinate in pixels
 
+                /* Wall colour used to fill collision tiles so they are
+                 * visible when the flashlight illuminates them. */
+                loc->wall_r = 75; loc->wall_g = 68; loc->wall_b = 58;
+
                 loc->background_texture = render_load_texture(
                     renderer, "assets/room/archive_room.png");
                 if (loc->background_texture) {
@@ -653,14 +657,6 @@ void world_render_room(const Location *loc, SDL_Renderer *renderer,
             (Uint8)(d->g > 30 ? d->g - 30 : 0),
             (Uint8)(d->b > 30 ? d->b - 30 : 0),
             200);
-    }
-    /* ── Collision boxes (debug visualization) ── */
-    for (int i = 0; i < loc->collider_count; i++) {
-        const Rect *col = &loc->colliders[i];
-        render_rect_outline(renderer,
-            (int)(col->x - cx), (int)(col->y - cy),
-            (int)col->w, (int)col->h,
-            255, 0, 0, 255);  /* Red outline */
     }
     /* ── Danger zone vignette ── */
     if (loc->is_danger_zone) {

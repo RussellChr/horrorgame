@@ -166,6 +166,12 @@ Alex
 The fuel tank is already in place.
 ---
 
+[power_slot2_locked]
+Alex
+---
+I should fill the first slot before using this one.
+---
+
 [power_valve_locked]
 Alex
 ---

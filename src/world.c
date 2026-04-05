@@ -400,8 +400,10 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/power.csv");
                 if (m) {
                     map_build_colliders(m, loc);
-                    /* Add solid collision for the two fuel-slot tiles (2 and 6)
-                       so the player cannot walk through the slot fixtures. */
+                    /* Add solid collision for the fuel-tank pickup tile (1) and
+                       the two fuel-slot tiles (2 and 6) so the player cannot
+                       walk through any of these fixtures. */
+                    map_build_colliders_for_tile(m, loc, 1);
                     map_build_colliders_for_tile(m, loc, 2);
                     map_build_colliders_for_tile(m, loc, 6);
 

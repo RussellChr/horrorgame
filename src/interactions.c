@@ -94,7 +94,7 @@ void game_handle_interaction(Game *game)
                 Item gm;
                 strncpy(gm.name, "Gas Mask", ITEM_NAME_MAX - 1);
                 gm.name[ITEM_NAME_MAX - 1] = '\0';
-                strncpy(gm.description, "GasMask found", ITEM_DESC_MAX - 1);
+                strncpy(gm.description, "Gas mask found.", ITEM_DESC_MAX - 1);
                 gm.description[ITEM_DESC_MAX - 1] = '\0';
                 gm.id     = ITEM_ID_GASMASK;
                 gm.usable = 1;
@@ -110,7 +110,7 @@ void game_handle_interaction(Game *game)
                 Item fl;
                 strncpy(fl.name, "Flashlight", ITEM_NAME_MAX - 1);
                 fl.name[ITEM_NAME_MAX - 1] = '\0';
-                strncpy(fl.description, "flashlight found", ITEM_DESC_MAX - 1);
+                strncpy(fl.description, "Flashlight found.", ITEM_DESC_MAX - 1);
                 fl.description[ITEM_DESC_MAX - 1] = '\0';
                 fl.id     = ITEM_ID_FLASHLIGHT;
                 fl.usable = 1;

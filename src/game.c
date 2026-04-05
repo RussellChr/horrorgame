@@ -73,6 +73,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
 
+    /* Seed the PRNG once at startup (used by the Simon minigame) */
+    srand((unsigned int)SDL_GetTicks());
+
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
 
@@ -267,7 +270,6 @@ void game_end_dialogue(Game *game)
 void game_start_simon(Game *game)
 {
     if (!game) return;
-    srand((unsigned int)SDL_GetTicks());
     for (int i = 0; i < 10; i++)
         game->simon_sequence[i] = rand() % 4;
     game->simon_length      = 1;

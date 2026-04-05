@@ -19,6 +19,12 @@
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
 
+/* ── Simon Says constants ──────────────────────────────────────────────── */
+#define SIMON_LIT_DURATION   0.55f  /* seconds a button stays lit        */
+#define SIMON_GAP_DURATION   0.20f  /* dark gap between lit steps         */
+#define SIMON_ROUND_PAUSE    0.60f  /* pause between a correct round and the next show */
+#define SIMON_START_PAUSE    0.40f  /* brief pause before first show      */
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static Button make_button(float x, float y, float w, float h,
@@ -247,9 +253,32 @@ void game_end_dialogue(Game *game)
         game->lab_death_triggered = 0;
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
+    } else if (game->simon_death_triggered) {
+        /* Player failed the Simon game — return to main menu */
+        game->simon_death_triggered = 0;
+        game->state                 = GAME_STATE_MENU;
     } else {
         game->state = GAME_STATE_PLAYING;
     }
+}
+
+/* ── Simon Says minigame ────────────────────────────────────────────────── */
+
+void game_start_simon(Game *game)
+{
+    if (!game) return;
+    srand((unsigned int)SDL_GetTicks());
+    for (int i = 0; i < 10; i++)
+        game->simon_sequence[i] = rand() % 4;
+    game->simon_length      = 1;
+    game->simon_show_pos    = 0;
+    game->simon_show_lit    = 0;
+    game->simon_show_timer  = SIMON_START_PAUSE;
+    game->simon_player_pos  = 0;
+    game->simon_phase       = 0; /* showing phase */
+    game->simon_lit_button  = -1;
+    game->simon_death_triggered = 0;
+    game->state = GAME_STATE_SIMON;
 }
 
 /* ── Per-frame event handling ──────────────────────────────────────────── */
@@ -571,6 +600,59 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_SIMON:
+        /* Only accept mouse clicks during player-input phase */
+        if (game->simon_phase == 1 &&
+            event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Determine which button (0=Red,1=Blue,2=Green,3=Yellow) was clicked.
+               Button layout (screen coords, see game_render_simon):
+                 Red   (450, 190, 160, 160)
+                 Blue  (670, 190, 160, 160)
+                 Green (450, 370, 160, 160)
+                 Yellow(670, 370, 160, 160) */
+            int clicked = -1;
+            float mx = game->mouse_x, my = game->mouse_y;
+            if (mx >= 450 && mx < 610) {
+                if      (my >= 190 && my < 350) clicked = 0; /* Red   */
+                else if (my >= 370 && my < 530) clicked = 2; /* Green */
+            } else if (mx >= 670 && mx < 830) {
+                if      (my >= 190 && my < 350) clicked = 1; /* Blue   */
+                else if (my >= 370 && my < 530) clicked = 3; /* Yellow */
+            }
+            if (clicked >= 0) {
+                game->simon_lit_button = clicked;
+                if (clicked == game->simon_sequence[game->simon_player_pos]) {
+                    game->simon_player_pos++;
+                    if (game->simon_player_pos >= game->simon_length) {
+                        /* Completed this round */
+                        if (game->simon_length >= 10) {
+                            /* Player won — power the generator */
+                            player_set_flag(game->player, FLAG_POWER_GENERATOR_ON);
+                            game->simon_lit_button = -1;
+                            game_set_dialogue_tree(game, "power_generator_win", 4);
+                            if (game->dialogue_tree)
+                                game_start_dialogue(game, 0);
+                        } else {
+                            /* Start next round after a brief pause */
+                            game->simon_length++;
+                            game->simon_player_pos = 0;
+                            game->simon_phase      = 2; /* round-pause */
+                            game->simon_show_timer = SIMON_ROUND_PAUSE;
+                            game->simon_lit_button = -1;
+                        }
+                    }
+                } else {
+                    /* Wrong button — player dies */
+                    game->simon_death_triggered = 1;
+                    game->simon_lit_button = -1;
+                    game_set_dialogue_tree(game, "power_simon_fail", 4);
+                    if (game->dialogue_tree)
+                        game_start_dialogue(game, 0);
+                }
+            }
+        }
+        break;
+
     default: break;
     }
 }
@@ -724,6 +806,43 @@ void game_update(Game *game)
 
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
+    } else if (game->state == GAME_STATE_SIMON) {
+        /* ── Simon Says update ── */
+        game->simon_show_timer -= dt;
+        if (game->simon_phase == 0) {
+            /* Showing the sequence */
+            if (game->simon_show_timer <= 0.0f) {
+                if (!game->simon_show_lit) {
+                    /* Gap/initial-pause ended – light up current button */
+                    game->simon_show_lit   = 1;
+                    game->simon_lit_button = game->simon_sequence[game->simon_show_pos];
+                    game->simon_show_timer = SIMON_LIT_DURATION;
+                } else {
+                    /* Lit period ended – unlight */
+                    game->simon_show_lit   = 0;
+                    game->simon_lit_button = -1;
+                    if (game->simon_show_pos + 1 >= game->simon_length) {
+                        /* All steps shown – switch to player input phase */
+                        game->simon_phase      = 1;
+                        game->simon_player_pos = 0;
+                    } else {
+                        /* Advance to next button after a gap */
+                        game->simon_show_pos++;
+                        game->simon_show_timer = SIMON_GAP_DURATION;
+                    }
+                }
+            }
+        } else if (game->simon_phase == 2) {
+            /* Brief pause between rounds */
+            if (game->simon_show_timer <= 0.0f) {
+                /* Begin showing the new (longer) sequence */
+                game->simon_phase      = 0;
+                game->simon_show_pos   = 0;
+                game->simon_show_lit   = 0;
+                game->simon_lit_button = -1;
+                game->simon_show_timer = SIMON_START_PAUSE;
+            }
+        }
     }
 
     /* Tick the pickup notification regardless of game state */
@@ -749,6 +868,7 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);

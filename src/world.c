@@ -411,6 +411,18 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     loc->spawn_x = sx;
                     loc->spawn_y = sy;
 
+                    /* Interactive triggers for power room objects:
+                       tile 1 = fuel tank (pickup, twice), tile 2 = fuel slot A,
+                       tile 3 = valve A,   tile 4 = generator,
+                       tile 6 = fuel slot B, tile 7 = valve B.
+                       Trigger IDs 101-107 are handled in interactions.c. */
+                    map_build_interactive_triggers_for_tile(m, loc, 1, 101, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 102, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 103, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 104, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 6, 106, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 7, 107, 0.0f, 0.0f);
+
                     map_free(m);
                 } else {
                     loc->spawn_x = (float)(loc->room_width  / 2);

@@ -26,6 +26,13 @@
 #define FLAG_SECURITY_NOTE_READ           (1u << 6) /* player chose to read the note in Security room (transient) */
 #define FLAG_KEYCARD_COLLECTED            (1u << 7) /* keycard picked up in the lab */
 #define FLAG_ARCHIVE_UNLOCKED             (1u << 8) /* archive door unlocked with keycard */
+#define FLAG_POWER_FUELTANK1_COLLECTED    (1u << 9)  /* first fuel tank picked up in Power room  */
+#define FLAG_POWER_FUELTANK2_COLLECTED    (1u << 10) /* second fuel tank picked up in Power room */
+#define FLAG_POWER_FUELTANK1_PLACED       (1u << 11) /* first fuel tank placed at slot 2         */
+#define FLAG_POWER_FUELTANK2_PLACED       (1u << 12) /* second fuel tank placed at slot 6        */
+#define FLAG_POWER_VALVE1_OPENED          (1u << 13) /* valve at tile 3 turned                   */
+#define FLAG_POWER_VALVE2_OPENED          (1u << 14) /* valve at tile 7 turned                   */
+#define FLAG_POWER_GENERATOR_ON           (1u << 15) /* generator started (Simon game won)       */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

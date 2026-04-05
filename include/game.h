@@ -31,6 +31,7 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_SIMON,
     GAME_STATE_QUIT
 } GameState;
 
@@ -128,6 +129,17 @@ typedef struct {
 
     /* Running flag */
     int running;
+
+    /* Simon Says minigame */
+    int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
+    int   simon_length;          /* steps in the current sequence (1–10)          */
+    int   simon_show_pos;        /* which step is being shown during show phase    */
+    int   simon_show_lit;        /* 1=button currently lit, 0=dark gap             */
+    float simon_show_timer;      /* countdown for current show-phase step          */
+    int   simon_player_pos;      /* player's progress in matching the sequence     */
+    int   simon_phase;           /* 0=showing, 1=player-input, 2=round-pause       */
+    int   simon_lit_button;      /* which button is lit right now (-1 = none)      */
+    int   simon_death_triggered; /* 1 if player failed the Simon game              */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -148,6 +160,7 @@ void game_change_location(Game *game, int location_id,
                           float spawn_x, float spawn_y);
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
+void game_start_simon(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -158,5 +171,6 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_simon(Game *game);
 
 #endif /* GAME_H */

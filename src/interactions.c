@@ -277,8 +277,10 @@ void game_handle_interaction(Game *game)
                 game_set_dialogue_tree(game, "power_generator_done", 4);
             }
         } else if (tid == 106) {
-            /* Tile 6: second fuel slot */
-            if (player_has_item(game->player, ITEM_ID_FUELTANK) &&
+            /* Tile 6: second fuel slot – requires first slot to be filled first */
+            if (!player_check_flag(game->player, FLAG_POWER_FUELTANK1_PLACED)) {
+                game_set_dialogue_tree(game, "power_slot2_locked", 4);
+            } else if (player_has_item(game->player, ITEM_ID_FUELTANK) &&
                 !player_check_flag(game->player, FLAG_POWER_FUELTANK2_PLACED)) {
                 player_remove_item(game->player, ITEM_ID_FUELTANK);
                 player_set_flag(game->player, FLAG_POWER_FUELTANK2_PLACED);

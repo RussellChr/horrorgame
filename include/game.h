@@ -12,6 +12,15 @@
 #include "npc.h"
 #include "monologue.h"
 
+/* ── Monitor passcode constants ────────────────────────────────────────── */
+#define MONITOR_PANEL_X      685
+#define MONITOR_PANEL_Y      415
+#define MONITOR_PANEL_W       75
+#define MONITOR_PANEL_H      119
+#define PASSCODE_CORRECT     "3643"
+/* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
+#define PASSCODE_DISPLAY_SIZE  8
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {

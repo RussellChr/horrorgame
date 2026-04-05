@@ -42,6 +42,9 @@ include_directories(include)
 add_executable(horrorgame
     src/main.c
     src/game.c
+    src/game_render.c
+    src/effects.c
+    src/interactions.c
     src/ui.c
     src/player.c
     src/world.c
@@ -54,6 +57,7 @@ add_executable(horrorgame
     src/animation.c
     src/camera.c
     src/collision.c
+    src/npc.c
 )
 
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})

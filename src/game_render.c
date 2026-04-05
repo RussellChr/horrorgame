@@ -513,3 +513,65 @@ void game_render_locker(Game *game)
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
 }
+
+/* ── Simon Says minigame ─────────────────────────────────────────────────── */
+
+void game_render_simon(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Dark background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 10, 10, 20, 255);
+
+    /* Panel */
+    int px = 390, py = 130, pw = 500, ph = 460;
+    render_filled_rect(r, px, py, pw, ph, 30, 30, 50, 255);
+    render_rect_outline(r, px, py, pw, ph, 80, 80, 120, 255);
+
+    /* Title and instruction */
+    render_text_centered(r, "GENERATOR CONTROL PANEL",
+                         WINDOW_W / 2, py + 14, 2, 200, 200, 255);
+
+    char buf[64];
+    if (game->simon_phase == 0 || game->simon_phase == 2) {
+        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 10)",
+                 game->simon_length);
+        render_text_centered(r, buf, WINDOW_W / 2, py + 38, 1, 160, 160, 200);
+    } else {
+        snprintf(buf, sizeof(buf), "Repeat the sequence  (%d / %d)",
+                 game->simon_player_pos, game->simon_length);
+        render_text_centered(r, buf, WINDOW_W / 2, py + 38, 1, 200, 220, 160);
+    }
+
+    /* Button definitions: x, y, w, h, dim colour, lit colour, label */
+    static const int bx[4] = { 450, 670, 450, 670 };
+    static const int by[4] = { 190, 190, 370, 370 };
+    static const int bw = 160, bh = 160;
+
+    /* dim colours */
+    static const Uint8 dim_r[4] = { 120,  20,  20, 120 };
+    static const Uint8 dim_g[4] = {  20,  20, 120, 120 };
+    static const Uint8 dim_b[4] = {  20, 120,  20,  20 };
+    /* lit colours */
+    static const Uint8 lit_r[4] = { 255,  50,  50, 255 };
+    static const Uint8 lit_g[4] = {  50,  50, 255, 255 };
+    static const Uint8 lit_b[4] = {  50, 255,  50,  50 };
+
+    static const char *labels[4] = { "RED", "BLUE", "GREEN", "YELLOW" };
+
+    for (int i = 0; i < 4; i++) {
+        int lit = (game->simon_lit_button == i);
+        Uint8 cr = lit ? lit_r[i] : dim_r[i];
+        Uint8 cg = lit ? lit_g[i] : dim_g[i];
+        Uint8 cb = lit ? lit_b[i] : dim_b[i];
+        render_filled_rect(r, bx[i], by[i], bw, bh, cr, cg, cb, 255);
+        render_rect_outline(r, bx[i], by[i], bw, bh, 200, 200, 200, 200);
+        render_text_centered(r, labels[i],
+                             bx[i] + bw / 2, by[i] + bh / 2 - 8,
+                             2, 255, 255, 255);
+    }
+
+    render_text_centered(r, "Click the correct buttons in order",
+                         WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
+}

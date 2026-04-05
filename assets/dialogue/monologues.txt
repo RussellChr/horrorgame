@@ -122,3 +122,91 @@ I should have worn that gas mask.
 Everything is going dark.
 ---
 
+# ── Power Room ──────────────────────────────────────────────────────────
+
+[power_fueltank]
+Alex
+---
+A fuel tank. This must be needed somewhere in here.
+---
+
+[power_fueltank2]
+Alex
+---
+Another fuel tank. There must be a second slot.
+---
+
+[power_fueltank_nothing]
+Alex
+---
+There's nothing left to take.
+---
+
+[power_fueltank_placed]
+Alex
+---
+The fuel tank locks into the housing with a satisfying clunk.
+---
+
+[power_fueltank_placed2]
+Alex
+---
+Second tank secured. Both fuel lines should be ready now.
+---
+
+[power_slot_empty]
+Alex
+---
+There's a slot here for a fuel tank. I need to find one first.
+---
+
+[power_slot_done]
+Alex
+---
+The fuel tank is already in place.
+---
+
+[power_valve_locked]
+Alex
+---
+The valve won't budge. I need to place a fuel tank in the slot first.
+---
+
+[power_valve_opened]
+Alex
+---
+The valve turns with some resistance. Fuel is flowing through.
+---
+
+[power_valve_done]
+Alex
+---
+This valve is already open.
+---
+
+[power_generator_locked]
+Alex
+---
+The generator won't start. I need to open both fuel valves first.
+---
+
+[power_generator_done]
+Alex
+---
+The generator is already running.
+---
+
+[power_generator_win]
+Alex
+---
+The generator roars to life. Power is restored to the facility.
+---
+
+[power_simon_fail]
+Alex
+---
+The panel sparks violently. A surge of electricity throws me back.
+I should have paid more attention to the sequence.
+Everything goes dark.
+---
+

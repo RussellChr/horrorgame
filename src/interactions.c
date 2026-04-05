@@ -211,6 +211,99 @@ void game_handle_interaction(Game *game)
         return;
     }
 
+    /* ── Power room interactions (loc 4) ───────────────────────────────── */
+    if (loc_id == 4) {
+        if (tid == 101) {
+            /* Tile 1: fuel tank – can be picked up twice */
+            if (!player_check_flag(game->player, FLAG_POWER_FUELTANK1_COLLECTED)) {
+                player_set_flag(game->player, FLAG_POWER_FUELTANK1_COLLECTED);
+                Item ft;
+                strncpy(ft.name, "Fuel Tank", ITEM_NAME_MAX - 1);
+                ft.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(ft.description, "A heavy fuel tank.", ITEM_DESC_MAX - 1);
+                ft.description[ITEM_DESC_MAX - 1] = '\0';
+                ft.id     = ITEM_ID_FUELTANK;
+                ft.usable = 0;
+                player_add_item(game->player, &ft);
+                game_set_dialogue_tree(game, "power_fueltank", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_FUELTANK2_COLLECTED) &&
+                        player_check_flag(game->player, FLAG_POWER_FUELTANK1_PLACED)) {
+                /* Second pickup: only available after first tank has been placed */
+                player_set_flag(game->player, FLAG_POWER_FUELTANK2_COLLECTED);
+                Item ft;
+                strncpy(ft.name, "Fuel Tank", ITEM_NAME_MAX - 1);
+                ft.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(ft.description, "A heavy fuel tank.", ITEM_DESC_MAX - 1);
+                ft.description[ITEM_DESC_MAX - 1] = '\0';
+                ft.id     = ITEM_ID_FUELTANK;
+                ft.usable = 0;
+                player_add_item(game->player, &ft);
+                game_set_dialogue_tree(game, "power_fueltank2", 4);
+            } else {
+                game_set_dialogue_tree(game, "power_fueltank_nothing", 4);
+            }
+        } else if (tid == 102) {
+            /* Tile 2: first fuel slot */
+            if (player_has_item(game->player, ITEM_ID_FUELTANK) &&
+                !player_check_flag(game->player, FLAG_POWER_FUELTANK1_PLACED)) {
+                player_remove_item(game->player, ITEM_ID_FUELTANK);
+                player_set_flag(game->player, FLAG_POWER_FUELTANK1_PLACED);
+                game_set_dialogue_tree(game, "power_fueltank_placed", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_FUELTANK1_PLACED)) {
+                game_set_dialogue_tree(game, "power_slot_empty", 4);
+            } else {
+                game_set_dialogue_tree(game, "power_slot_done", 4);
+            }
+        } else if (tid == 103) {
+            /* Tile 3: valve A – only turnable after fuel slot A is filled */
+            if (!player_check_flag(game->player, FLAG_POWER_FUELTANK1_PLACED)) {
+                game_set_dialogue_tree(game, "power_valve_locked", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_VALVE1_OPENED)) {
+                player_set_flag(game->player, FLAG_POWER_VALVE1_OPENED);
+                game_set_dialogue_tree(game, "power_valve_opened", 4);
+            } else {
+                game_set_dialogue_tree(game, "power_valve_done", 4);
+            }
+        } else if (tid == 104) {
+            /* Tile 4: generator – starts Simon game once both valves are open */
+            if (!player_check_flag(game->player, FLAG_POWER_VALVE1_OPENED) ||
+                !player_check_flag(game->player, FLAG_POWER_VALVE2_OPENED)) {
+                game_set_dialogue_tree(game, "power_generator_locked", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_GENERATOR_ON)) {
+                /* Start the Simon minigame – no dialogue, switch state directly */
+                game_start_simon(game);
+                return;
+            } else {
+                game_set_dialogue_tree(game, "power_generator_done", 4);
+            }
+        } else if (tid == 106) {
+            /* Tile 6: second fuel slot */
+            if (player_has_item(game->player, ITEM_ID_FUELTANK) &&
+                !player_check_flag(game->player, FLAG_POWER_FUELTANK2_PLACED)) {
+                player_remove_item(game->player, ITEM_ID_FUELTANK);
+                player_set_flag(game->player, FLAG_POWER_FUELTANK2_PLACED);
+                game_set_dialogue_tree(game, "power_fueltank_placed2", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_FUELTANK2_PLACED)) {
+                game_set_dialogue_tree(game, "power_slot_empty", 4);
+            } else {
+                game_set_dialogue_tree(game, "power_slot_done", 4);
+            }
+        } else if (tid == 107) {
+            /* Tile 7: valve B – only turnable after fuel slot B is filled */
+            if (!player_check_flag(game->player, FLAG_POWER_FUELTANK2_PLACED)) {
+                game_set_dialogue_tree(game, "power_valve_locked", 4);
+            } else if (!player_check_flag(game->player, FLAG_POWER_VALVE2_OPENED)) {
+                player_set_flag(game->player, FLAG_POWER_VALVE2_OPENED);
+                game_set_dialogue_tree(game, "power_valve_opened", 4);
+            } else {
+                game_set_dialogue_tree(game, "power_valve_done", 4);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
+
     /* Portrait interaction (Entrance Hall, trigger 30) */
     if (tid == 30 && loc_id == 0) {
         game_set_dialogue_tree(game, "portrait", 30);

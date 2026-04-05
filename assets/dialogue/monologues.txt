@@ -94,6 +94,12 @@ Alex
 GasMask found.
 ---
 
+[hallway_flashlight]
+Alex
+---
+Flashlight Found.
+---
+
 [archive_door_locked]
 Alex
 ---
@@ -111,8 +117,8 @@ You found a keycard.
 [lab_gas_death]
 Alex
 ---
-The air... it burns. I can't breathe.
+The air, it burns. I can't breathe.
 I should have worn that gas mask.
-Everything is going dark...
+Everything is going dark.
 ---
 

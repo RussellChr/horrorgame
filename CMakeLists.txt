@@ -21,9 +21,6 @@ find_package(SDL3 REQUIRED CONFIG)
 # SDL3_image is optional; enables PNG loading for the dialogue background
 find_package(SDL3_image CONFIG)
 
-# SDL3_mixer is optional; enables MP3/music playback
-find_package(SDL3_mixer CONFIG)
-
 # Prefer static SDL3 target to avoid missing DLL at runtime
 if(TARGET SDL3::SDL3-static)
     set(SDL3_LINK_TARGET SDL3::SDL3-static)
@@ -40,16 +37,7 @@ else()
     set(SDL3_IMAGE_LINK_TARGET "")
 endif()
 
-# Prefer static SDL3_mixer target
-if(TARGET SDL3_mixer::SDL3_mixer-static)
-    set(SDL3_MIXER_LINK_TARGET SDL3_mixer::SDL3_mixer-static)
-elseif(TARGET SDL3_mixer::SDL3_mixer)
-    set(SDL3_MIXER_LINK_TARGET SDL3_mixer::SDL3_mixer)
-else()
-    set(SDL3_MIXER_LINK_TARGET "")
-endif()
-
-include_directories(include)
+include_directories(include vendor)
 
 add_executable(horrorgame
     src/main.c
@@ -75,12 +63,6 @@ target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
 if(SDL3_IMAGE_LINK_TARGET)
     target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_IMAGE=1)
     target_link_libraries(horrorgame ${SDL3_IMAGE_LINK_TARGET})
-endif()
-
-# If SDL3_mixer was found, enable music/audio playback
-if(SDL3_MIXER_LINK_TARGET)
-    target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_MIXER=1)
-    target_link_libraries(horrorgame ${SDL3_MIXER_LINK_TARGET})
 endif()
 
 # Link math library on Linux

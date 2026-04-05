@@ -36,8 +36,8 @@
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
-/* Convert the 0–100 volume setting to the 0–128 range used by SDL3_mixer. */
-#define VOLUME_TO_MIX(v)  ((int)((v) / 100.0f * 128))
+/* Convert the 0–100 volume setting to the 0–128 range used by audio_set_volume(). */
+#define VOLUME_TO_SDL(v)  ((int)((v) / 100.0f * 128))
 
 static Button make_button(float x, float y, float w, float h,
                           const char *text)
@@ -809,7 +809,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value - 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                    audio_set_volume(VOLUME_TO_MIX(game->volume));
+                    audio_set_volume(VOLUME_TO_SDL(game->volume));
                 } else {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value - 5.0f);
@@ -821,7 +821,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value + 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                    audio_set_volume(VOLUME_TO_MIX(game->volume));
+                    audio_set_volume(VOLUME_TO_SDL(game->volume));
                 } else {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value + 5.0f);
@@ -842,7 +842,7 @@ void game_handle_event(Game *game, SDL_Event *event)
             if (slider_handle_click(&game->settings_volume_slider,
                                     game->mouse_x, game->mouse_y)) {
                 game->volume = game->settings_volume_slider.value;
-                audio_set_volume(VOLUME_TO_MIX(game->volume));
+                audio_set_volume(VOLUME_TO_SDL(game->volume));
                 game->settings_focus = 0;
             }
             if (slider_handle_click(&game->settings_brightness_slider,

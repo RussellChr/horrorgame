@@ -1,8 +1,7 @@
 #ifndef INTERACTIONS_H
 #define INTERACTIONS_H
 
-/* Forward-declare Game to avoid a circular include with game.h */
-typedef struct Game Game;
+#include "game.h"
 
 /* ── In-world interaction handler ───────────────────────────────────────
  *

@@ -64,25 +64,16 @@ add_executable(horrorgame
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
 
 # FFmpeg libraries for video/audio decoding (jumpscare.mov playback).
-# Optional: if not found the jumpscare is silently skipped at runtime.
-# Install on macOS: brew install ffmpeg
-# Install on Linux: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
-find_package(PkgConfig)
-if(PkgConfig_FOUND)
-    # Add Homebrew search paths for macOS (Intel + Apple Silicon)
-    set(ENV{PKG_CONFIG_PATH}
-        "/usr/local/lib/pkgconfig:/opt/homebrew/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-    pkg_check_modules(FFMPEG libavformat libavcodec libavutil libswscale libswresample)
-endif()
-
-if(FFMPEG_FOUND)
-    message(STATUS "FFmpeg found — jumpscare video enabled")
-    target_compile_definitions(horrorgame PRIVATE HAVE_FFMPEG=1)
-    target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
-    target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
-else()
-    message(STATUS "FFmpeg not found — jumpscare video disabled (install ffmpeg to enable)")
-endif()
+# On macOS install with: brew install ffmpeg
+# On Linux install with: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
+find_package(PkgConfig REQUIRED)
+# Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
+set(ENV{PKG_CONFIG_PATH}
+    "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+pkg_check_modules(FFMPEG REQUIRED
+    libavformat libavcodec libavutil libswscale libswresample)
+target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 
 # If SDL3_image was found, enable PNG loading for the dialogue background
 if(SDL3_IMAGE_LINK_TARGET)

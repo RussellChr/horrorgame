@@ -104,10 +104,13 @@ void game_render_playing(Game *game)
 
     /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
      * more atmospheric look without completely obscuring details. */
-    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 55);
+    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 80);
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);
+
+    /* Edge darkening vignette for stronger horror atmosphere. */
+    render_screen_vignette(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.

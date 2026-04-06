@@ -13,7 +13,7 @@
 
 /* ── Flashlight cone constants ──────────────────────────────────────────── */
 #define FL_NUM_RAYS  48
-#define FL_MAX_DIST  250.0f
+#define FL_MAX_DIST  300.0f
 #define FL_HALF_CONE (M_PI / 4.0)   /* half-cone: 45° (π/4 radians) each side */
 
 /* ── Archive darkness constants ─────────────────────────────────────────── */
@@ -27,6 +27,10 @@
 #define GM_VIGNETTE_NUM_SEGS  64
 /* Screen-space radius (pixels) of the visible circle when wearing the gas mask. */
 #define GM_VIGNETTE_RADIUS    200
+
+/* ── Gameplay vignette constants ─────────────────────────────────────────── */
+#define GAME_VIGNETTE_NUM_SEGS  64
+#define GAME_VIGNETTE_RADIUS    300
 
 
 /* ── Shared helper: base angle from facing direction ─────────────────────── */
@@ -74,7 +78,7 @@ void render_flashlight_beam(Game *game)
     verts[0].color.r     = 1.0f;
     verts[0].color.g     = 1.0f;
     verts[0].color.b     = 0.8f;
-    verts[0].color.a     = 0.45f;
+    verts[0].color.a     = 0.60f;
     verts[0].tex_coord.x = 0.0f;
     verts[0].tex_coord.y = 0.0f;
 
@@ -98,7 +102,7 @@ void render_flashlight_beam(Game *game)
         verts[i + 1].color.r     = 1.0f;
         verts[i + 1].color.g     = 1.0f;
         verts[i + 1].color.b     = 0.7f;
-        verts[i + 1].color.a     = 0.20f * edge;
+        verts[i + 1].color.a     = 0.34f * edge;
         verts[i + 1].tex_coord.x = 0.0f;
         verts[i + 1].tex_coord.y = 0.0f;
     }
@@ -331,6 +335,69 @@ void render_gasmask_vignette(Game *game)
     }
 
     /* ── Apply the mask to the screen via multiply blend ───────────────── */
+    SDL_SetRenderTarget(r, NULL);
+    SDL_SetTextureBlendMode(game->dark_overlay, SDL_BLENDMODE_MOD);
+    SDL_FRect dst = { 0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H };
+    SDL_RenderTexture(r, game->dark_overlay, NULL, &dst);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+}
+
+void render_screen_vignette(Game *game)
+{
+    if (!game || !game->dark_overlay) return;
+    if (game->state != GAME_STATE_PLAYING &&
+        game->state != GAME_STATE_DIALOGUE &&
+        game->state != GAME_STATE_PAUSE) return;
+    if (game->gasmask_active) return;
+
+    SDL_Renderer *r = game->renderer;
+    float sx0 = (float)WINDOW_W * 0.5f;
+    float sy0 = (float)WINDOW_H * 0.5f;
+
+    SDL_SetRenderTarget(r, game->dark_overlay);
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+    SDL_RenderClear(r);
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_ADD);
+    {
+        SDL_Vertex av[GAME_VIGNETTE_NUM_SEGS + 2];
+        int        ai[GAME_VIGNETTE_NUM_SEGS * 3];
+
+        av[0].position.x  = sx0;
+        av[0].position.y  = sy0;
+        av[0].color.r     = 0.85f;
+        av[0].color.g     = 0.85f;
+        av[0].color.b     = 0.85f;
+        av[0].color.a     = 1.0f;
+        av[0].tex_coord.x = 0.0f;
+        av[0].tex_coord.y = 0.0f;
+
+        for (int i = 0; i <= GAME_VIGNETTE_NUM_SEGS; i++) {
+            double angle = (2.0 * M_PI * i) / GAME_VIGNETTE_NUM_SEGS;
+            av[i + 1].position.x  = sx0
+                                    + GAME_VIGNETTE_RADIUS * (float)cos(angle);
+            av[i + 1].position.y  = sy0
+                                    + GAME_VIGNETTE_RADIUS * (float)sin(angle);
+            av[i + 1].color.r     = 0.0f;
+            av[i + 1].color.g     = 0.0f;
+            av[i + 1].color.b     = 0.0f;
+            av[i + 1].color.a     = 1.0f;
+            av[i + 1].tex_coord.x = 0.0f;
+            av[i + 1].tex_coord.y = 0.0f;
+        }
+
+        for (int i = 0; i < GAME_VIGNETTE_NUM_SEGS; i++) {
+            ai[i * 3 + 0] = 0;
+            ai[i * 3 + 1] = i + 1;
+            ai[i * 3 + 2] = i + 2;
+        }
+
+        SDL_RenderGeometry(r, NULL,
+                           av, GAME_VIGNETTE_NUM_SEGS + 2,
+                           ai, GAME_VIGNETTE_NUM_SEGS * 3);
+    }
+
     SDL_SetRenderTarget(r, NULL);
     SDL_SetTextureBlendMode(game->dark_overlay, SDL_BLENDMODE_MOD);
     SDL_FRect dst = { 0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H };

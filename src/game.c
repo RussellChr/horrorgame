@@ -930,6 +930,11 @@ void game_update(Game *game)
             }
         }
 
+    } else if (game->state == GAME_STATE_LOCKER && game->player) {
+        /* Keep the hallway enemy moving while the player is hidden in locker.
+           Treat player as out-of-room so enemy cannot chase hidden player. */
+        if (game->enemy.active)
+            enemy_update(&game->enemy, game->player->x, game->player->y, 0, dt);
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {

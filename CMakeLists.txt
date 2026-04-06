@@ -73,6 +73,7 @@ set(ENV{PKG_CONFIG_PATH}
 pkg_check_modules(FFMPEG REQUIRED
     libavformat libavcodec libavutil libswscale libswresample)
 target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
 target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 
 # If SDL3_image was found, enable PNG loading for the dialogue background

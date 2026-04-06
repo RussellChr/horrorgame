@@ -27,6 +27,12 @@
 #define AM_RECORD_W    66   /* 443 - 377 */
 #define AM_RECORD_H   109   /* 383 - 274 */
 
+/* ── Containment level interactable (monitor_zoom screen) ─────────────── */
+#define CONTAINMENT_LEVEL_RECT_X   990
+#define CONTAINMENT_LEVEL_RECT_Y   168
+#define CONTAINMENT_LEVEL_RECT_W   125
+#define CONTAINMENT_LEVEL_RECT_H   122
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {
@@ -116,8 +122,10 @@ typedef struct {
     SDL_Texture *locker_texture;
     SDL_Texture *note_locker_texture;   /* shown when reading the security note */
     int          show_note_locker;      /* 1 = show note_locker_texture instead of locker_texture */
-    SDL_Texture *monitor_zoom_texture;  /* shown when examining the security monitor */
-    int          show_monitor_zoom;     /* 1 = show monitor_zoom_texture             */
+    SDL_Texture *monitor_zoom_texture;        /* shown when examining the security monitor  */
+    int          show_monitor_zoom;           /* 1 = show monitor_zoom_texture              */
+    SDL_Texture *containment_level_texture;   /* shown when clicking the containment rect   */
+    int          show_containment_level;      /* 1 = show containment_level_texture overlay */
 
     /* Passcode system (triggered by clicking the monitor panel rect) */
     int  passcode_active;          /* 1 = passcode input overlay is shown */

@@ -448,7 +448,7 @@ void game_render_locker(Game *game)
 
     if (game->show_monitor_zoom) {
         /* Hover indicator on the clickable monitor panel rect */
-        if (!game->passcode_active) {
+        if (!game->passcode_active && !game->show_containment_level) {
             float mx = game->mouse_x, my = game->mouse_y;
             int hovering = (mx >= MONITOR_PANEL_X &&
                             mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
@@ -480,6 +480,22 @@ void game_render_locker(Game *game)
                 render_text_centered(r, "experiment recording #1",
                     AM_RECORD_X + AM_RECORD_W / 2,
                     AM_RECORD_Y - 16, 1, 0, 220, 255);
+            }
+
+            /* Containment level interactable outline and description */
+            int cl_hovering = (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                               mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                               my >= CONTAINMENT_LEVEL_RECT_Y &&
+                               my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H);
+            render_rect_outline(r,
+                CONTAINMENT_LEVEL_RECT_X, CONTAINMENT_LEVEL_RECT_Y,
+                CONTAINMENT_LEVEL_RECT_W, CONTAINMENT_LEVEL_RECT_H,
+                0, cl_hovering ? 255 : 160, cl_hovering ? 80 : 0,
+                cl_hovering ? 255 : 140);
+            if (cl_hovering) {
+                render_text_centered(r, "Containment level",
+                    CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W / 2,
+                    CONTAINMENT_LEVEL_RECT_Y - 16, 1, 0, 220, 255);
             }
         }
 
@@ -524,11 +540,18 @@ void game_render_locker(Game *game)
                                      WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
             }
         }
+        /* Containment level overlay (shown when containment rect is clicked) */
+        if (game->show_containment_level && game->containment_level_texture) {
+            render_texture(r, game->containment_level_texture,
+                           0, 0, WINDOW_W, WINDOW_H);
+            render_text_centered(r, "Press E or ESC to close",
+                                 WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        }
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
-}
+} 
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */
 

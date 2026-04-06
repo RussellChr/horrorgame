@@ -322,6 +322,11 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
                                      const char *prefix,
                                      int frame_no)
 {
+    if (frame_no <= 0) {
+        SDL_Log("enemy: invalid frame number %d for %s/%s", frame_no, dir_name, prefix);
+        return NULL;
+    }
+
     char path[512];
     int n = snprintf(path, sizeof(path),
              "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);

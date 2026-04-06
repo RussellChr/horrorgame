@@ -10,8 +10,8 @@
 #define ENEMY_WAYPOINT_COUNT      6
 #define ENEMY_PATH_MAX          256
 #define ENEMY_MAX_ANIM_FRAMES     8
-#define ENEMY_BACKWARD_FRAMES     6
-#define ENEMY_RIGHT_FRAMES        6
+#define ENEMY_BACKWARD_FRAMES     6  /* available backward asset frames */
+#define ENEMY_RIGHT_FRAMES        6  /* available right asset frames */
 #define ENEMY_W                  20    /* width  of the enemy rect in pixels */
 #define ENEMY_H                  40    /* height of the enemy rect in pixels */
 
@@ -74,7 +74,7 @@ typedef struct {
     float tile_h;   /* world pixels per grid row    */
 
     /* Visuals */
-    Animation     move_anim;
+    Animation     move_anim; /* movement animation state (8 FPS looping) */
     EnemyDirection direction;
     int           is_moving;
     SDL_Texture  *forward_frames[ENEMY_MAX_ANIM_FRAMES];

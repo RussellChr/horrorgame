@@ -481,6 +481,22 @@ void game_render_locker(Game *game)
                     AM_RECORD_X + AM_RECORD_W / 2,
                     AM_RECORD_Y - 16, 1, 0, 220, 255);
             }
+
+            /* Containment level interactable outline and description */
+            int cl_hovering = (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                               mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                               my >= CONTAINMENT_LEVEL_RECT_Y &&
+                               my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H);
+            render_rect_outline(r,
+                CONTAINMENT_LEVEL_RECT_X, CONTAINMENT_LEVEL_RECT_Y,
+                CONTAINMENT_LEVEL_RECT_W, CONTAINMENT_LEVEL_RECT_H,
+                0, cl_hovering ? 255 : 160, cl_hovering ? 80 : 0,
+                cl_hovering ? 255 : 140);
+            if (cl_hovering) {
+                render_text_centered(r, "Containment level",
+                    CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W / 2,
+                    CONTAINMENT_LEVEL_RECT_Y - 16, 1, 0, 220, 255);
+            }
         }
 
         /* Text bar: "Use mouse button to select" */

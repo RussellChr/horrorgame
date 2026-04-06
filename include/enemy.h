@@ -3,6 +3,7 @@
 
 #include <SDL3/SDL.h>
 #include "camera.h"
+#include "animation.h"
 
 /* ── Enemy constants ──────────────────────────────────────────────────── */
 
@@ -26,6 +27,13 @@ typedef enum {
     ENEMY_STATE_PATROL,
     ENEMY_STATE_CHASE
 } EnemyState;
+
+typedef enum {
+    ENEMY_DIR_FORWARD = 0,
+    ENEMY_DIR_BACKWARD,
+    ENEMY_DIR_LEFT,
+    ENEMY_DIR_RIGHT
+} EnemyDirection;
 
 /* ── Simple 2D world-space point ──────────────────────────────────────── */
 
@@ -61,6 +69,19 @@ typedef struct {
     int   grid_cols;
     float tile_w;   /* world pixels per grid column */
     float tile_h;   /* world pixels per grid row    */
+
+    /* Visuals */
+    Animation     move_anim;
+    EnemyDirection direction;
+    int           is_moving;
+    SDL_Texture  *forward_frames[8];
+    int           forward_count;
+    SDL_Texture  *backward_frames[8];
+    int           backward_count;
+    SDL_Texture  *left_frames[8];
+    int           left_count;
+    SDL_Texture  *right_frames[8];
+    int           right_count;
 } Enemy;
 
 /* ── API ──────────────────────────────────────────────────────────────── */
@@ -71,6 +92,7 @@ typedef struct {
  * room_width / room_height are known.
  */
 void enemy_init(Enemy *e, int room_width, int room_height);
+void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer);
 
 /* Free the grid memory allocated by enemy_init(). */
 void enemy_free(Enemy *e);

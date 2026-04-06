@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 #include <float.h>
+#include <stdio.h>
 
 /* ── A* pathfinding ───────────────────────────────────────────────────── */
 
@@ -200,13 +201,29 @@ void enemy_init(Enemy *e, int room_width, int room_height)
 
     e->state  = ENEMY_STATE_INACTIVE;
     e->active = 0;
+    e->direction = ENEMY_DIR_FORWARD;
+    e->is_moving = 0;
+    animation_init(&e->move_anim, 8, 8.0f, 1);
 }
 
 void enemy_free(Enemy *e)
 {
     if (!e) return;
+    for (int i = 0; i < e->forward_count; i++)
+        render_texture_destroy(e->forward_frames[i]);
+    for (int i = 0; i < e->backward_count; i++)
+        render_texture_destroy(e->backward_frames[i]);
+    for (int i = 0; i < e->left_count; i++)
+        render_texture_destroy(e->left_frames[i]);
+    for (int i = 0; i < e->right_count; i++)
+        render_texture_destroy(e->right_frames[i]);
+
     free(e->grid);
     e->grid = NULL;
+    e->forward_count = 0;
+    e->backward_count = 0;
+    e->left_count = 0;
+    e->right_count = 0;
 }
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
@@ -261,12 +278,94 @@ static void move_towards(Enemy *e, float tx, float ty,
     e->y += dy * ratio;
 }
 
+static void enemy_update_direction(Enemy *e, float dx, float dy)
+{
+    if (!e) return;
+    float adx = fabsf(dx);
+    float ady = fabsf(dy);
+    if (adx >= ady) {
+        if (dx > 0.0f) e->direction = ENEMY_DIR_RIGHT;
+        else if (dx < 0.0f) e->direction = ENEMY_DIR_LEFT;
+    } else {
+        if (dy > 0.0f) e->direction = ENEMY_DIR_FORWARD;
+        else if (dy < 0.0f) e->direction = ENEMY_DIR_BACKWARD;
+    }
+}
+
+static int move_towards_animated(Enemy *e, float tx, float ty,
+                                 float speed, float dt)
+{
+    float cx, cy;
+    enemy_centre(e, &cx, &cy);
+    float dx = tx - cx, dy = ty - cy;
+    float dist = sqrtf(dx * dx + dy * dy);
+    if (dist < 1.0f) return 0;
+
+    enemy_update_direction(e, dx, dy);
+    move_towards(e, tx, ty, speed, dt);
+    return 1;
+}
+
+static void enemy_update_animation(Enemy *e, float dt)
+{
+    if (!e) return;
+    if (e->is_moving) {
+        animation_update(&e->move_anim, dt);
+    } else {
+        e->move_anim.current_frame = 0;
+        e->move_anim.frame_timer = 0.0f;
+    }
+}
+
+static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
+                                     const char *dir_name,
+                                     const char *prefix,
+                                     int frame_no)
+{
+    char path[128];
+    snprintf(path, sizeof(path),
+             "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);
+    return render_load_texture(renderer, path);
+}
+
+void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
+{
+    if (!e || !renderer) return;
+
+    e->forward_count = 0;
+    e->backward_count = 0;
+    e->left_count = 0;
+    e->right_count = 0;
+
+    for (int i = 1; i <= 8; i++) {
+        SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", i);
+        if (!t) break;
+        e->forward_frames[e->forward_count++] = t;
+    }
+    for (int i = 1; i <= 6; i++) {
+        SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", i);
+        if (!t) break;
+        e->backward_frames[e->backward_count++] = t;
+    }
+    for (int i = 1; i <= 8; i++) {
+        SDL_Texture *t = load_enemy_frame(renderer, "left", "kiri", i);
+        if (!t) break;
+        e->left_frames[e->left_count++] = t;
+    }
+    for (int i = 1; i <= 6; i++) {
+        SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", i);
+        if (!t) break;
+        e->right_frames[e->right_count++] = t;
+    }
+}
+
 /* ── Update ───────────────────────────────────────────────────────────── */
 
 void enemy_update(Enemy *e, float player_x, float player_y,
                   int player_in_room, float dt)
 {
     if (!e || !e->active || !e->grid) return;
+    e->is_moving = 0;
 
     float dist_to_player = player_in_room
         ? enemy_dist(e, player_x, player_y)
@@ -311,8 +410,10 @@ void enemy_update(Enemy *e, float player_x, float player_y,
                 e->patrol_dir = 1;
             }
         } else {
-            move_towards(e, wp->x, wp->y, ENEMY_PATROL_SPEED, dt);
+            e->is_moving = move_towards_animated(
+                e, wp->x, wp->y, ENEMY_PATROL_SPEED, dt);
         }
+        enemy_update_animation(e, dt);
         return;
     }
 
@@ -348,12 +449,15 @@ void enemy_update(Enemy *e, float player_x, float player_y,
             if (d <= ENEMY_WAYPOINT_THRESH) {
                 e->path_idx++;
             } else {
-                move_towards(e, node->x, node->y, ENEMY_CHASE_SPEED, dt);
+                e->is_moving = move_towards_animated(
+                    e, node->x, node->y, ENEMY_CHASE_SPEED, dt);
             }
         } else {
             /* Path exhausted — move directly towards player as fallback */
-            move_towards(e, player_x, player_y, ENEMY_CHASE_SPEED, dt);
+            e->is_moving = move_towards_animated(
+                e, player_x, player_y, ENEMY_CHASE_SPEED, dt);
         }
+        enemy_update_animation(e, dt);
     }
 }
 
@@ -378,10 +482,39 @@ void enemy_render(const Enemy *e, SDL_Renderer *renderer, const Camera *cam)
     int sx = camera_to_screen_x(cam, e->x);
     int sy = camera_to_screen_y(cam, e->y);
 
-    /* Fill: dark red body */
-    render_filled_rect(renderer, sx, sy, ENEMY_W, ENEMY_H,
-                       180, 20, 20, 255);
-    /* Outline: brighter red */
-    render_rect_outline(renderer, sx, sy, ENEMY_W, ENEMY_H,
-                        255, 60, 60, 255);
+    const SDL_Texture *const *frames = NULL;
+    int frame_count = 0;
+    switch (e->direction) {
+        case ENEMY_DIR_BACKWARD:
+            frames = (const SDL_Texture *const *)e->backward_frames;
+            frame_count = e->backward_count;
+            break;
+        case ENEMY_DIR_LEFT:
+            frames = (const SDL_Texture *const *)e->left_frames;
+            frame_count = e->left_count;
+            break;
+        case ENEMY_DIR_RIGHT:
+            frames = (const SDL_Texture *const *)e->right_frames;
+            frame_count = e->right_count;
+            break;
+        case ENEMY_DIR_FORWARD:
+        default:
+            frames = (const SDL_Texture *const *)e->forward_frames;
+            frame_count = e->forward_count;
+            break;
+    }
+
+    if (frames && frame_count > 0) {
+        int idx = animation_get_frame(&e->move_anim) % frame_count;
+        SDL_Texture *tex = (SDL_Texture *)frames[idx];
+        if (tex) {
+            SDL_FRect dst = { (float)sx, (float)sy, (float)ENEMY_W, (float)ENEMY_H };
+            SDL_RenderTexture(renderer, tex, NULL, &dst);
+            return;
+        }
+    }
+
+    /* Fallback rectangle if textures are unavailable */
+    render_filled_rect(renderer, sx, sy, ENEMY_W, ENEMY_H, 180, 20, 20, 255);
+    render_rect_outline(renderer, sx, sy, ENEMY_W, ENEMY_H, 255, 60, 60, 255);
 }

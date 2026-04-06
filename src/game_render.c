@@ -476,6 +476,17 @@ void game_render_locker(Game *game)
             if (ey > mm_y + mm_h - 5) ey = mm_y + mm_h - 5;
             render_filled_rect(r, ex, ey, 4, 4, 255, 0, 0, 255);
 
+            if (game->player &&
+                game->player->current_location_id == LOCATION_HALLWAY) {
+                int px = mm_x + pad + (int)(game->player->x * sx);
+                int py = mm_y + pad + (int)(game->player->y * sy);
+                if (px < mm_x + 1) px = mm_x + 1;
+                if (py < mm_y + 1) py = mm_y + 1;
+                if (px > mm_x + mm_w - 5) px = mm_x + mm_w - 5;
+                if (py > mm_y + mm_h - 5) py = mm_y + mm_h - 5;
+                render_filled_rect(r, px, py, 4, 4, 255, 220, 0, 255);
+            }
+
             render_text(r, "HALLWAY", mm_x + 6, mm_y + mm_h + 6, 1, 180, 180, 180);
         }
     }

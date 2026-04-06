@@ -74,7 +74,7 @@ typedef struct {
     float tile_h;   /* world pixels per grid row    */
 
     /* Visuals */
-    Animation     move_anim; /* movement animation state (8 FPS looping) */
+    Animation     move_anim; /* movement animation state (5 FPS looping) */
     EnemyDirection direction;
     int           is_moving;
     SDL_Texture  *forward_frames[ENEMY_MAX_ANIM_FRAMES];

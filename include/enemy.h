@@ -79,11 +79,11 @@ typedef struct {
     int           is_moving;
     SDL_Texture  *forward_frames[ENEMY_MAX_ANIM_FRAMES];
     int           forward_count;
-    SDL_Texture  *backward_frames[ENEMY_MAX_ANIM_FRAMES];
+    SDL_Texture  *backward_frames[ENEMY_BACKWARD_FRAMES];
     int           backward_count;
     SDL_Texture  *left_frames[ENEMY_MAX_ANIM_FRAMES];
     int           left_count;
-    SDL_Texture  *right_frames[ENEMY_MAX_ANIM_FRAMES];
+    SDL_Texture  *right_frames[ENEMY_RIGHT_FRAMES];
     int           right_count;
 } Enemy;
 

@@ -131,7 +131,7 @@ void game_render_playing(Game *game)
      * so we only add the visual indicator here. */
 
     /* Interaction prompt */
-    if (game->near_interactive) {
+    if (game->near_interactive && game->state != GAME_STATE_DIALOGUE) {
         int px = camera_to_screen_x(&game->camera, game->player->x);
         int py = camera_to_screen_y(&game->camera,
                                     game->player->y - PLAYER_SPRITE_H - 8);

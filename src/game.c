@@ -79,6 +79,11 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Seed the PRNG once at startup (used by the Simon minigame) */
     srand((unsigned int)SDL_GetTicks());
 
+    /* Rare ambient flicker defaults */
+    g->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
+    g->ambient_flicker_duration = 0.0f;
+    g->ambient_flicker_alpha    = 0;
+
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
 
@@ -203,6 +208,9 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
+    game->ambient_flicker_duration = 0.0f;
+    game->ambient_flicker_alpha    = 0;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -845,6 +853,22 @@ void game_update(Game *game)
 
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
+
+        /* ── Rare subtle ambient flicker ── */
+        if (game->ambient_flicker_duration > 0.0f) {
+            game->ambient_flicker_duration -= dt;
+            if (game->ambient_flicker_duration < 0.0f)
+                game->ambient_flicker_duration = 0.0f;
+        } else {
+            game->ambient_flicker_alpha = 0;
+            game->ambient_flicker_timer -= dt;
+            if (game->ambient_flicker_timer <= 0.0f) {
+                /* Single short pulse, low intensity, and infrequent */
+                game->ambient_flicker_duration = 0.07f + (float)(rand() % 7) / 100.0f; /* 0.07-0.13s */
+                game->ambient_flicker_alpha    = (Uint8)(6 + (rand() % 10));            /* +6..+15 alpha */
+                game->ambient_flicker_timer    = 7.0f + (float)(rand() % 12);            /* next pulse in 7-18s */
+            }
+        }
 
         /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
         if (p->current_location_id == LOCATION_LAB &&

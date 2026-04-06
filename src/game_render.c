@@ -104,7 +104,14 @@ void game_render_playing(Game *game)
 
     /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
      * more atmospheric look without completely obscuring details. */
-    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 80);
+    {
+        int ambient_alpha = 80;
+        if (game->ambient_flicker_duration > 0.0f)
+            ambient_alpha += game->ambient_flicker_alpha;
+        if (ambient_alpha > 255) ambient_alpha = 255;
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                           0, 0, 0, (Uint8)ambient_alpha);
+    }
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);

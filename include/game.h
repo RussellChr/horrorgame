@@ -115,6 +115,9 @@ typedef struct {
 
     /* Archive room darkness: full-screen light-mask render target */
     SDL_Texture *dark_overlay;
+    float ambient_flicker_timer;      /* seconds until next rare flicker pulse */
+    float ambient_flicker_duration;   /* remaining seconds of active flicker pulse */
+    Uint8 ambient_flicker_alpha;      /* extra darkness alpha applied during pulse */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */

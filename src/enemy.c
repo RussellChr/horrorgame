@@ -322,7 +322,7 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
                                      const char *prefix,
                                      int frame_no)
 {
-    if (frame_no <= 0) {
+    if (frame_no < 1) {
         SDL_Log("enemy: invalid frame number %d for %s/%s", frame_no, dir_name, prefix);
         return NULL;
     }
@@ -348,37 +348,45 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
 
     /* Asset names are Indonesian:
        depan=forward, belakang=backward, kiri=left, kanan=right. */
-    for (int i = 1; i <= ENEMY_MAX_ANIM_FRAMES; i++) {
-        SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", i);
+    for (int i = 0; i < ENEMY_MAX_ANIM_FRAMES; i++) {
+        int frame_no = i + 1;
+        SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading forward frame %d", i);
+            SDL_Log("enemy: stopped loading forward frame %d", frame_no);
             break;
         }
-        e->forward_frames[e->forward_count++] = t;
+        e->forward_frames[i] = t;
+        e->forward_count++;
     }
-    for (int i = 1; i <= ENEMY_BACKWARD_FRAMES; i++) {
-        SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", i);
+    for (int i = 0; i < ENEMY_BACKWARD_FRAMES; i++) {
+        int frame_no = i + 1;
+        SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading backward frame %d", i);
+            SDL_Log("enemy: stopped loading backward frame %d", frame_no);
             break;
         }
-        e->backward_frames[e->backward_count++] = t;
+        e->backward_frames[i] = t;
+        e->backward_count++;
     }
-    for (int i = 1; i <= ENEMY_MAX_ANIM_FRAMES; i++) {
-        SDL_Texture *t = load_enemy_frame(renderer, "left", "kiri", i);
+    for (int i = 0; i < ENEMY_MAX_ANIM_FRAMES; i++) {
+        int frame_no = i + 1;
+        SDL_Texture *t = load_enemy_frame(renderer, "left", "kiri", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading left frame %d", i);
+            SDL_Log("enemy: stopped loading left frame %d", frame_no);
             break;
         }
-        e->left_frames[e->left_count++] = t;
+        e->left_frames[i] = t;
+        e->left_count++;
     }
-    for (int i = 1; i <= ENEMY_RIGHT_FRAMES; i++) {
-        SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", i);
+    for (int i = 0; i < ENEMY_RIGHT_FRAMES; i++) {
+        int frame_no = i + 1;
+        SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading right frame %d", i);
+            SDL_Log("enemy: stopped loading right frame %d", frame_no);
             break;
         }
-        e->right_frames[e->right_count++] = t;
+        e->right_frames[i] = t;
+        e->right_count++;
     }
 }
 

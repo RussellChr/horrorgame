@@ -80,7 +80,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     srand((unsigned int)SDL_GetTicks());
 
     /* Rare ambient flicker defaults */
-    g->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
+    g->ambient_flicker_timer    = 7.0f + (float)(rand() % 12); /* 7-18s */
     g->ambient_flicker_duration = 0.0f;
     g->ambient_flicker_alpha    = 0;
 
@@ -865,7 +865,7 @@ void game_update(Game *game)
             if (game->ambient_flicker_timer <= 0.0f) {
                 /* Single short pulse, low intensity, and infrequent */
                 game->ambient_flicker_duration = 0.07f + (float)(rand() % 7) / 100.0f; /* 0.07-0.13s */
-                game->ambient_flicker_alpha    = (Uint8)(6 + (rand() % 10));            /* +6..+15 alpha */
+                game->ambient_flicker_alpha    = (Uint8)(6 + (rand() % 10));            /* additive 6-15 alpha */
                 game->ambient_flicker_timer    = 7.0f + (float)(rand() % 12);            /* next pulse in 7-18s */
             }
         }

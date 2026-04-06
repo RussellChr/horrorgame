@@ -13,6 +13,7 @@
 
 /* ── Flashlight cone constants ──────────────────────────────────────────── */
 #define FL_NUM_RAYS  48
+/* Slightly longer throw to keep contrast playable with darker ambient pass. */
 #define FL_MAX_DIST  300.0f
 #define FL_HALF_CONE (M_PI / 4.0)   /* half-cone: 45° (π/4 radians) each side */
 

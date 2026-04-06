@@ -12,8 +12,8 @@
 #define ENEMY_MAX_ANIM_FRAMES     8
 #define ENEMY_BACKWARD_FRAMES     6  /* available backward asset frames */
 #define ENEMY_RIGHT_FRAMES        6  /* available right asset frames */
-#define ENEMY_W                  77    /* matches enemy sprite width  */
-#define ENEMY_H                  77    /* matches enemy sprite height */
+#define ENEMY_W                 154    /* 2x sprite width for larger enemy */
+#define ENEMY_H                 154    /* 2x sprite height for larger enemy */
 
 #define ENEMY_PATROL_SPEED      100.0f /* pixels/second while patrolling     */
 #define ENEMY_CHASE_SPEED       200.0f /* pixels/second while chasing        */

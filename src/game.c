@@ -10,6 +10,7 @@
 #include "collision.h"
 #include "effects.h"
 #include "interactions.h"
+#include "enemy.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -140,6 +141,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
     render_texture_destroy(game->dark_overlay);
+    enemy_free(&game->enemy);
     free(game);
 }
 
@@ -177,6 +179,15 @@ void game_start_new(Game *game)
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
+
+    /* Initialise the enemy patrol system (uses hallway room dimensions) */
+    enemy_free(&game->enemy);
+    {
+        Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+        int hw_w = hw ? hw->room_width  : 1920;
+        int hw_h = hw ? hw->room_height : 960;
+        enemy_init(&game->enemy, hw_w, hw_h);
+    }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
@@ -447,6 +458,15 @@ void game_handle_event(Game *game, SDL_Event *event)
                             if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
                                 /* Correct – show success message; overlay stays open */
                                 game->passcode_correct = 1;
+                                /* Activate the hallway enemy the first time */
+                                if (game->player &&
+                                    !player_check_flag(game->player,
+                                                       FLAG_SECURITY_PASSCODE_DONE)) {
+                                    player_set_flag(game->player,
+                                                    FLAG_SECURITY_PASSCODE_DONE);
+                                    game->enemy.active = 1;
+                                    game->enemy.state  = ENEMY_STATE_PATROL;
+                                }
                             } else {
                                 game->passcode_wrong = 1;
                             }
@@ -700,6 +720,12 @@ void game_handle_event(Game *game, SDL_Event *event)
 
     default: break;
     }
+
+    /* ── Game Over: any key returns to the main menu ── */
+    if (game->state == GAME_STATE_GAME_OVER &&
+        event->type == SDL_EVENT_KEY_DOWN) {
+        game->state = GAME_STATE_MENU;
+    }
 }
 
 /* ── Per-frame update ──────────────────────────────────────────────────── */
@@ -849,6 +875,18 @@ void game_update(Game *game)
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
+        /* ── Enemy patrol / chase update ── */
+        if (game->enemy.active) {
+            int in_hallway = (p->current_location_id == LOCATION_HALLWAY);
+            enemy_update(&game->enemy, p->x, p->y, in_hallway, dt);
+
+            /* Game-over: enemy caught the player while in the hallway */
+            if (in_hallway &&
+                enemy_hits_player(&game->enemy, p->x, p->y)) {
+                game->state = GAME_STATE_GAME_OVER;
+            }
+        }
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {
@@ -914,6 +952,7 @@ void game_render(Game *game)
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
+    case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);

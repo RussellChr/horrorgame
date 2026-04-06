@@ -352,41 +352,37 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
         int frame_no = i + 1;
         SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading forward frame %d", frame_no);
-            break;
+            SDL_Log("enemy: missing forward frame %d", frame_no);
+            continue;
         }
-        e->forward_frames[i] = t;
-        e->forward_count++;
+        e->forward_frames[e->forward_count++] = t;
     }
     for (int i = 0; i < ENEMY_BACKWARD_FRAMES; i++) {
         int frame_no = i + 1;
         SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading backward frame %d", frame_no);
-            break;
+            SDL_Log("enemy: missing backward frame %d", frame_no);
+            continue;
         }
-        e->backward_frames[i] = t;
-        e->backward_count++;
+        e->backward_frames[e->backward_count++] = t;
     }
     for (int i = 0; i < ENEMY_MAX_ANIM_FRAMES; i++) {
         int frame_no = i + 1;
         SDL_Texture *t = load_enemy_frame(renderer, "left", "kiri", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading left frame %d", frame_no);
-            break;
+            SDL_Log("enemy: missing left frame %d", frame_no);
+            continue;
         }
-        e->left_frames[i] = t;
-        e->left_count++;
+        e->left_frames[e->left_count++] = t;
     }
     for (int i = 0; i < ENEMY_RIGHT_FRAMES; i++) {
         int frame_no = i + 1;
         SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", frame_no);
         if (!t) {
-            SDL_Log("enemy: stopped loading right frame %d", frame_no);
-            break;
+            SDL_Log("enemy: missing right frame %d", frame_no);
+            continue;
         }
-        e->right_frames[i] = t;
-        e->right_count++;
+        e->right_frames[e->right_count++] = t;
     }
 }
 

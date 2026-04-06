@@ -454,6 +454,32 @@ void game_render_locker(Game *game)
         render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
     }
 
+    /* Left-side minimap while hiding in locker: hallway + enemy marker */
+    if (game->world && game->enemy.active) {
+        Location *hall = world_get_location(game->world, LOCATION_HALLWAY);
+        if (hall && hall->room_width > 0 && hall->room_height > 0) {
+            const int mm_x = 20, mm_y = 20, mm_w = 220, mm_h = 64;
+            const int pad = 3;
+            const float sx = (float)(mm_w - pad * 2) / (float)hall->room_width;
+            const float sy = (float)(mm_h - pad * 2) / (float)hall->room_height;
+
+            render_filled_rect(r, mm_x - 3, mm_y - 3, mm_w + 6, mm_h + 6,
+                               0, 0, 0, 170);
+            render_filled_rect(r, mm_x, mm_y, mm_w, mm_h, 18, 18, 18, 220);
+            render_rect_outline(r, mm_x, mm_y, mm_w, mm_h, 160, 160, 160, 230);
+
+            int ex = mm_x + pad + (int)(game->enemy.x * sx);
+            int ey = mm_y + pad + (int)(game->enemy.y * sy);
+            if (ex < mm_x + 1) ex = mm_x + 1;
+            if (ey < mm_y + 1) ey = mm_y + 1;
+            if (ex > mm_x + mm_w - 5) ex = mm_x + mm_w - 5;
+            if (ey > mm_y + mm_h - 5) ey = mm_y + mm_h - 5;
+            render_filled_rect(r, ex, ey, 4, 4, 255, 0, 0, 255);
+
+            render_text(r, "HALLWAY", mm_x + 6, mm_y + mm_h + 6, 1, 180, 180, 180);
+        }
+    }
+
     if (game->show_monitor_zoom) {
         /* Hover indicator on the clickable monitor panel rect */
         if (!game->passcode_active && !game->show_containment_level) {

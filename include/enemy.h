@@ -10,6 +10,8 @@
 #define ENEMY_WAYPOINT_COUNT      6
 #define ENEMY_PATH_MAX          256
 #define ENEMY_MAX_ANIM_FRAMES     8
+#define ENEMY_BACKWARD_FRAMES     6
+#define ENEMY_RIGHT_FRAMES        6
 #define ENEMY_W                  20    /* width  of the enemy rect in pixels */
 #define ENEMY_H                  40    /* height of the enemy rect in pixels */
 

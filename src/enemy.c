@@ -351,7 +351,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
         }
         e->forward_frames[e->forward_count++] = t;
     }
-    for (int i = 1; i <= 6; i++) {
+    for (int i = 1; i <= ENEMY_BACKWARD_FRAMES; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", i);
         if (!t) {
             SDL_Log("enemy: stopped loading backward frame %d", i);
@@ -367,7 +367,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
         }
         e->left_frames[e->left_count++] = t;
     }
-    for (int i = 1; i <= 6; i++) {
+    for (int i = 1; i <= ENEMY_RIGHT_FRAMES; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", i);
         if (!t) {
             SDL_Log("enemy: stopped loading right frame %d", i);

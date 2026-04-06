@@ -76,7 +76,9 @@ typedef struct {
     /* Visuals */
     Animation     move_anim; /* movement animation state (5 FPS looping) */
     EnemyDirection direction;
+    EnemyDirection last_anim_direction; /* previous direction used for move_anim frame */
     int           is_moving;
+    int           saved_frame_by_dir[4]; /* cached frame index per EnemyDirection */
     SDL_Texture  *forward_frames[ENEMY_MAX_ANIM_FRAMES];
     int           forward_count;
     SDL_Texture  *backward_frames[ENEMY_BACKWARD_FRAMES];

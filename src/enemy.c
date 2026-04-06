@@ -202,7 +202,9 @@ void enemy_init(Enemy *e, int room_width, int room_height)
     e->state  = ENEMY_STATE_INACTIVE;
     e->active = 0;
     e->direction = ENEMY_DIR_FORWARD;
+    e->last_anim_direction = ENEMY_DIR_FORWARD;
     e->is_moving = 0;
+    for (int i = 0; i < 4; i++) e->saved_frame_by_dir[i] = 0;
     animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 7.5f, 1);
 }
 
@@ -312,6 +314,15 @@ static int move_towards_animated(Enemy *e, float tx, float ty,
 static void enemy_update_animation(Enemy *e, float dt)
 {
     if (!e) return;
+    if (e->direction != e->last_anim_direction) {
+        int prev_dir = (int)e->last_anim_direction;
+        int next_dir = (int)e->direction;
+        if (prev_dir >= 0 && prev_dir < 4)
+            e->saved_frame_by_dir[prev_dir] = e->move_anim.current_frame;
+        if (next_dir >= 0 && next_dir < 4)
+            e->move_anim.current_frame = e->saved_frame_by_dir[next_dir];
+        e->last_anim_direction = e->direction;
+    }
     if (e->is_moving) {
         animation_update(&e->move_anim, dt);
     } else {

@@ -9,6 +9,7 @@
 
 #define ENEMY_WAYPOINT_COUNT      6
 #define ENEMY_PATH_MAX          256
+#define ENEMY_MAX_ANIM_FRAMES     8
 #define ENEMY_W                  20    /* width  of the enemy rect in pixels */
 #define ENEMY_H                  40    /* height of the enemy rect in pixels */
 
@@ -74,13 +75,13 @@ typedef struct {
     Animation     move_anim;
     EnemyDirection direction;
     int           is_moving;
-    SDL_Texture  *forward_frames[8];
+    SDL_Texture  *forward_frames[ENEMY_MAX_ANIM_FRAMES];
     int           forward_count;
-    SDL_Texture  *backward_frames[8];
+    SDL_Texture  *backward_frames[ENEMY_MAX_ANIM_FRAMES];
     int           backward_count;
-    SDL_Texture  *left_frames[8];
+    SDL_Texture  *left_frames[ENEMY_MAX_ANIM_FRAMES];
     int           left_count;
-    SDL_Texture  *right_frames[8];
+    SDL_Texture  *right_frames[ENEMY_MAX_ANIM_FRAMES];
     int           right_count;
 } Enemy;
 

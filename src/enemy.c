@@ -322,9 +322,13 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
                                      const char *prefix,
                                      int frame_no)
 {
-    char path[256];
-    snprintf(path, sizeof(path),
+    char path[512];
+    int n = snprintf(path, sizeof(path),
              "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);
+    if (n < 0 || (size_t)n >= sizeof(path)) {
+        SDL_Log("enemy: sprite path too long for %s/%s%d", dir_name, prefix, frame_no);
+        return NULL;
+    }
     return render_load_texture(renderer, path);
 }
 
@@ -339,24 +343,36 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
 
     /* Asset names are Indonesian:
        depan=forward, belakang=backward, kiri=left, kanan=right. */
-    for (int i = 1; i <= 8; i++) {
+    for (int i = 1; i <= ENEMY_MAX_ANIM_FRAMES; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", i);
-        if (!t) break;
+        if (!t) {
+            SDL_Log("enemy: stopped loading forward frame %d", i);
+            break;
+        }
         e->forward_frames[e->forward_count++] = t;
     }
     for (int i = 1; i <= 6; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", i);
-        if (!t) break;
+        if (!t) {
+            SDL_Log("enemy: stopped loading backward frame %d", i);
+            break;
+        }
         e->backward_frames[e->backward_count++] = t;
     }
-    for (int i = 1; i <= 8; i++) {
+    for (int i = 1; i <= ENEMY_MAX_ANIM_FRAMES; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "left", "kiri", i);
-        if (!t) break;
+        if (!t) {
+            SDL_Log("enemy: stopped loading left frame %d", i);
+            break;
+        }
         e->left_frames[e->left_count++] = t;
     }
     for (int i = 1; i <= 6; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "right", "kanan", i);
-        if (!t) break;
+        if (!t) {
+            SDL_Log("enemy: stopped loading right frame %d", i);
+            break;
+        }
         e->right_frames[e->right_count++] = t;
     }
 }

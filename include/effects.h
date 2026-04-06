@@ -20,5 +20,6 @@
 void render_flashlight_beam(Game *game);
 void render_archive_darkness(Game *game);
 void render_gasmask_vignette(Game *game);
+void render_screen_vignette(Game *game);
 
 #endif /* EFFECTS_H */

@@ -283,7 +283,10 @@ static void enemy_update_direction(Enemy *e, float dx, float dy)
     if (!e) return;
     float adx = fabsf(dx);
     float ady = fabsf(dy);
-    const float sideway_bias = 1.10f; /* favor sideways on mild diagonals */
+    const float sideway_enter_bias = 1.10f; /* favor sideways on mild diagonals */
+    const float sideway_stick_bias = 0.90f; /* keep sideways unless clearly vertical */
+    const int sideway_active = (e->direction == ENEMY_DIR_LEFT || e->direction == ENEMY_DIR_RIGHT);
+    const float sideway_bias = sideway_active ? sideway_stick_bias : sideway_enter_bias;
     if (adx > ady * sideway_bias) {
         if (dx > 0.0f) e->direction = ENEMY_DIR_RIGHT;
         else if (dx < 0.0f) e->direction = ENEMY_DIR_LEFT;

@@ -54,6 +54,8 @@ void game_handle_interaction(Game *game)
 
     /* Locker interaction (Hallway, trigger 60) */
     if (tid == 60 && loc_id == 2) {
+        if (game->enemy.active)
+            enemy_return_to_nearest_waypoint(&game->enemy);
         game->state = GAME_STATE_LOCKER;
         return;
     }

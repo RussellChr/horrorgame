@@ -245,6 +245,32 @@ static float enemy_dist(const Enemy *e, float wx, float wy)
     return sqrtf(dx * dx + dy * dy);
 }
 
+void enemy_return_to_nearest_waypoint(Enemy *e)
+{
+    if (!e || !e->active || e->waypoint_count <= 0) return;
+
+    float cx, cy;
+    enemy_centre(e, &cx, &cy);
+
+    int best_i = 0;
+    float best_d2 = FLT_MAX;
+    for (int i = 0; i < e->waypoint_count; i++) {
+        float dx = e->waypoints[i].x - cx;
+        float dy = e->waypoints[i].y - cy;
+        float d2 = dx * dx + dy * dy;
+        if (d2 < best_d2) {
+            best_d2 = d2;
+            best_i = i;
+        }
+    }
+
+    e->state = ENEMY_STATE_PATROL;
+    e->current_waypoint = best_i;
+    e->path_len = 0;
+    e->path_idx = 0;
+    e->repath_timer = 0.0f;
+}
+
 /* Move the enemy towards (tx, ty) at the given speed this frame. */
 static void move_towards(Enemy *e, float tx, float ty,
                          float speed, float dt)

@@ -465,6 +465,22 @@ void game_render_locker(Game *game)
                     MONITOR_PANEL_X + MONITOR_PANEL_W / 2,
                     MONITOR_PANEL_Y - 16, 1, 0, 220, 255);
             }
+
+            /* AM recording interactable outline and description */
+            int am_hovering = (mx >= AM_RECORD_X &&
+                               mx <= AM_RECORD_X + AM_RECORD_W &&
+                               my >= AM_RECORD_Y &&
+                               my <= AM_RECORD_Y + AM_RECORD_H);
+            render_rect_outline(r,
+                AM_RECORD_X, AM_RECORD_Y,
+                AM_RECORD_W, AM_RECORD_H,
+                0, am_hovering ? 255 : 160, am_hovering ? 80 : 0,
+                am_hovering ? 255 : 140);
+            if (am_hovering) {
+                render_text_centered(r, "experiment recording #1",
+                    AM_RECORD_X + AM_RECORD_W / 2,
+                    AM_RECORD_Y - 16, 1, 0, 220, 255);
+            }
         }
 
         /* Text bar: "Use mouse button to select" */

@@ -21,6 +21,12 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── AM recording interactable (monitor_zoom screen) ──────────────────── */
+#define AM_RECORD_X   377
+#define AM_RECORD_Y   274
+#define AM_RECORD_W    66   /* 443 - 377 */
+#define AM_RECORD_H   109   /* 383 - 274 */
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {
@@ -119,6 +125,12 @@ typedef struct {
     int  passcode_input_len;       /* number of digits entered so far */
     int  passcode_wrong;           /* 1 = wrong code was submitted, show error */
     int  passcode_correct;         /* 1 = correct code just entered, show success */
+
+    /* AM recording audio (played when the AM recording interactable is clicked) */
+    SDL_AudioSpec    am_wav_spec;
+    Uint8           *am_wav_buf;
+    Uint32           am_wav_len;
+    SDL_AudioStream *am_audio_stream;
 
     /* Timing */
     Uint64 last_ticks;

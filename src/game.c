@@ -88,7 +88,19 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load locker view */
     g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
+    /* Load monitor zoom texture */
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
+
+    /* Load AM recording audio */
+    if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
+                    &g->am_wav_buf, &g->am_wav_len)) {
+        g->am_audio_stream = SDL_OpenAudioDeviceStream(
+            SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &g->am_wav_spec, NULL, NULL);
+        if (!g->am_audio_stream)
+            SDL_Log("game_init: failed to open audio stream: %s", SDL_GetError());
+    } else {
+        SDL_Log("game_init: failed to load AM.wav: %s", SDL_GetError());
+    }
 
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
@@ -119,6 +131,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
+    if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
@@ -363,6 +377,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len = 0;
                     game->passcode_input[0]  = '\0';
                     game->passcode_wrong     = 0;
+                }
+                /* Check if the AM recording interactable was clicked */
+                if (mx >= AM_RECORD_X && mx <= AM_RECORD_X + AM_RECORD_W &&
+                    my >= AM_RECORD_Y && my <= AM_RECORD_Y + AM_RECORD_H) {
+                    if (game->am_audio_stream && game->am_wav_buf &&
+                        game->am_wav_len <= (Uint32)SDL_MAX_SINT32) {
+                        SDL_ClearAudioStream(game->am_audio_stream);
+                        SDL_PutAudioStreamData(game->am_audio_stream,
+                                               game->am_wav_buf,
+                                               (int)game->am_wav_len);
+                        SDL_ResumeAudioStreamDevice(game->am_audio_stream);
+                    }
                 }
             }
         }

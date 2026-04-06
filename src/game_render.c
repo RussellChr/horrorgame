@@ -102,10 +102,9 @@ void game_render_playing(Game *game)
                            0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
     }
 
-    /* Ambient darkness: tuned darker (80) for horror mood, still preserving
-     * scene readability; rare flicker adds a brief subtle boost. */
+    /* Ambient darkness: keep atmosphere but lighter for readability. */
     {
-        int ambient_alpha = 80;
+        int ambient_alpha = 62;
         if (game->ambient_flicker_duration > 0.0f)
             ambient_alpha += game->ambient_flicker_alpha;
         if (ambient_alpha > 255) ambient_alpha = 255;

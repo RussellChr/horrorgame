@@ -58,9 +58,23 @@ add_executable(horrorgame
     src/camera.c
     src/collision.c
     src/npc.c
+    src/video.c
 )
 
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
+
+# FFmpeg libraries for video/audio decoding (jumpscare.mov playback).
+# On macOS install with: brew install ffmpeg
+# On Linux install with: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
+find_package(PkgConfig REQUIRED)
+# Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
+set(ENV{PKG_CONFIG_PATH}
+    "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+pkg_check_modules(FFMPEG REQUIRED
+    libavformat libavcodec libavutil libswscale libswresample)
+target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
+target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 
 # If SDL3_image was found, enable PNG loading for the dialogue background
 if(SDL3_IMAGE_LINK_TARGET)

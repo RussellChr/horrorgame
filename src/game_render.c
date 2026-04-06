@@ -7,6 +7,7 @@
 #include "ui.h"
 #include "story.h"
 #include "dialogue.h"
+#include "video.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -613,4 +614,17 @@ void game_render_simon(Game *game)
 
     render_text_centered(r, "Click the correct buttons in order",
                          WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
+}
+
+/* ── Jumpscare video ─────────────────────────────────────────────────────── */
+
+void game_render_jumpscare(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Black background in case the video hasn't decoded its first frame yet */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+
+    video_player_render(game->jumpscare_player, r);
 }

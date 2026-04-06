@@ -199,6 +199,7 @@ void game_start_new(Game *game)
         int hw_w = hw ? hw->room_width  : 1920; /* hallway texture width  */
         int hw_h = hw ? hw->room_height : 960;  /* hallway texture height */
         enemy_init(&game->enemy, hw_w, hw_h);
+        enemy_load_sprites(&game->enemy, game->renderer);
     }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */

@@ -210,13 +210,13 @@ void enemy_free(Enemy *e)
 {
     if (!e) return;
     for (int i = 0; i < e->forward_count; i++)
-        render_texture_destroy(e->forward_frames[i]);
+        if (e->forward_frames[i]) render_texture_destroy(e->forward_frames[i]);
     for (int i = 0; i < e->backward_count; i++)
-        render_texture_destroy(e->backward_frames[i]);
+        if (e->backward_frames[i]) render_texture_destroy(e->backward_frames[i]);
     for (int i = 0; i < e->left_count; i++)
-        render_texture_destroy(e->left_frames[i]);
+        if (e->left_frames[i]) render_texture_destroy(e->left_frames[i]);
     for (int i = 0; i < e->right_count; i++)
-        render_texture_destroy(e->right_frames[i]);
+        if (e->right_frames[i]) render_texture_destroy(e->right_frames[i]);
 
     free(e->grid);
     e->grid = NULL;
@@ -322,7 +322,7 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
                                      const char *prefix,
                                      int frame_no)
 {
-    char path[128];
+    char path[256];
     snprintf(path, sizeof(path),
              "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);
     return render_load_texture(renderer, path);
@@ -337,6 +337,8 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
     e->left_count = 0;
     e->right_count = 0;
 
+    /* Asset names are Indonesian:
+       depan=forward, belakang=backward, kiri=left, kanan=right. */
     for (int i = 1; i <= 8; i++) {
         SDL_Texture *t = load_enemy_frame(renderer, "forward", "depan", i);
         if (!t) break;

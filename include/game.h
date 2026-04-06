@@ -12,6 +12,7 @@
 #include "npc.h"
 #include "monologue.h"
 #include "video.h"
+#include "enemy.h"
 
 /* ── Monitor passcode constants ────────────────────────────────────────── */
 #define MONITOR_PANEL_X      685
@@ -46,6 +47,7 @@ typedef enum {
     GAME_STATE_LOCKER,
     GAME_STATE_SIMON,
     GAME_STATE_JUMPSCARE,
+    GAME_STATE_GAME_OVER,
     GAME_STATE_QUIT
 } GameState;
 
@@ -142,6 +144,9 @@ typedef struct {
     Uint32           am_wav_len;
     SDL_AudioStream *am_audio_stream;
 
+    /* Enemy patrol / chase system */
+    Enemy         enemy;
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;
@@ -198,5 +203,6 @@ void game_render_settings(Game *game);
 void game_render_locker(Game *game);
 void game_render_simon(Game *game);
 void game_render_jumpscare(Game *game);
+void game_render_game_over(Game *game);
 
 #endif /* GAME_H */

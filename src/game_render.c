@@ -8,6 +8,7 @@
 #include "story.h"
 #include "dialogue.h"
 #include "video.h"
+#include "enemy.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -88,6 +89,12 @@ void game_render_playing(Game *game)
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
+
+    /* Enemy (visible only when active and player is in the hallway) */
+    if (game->enemy.active &&
+        game->player->current_location_id == LOCATION_HALLWAY) {
+        enemy_render(&game->enemy, game->renderer, &game->camera);
+    }
 
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
@@ -619,6 +626,9 @@ void game_render_simon(Game *game)
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */
 
 void game_render_jumpscare(Game *game)
+/* ── Game Over ───────────────────────────────────────────────────────────── */
+
+void game_render_game_over(Game *game)
 {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
@@ -627,4 +637,29 @@ void game_render_jumpscare(Game *game)
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
 
     video_player_render(game->jumpscare_player, r);
+    /* Dark red background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 8, 0, 0, 255);
+
+    /* Decorative panel */
+    int pw = 600, ph = 260;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 25, 5, 5, 230);
+    render_rect_outline(r, px, py, pw, ph, 160, 20, 20, 255);
+    render_rect_outline(r, px + 3, py + 3, pw - 6, ph - 6, 80, 10, 10, 180);
+
+    /* Title */
+    render_text_centered(r, "GAME OVER",
+                         WINDOW_W / 2, py + 60, 5, 220, 30, 30);
+
+    /* Separator */
+    render_filled_rect(r, px + 24, py + 130, pw - 48, 2, 100, 15, 15, 200);
+
+    /* Subtitle */
+    render_text_centered(r, "You were caught.",
+                         WINDOW_W / 2, py + 150, 2, 180, 80, 80);
+
+    /* Prompt */
+    render_text_centered(r, "Press any key to return to the menu",
+                         WINDOW_W / 2, py + ph - 28, 1, 110, 40, 40);
 }

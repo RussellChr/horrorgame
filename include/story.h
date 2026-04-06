@@ -33,6 +33,7 @@
 #define FLAG_POWER_VALVE1_OPENED          (1u << 13) /* valve at tile 3 turned                   */
 #define FLAG_POWER_VALVE2_OPENED          (1u << 14) /* valve at tile 7 turned                   */
 #define FLAG_POWER_GENERATOR_ON           (1u << 15) /* generator started (Simon game won)       */
+#define FLAG_SECURITY_PASSCODE_DONE       (1u << 16) /* correct passcode entered in security room */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

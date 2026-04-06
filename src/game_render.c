@@ -104,7 +104,7 @@ void game_render_playing(Game *game)
 
     /* Ambient darkness: keep atmosphere but lighter for readability. */
     {
-        int ambient_alpha = 62;
+        int ambient_alpha = 48;
         if (game->ambient_flicker_duration > 0.0f)
             ambient_alpha += game->ambient_flicker_alpha;
         if (ambient_alpha > 255) ambient_alpha = 255;

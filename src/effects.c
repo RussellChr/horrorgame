@@ -31,7 +31,7 @@
 
 /* ── Gameplay vignette constants ─────────────────────────────────────────── */
 #define GAME_VIGNETTE_NUM_SEGS  64
-#define GAME_VIGNETTE_RADIUS    360
+#define GAME_VIGNETTE_RADIUS    420
 
 
 /* ── Shared helper: base angle from facing direction ─────────────────────── */
@@ -367,9 +367,9 @@ void render_screen_vignette(Game *game)
 
         av[0].position.x  = sx0;
         av[0].position.y  = sy0;
-        av[0].color.r     = 0.90f;
-        av[0].color.g     = 0.90f;
-        av[0].color.b     = 0.90f;
+        av[0].color.r     = 0.94f;
+        av[0].color.g     = 0.94f;
+        av[0].color.b     = 0.94f;
         av[0].color.a     = 1.0f;
         av[0].tex_coord.x = 0.0f;
         av[0].tex_coord.y = 0.0f;

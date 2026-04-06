@@ -865,7 +865,7 @@ void game_update(Game *game)
             if (game->ambient_flicker_timer <= 0.0f) {
                 /* Single short pulse, low intensity, and infrequent */
                 game->ambient_flicker_duration = 0.07f + (float)(rand() % 7) / 100.0f; /* 0.07-0.13s */
-                game->ambient_flicker_alpha    = (Uint8)(4 + (rand() % 8));             /* additive 4-11 alpha */
+                game->ambient_flicker_alpha    = (Uint8)(3 + (rand() % 6));             /* additive 3-8 alpha */
                 game->ambient_flicker_timer    = 7.0f + (float)(rand() % 12);            /* next pulse in 7-18s */
             }
         }

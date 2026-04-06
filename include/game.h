@@ -130,6 +130,11 @@ typedef struct {
     int          show_monitor_zoom;           /* 1 = show monitor_zoom_texture              */
     SDL_Texture *containment_level_texture;   /* shown when clicking the containment rect   */
     int          show_containment_level;      /* 1 = show containment_level_texture overlay */
+    int          locker_breathing_active;     /* 1 = locker breathing minigame is active    */
+    int          locker_breathing_successes;  /* successful timing hits in current run      */
+    float        locker_breathing_line_pos;   /* normalized [0..1] white line position      */
+    float        locker_breathing_line_dir;   /* +1 right, -1 left                          */
+    float        locker_breathing_zone_half;  /* normalized half-width of green zone        */
 
     /* Passcode system (triggered by clicking the monitor panel rect) */
     int  passcode_active;          /* 1 = passcode input overlay is shown */

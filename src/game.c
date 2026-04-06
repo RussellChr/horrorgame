@@ -28,6 +28,12 @@
 #define SIMON_START_PAUSE    0.40f  /* brief pause before first show      */
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
+/* ── Locker breathing minigame constants ──────────────────────────────── */
+#define LOCKER_BREATHING_TARGET_HITS   5
+#define LOCKER_BREATHING_SWEEP_SPEED   0.75f   /* normalized units per second */
+#define LOCKER_BREATHING_ZONE_START    0.22f   /* half-width at 0 successes   */
+#define LOCKER_BREATHING_ZONE_SHRINK   0.028f  /* half-width shrink per hit   */
+#define LOCKER_BREATHING_ZONE_MIN      0.07f
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -216,6 +222,11 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->locker_breathing_active = 0;
+    game->locker_breathing_successes = 0;
+    game->locker_breathing_line_pos = 0.0f;
+    game->locker_breathing_line_dir = 1.0f;
+    game->locker_breathing_zone_half = LOCKER_BREATHING_ZONE_START;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -388,6 +399,31 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_SPACE &&
+            game->locker_breathing_active) {
+            float center = 0.5f;
+            float minp = center - game->locker_breathing_zone_half;
+            float maxp = center + game->locker_breathing_zone_half;
+            if (game->locker_breathing_line_pos >= minp &&
+                game->locker_breathing_line_pos <= maxp) {
+                game->locker_breathing_successes++;
+                game->locker_breathing_zone_half -= LOCKER_BREATHING_ZONE_SHRINK;
+                if (game->locker_breathing_zone_half < LOCKER_BREATHING_ZONE_MIN)
+                    game->locker_breathing_zone_half = LOCKER_BREATHING_ZONE_MIN;
+
+                if (game->locker_breathing_successes >= LOCKER_BREATHING_TARGET_HITS) {
+                    game->locker_breathing_active = 0;
+                    if (game->enemy.active)
+                        enemy_return_to_nearest_waypoint(&game->enemy);
+                }
+            } else {
+                game->locker_breathing_active = 0;
+                game->state = GAME_STATE_GAME_OVER;
+                break;
+            }
+        }
+
         if (game->show_monitor_zoom && !game->passcode_active &&
             !game->show_containment_level) {
             /* Check if the invisible monitor panel rect was clicked */
@@ -486,6 +522,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
+                if (game->locker_breathing_active)
+                    break;
                 /* If containment level overlay is open, just close it */
                 if (game->show_containment_level) {
                     game->show_containment_level = 0;
@@ -907,10 +945,21 @@ void game_update(Game *game)
         }
 
     } else if (game->state == GAME_STATE_LOCKER && game->player) {
-        /* Keep the hallway enemy moving while the player is hidden in locker.
+        /* Keep hallway enemy moving in locker except during breathing minigame.
            Treat player as out-of-room so enemy cannot chase hidden player. */
-        if (game->enemy.active)
+        if (game->enemy.active && !game->locker_breathing_active)
             enemy_update(&game->enemy, game->player->x, game->player->y, 0, dt);
+        if (game->locker_breathing_active) {
+            game->locker_breathing_line_pos +=
+                game->locker_breathing_line_dir * LOCKER_BREATHING_SWEEP_SPEED * dt;
+            if (game->locker_breathing_line_pos > 1.0f) {
+                game->locker_breathing_line_pos = 1.0f;
+                game->locker_breathing_line_dir = -1.0f;
+            } else if (game->locker_breathing_line_pos < 0.0f) {
+                game->locker_breathing_line_pos = 0.0f;
+                game->locker_breathing_line_dir = 1.0f;
+            }
+        }
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {

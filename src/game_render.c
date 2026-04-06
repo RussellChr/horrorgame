@@ -599,7 +599,35 @@ void game_render_locker(Game *game)
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
-} 
+
+    if (game->locker_breathing_active) {
+        const int bar_w = 760;
+        const int bar_h = 24;
+        const int bar_x = (WINDOW_W - bar_w) / 2;
+        const int bar_y = WINDOW_H - 56;
+
+        int green_w = (int)(game->locker_breathing_zone_half * 2.0f * (float)bar_w);
+        if (green_w < 6) green_w = 6;
+        int green_x = bar_x + (bar_w - green_w) / 2;
+
+        int line_x = bar_x + (int)(game->locker_breathing_line_pos * (float)bar_w);
+        if (line_x < bar_x) line_x = bar_x;
+        if (line_x > bar_x + bar_w - 2) line_x = bar_x + bar_w - 2;
+
+        render_filled_rect(r, bar_x - 4, bar_y - 4, bar_w + 8, bar_h + 8, 0, 0, 0, 180);
+        render_filled_rect(r, bar_x, bar_y, bar_w, bar_h, 44, 44, 44, 230);
+        render_filled_rect(r, green_x, bar_y, green_w, bar_h, 30, 190, 45, 230);
+        render_filled_rect(r, line_x, bar_y - 4, 2, bar_h + 8, 245, 245, 245, 255);
+        render_rect_outline(r, bar_x, bar_y, bar_w, bar_h, 180, 180, 180, 255);
+
+        char trial_text[64];
+        SDL_snprintf(trial_text, sizeof(trial_text), "Breathing: %d/5",
+                     game->locker_breathing_successes);
+        render_text_centered(r, trial_text, WINDOW_W / 2, bar_y - 18, 1, 235, 235, 235);
+        render_text_centered(r, "Press SPACE when white line is inside green zone",
+                             WINDOW_W / 2, bar_y + bar_h + 10, 1, 220, 220, 220);
+    }
+}
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */
 

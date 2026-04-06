@@ -56,6 +56,11 @@ void game_handle_interaction(Game *game)
     if (tid == 60 && loc_id == 2) {
         if (game->enemy.active)
             enemy_return_to_nearest_waypoint(&game->enemy);
+        game->locker_breathing_active    = game->enemy.active ? 1 : 0;
+        game->locker_breathing_successes = 0;
+        game->locker_breathing_line_pos  = 0.0f;
+        game->locker_breathing_line_dir  = 1.0f;
+        game->locker_breathing_zone_half = 0.22f;
         game->state = GAME_STATE_LOCKER;
         return;
     }
@@ -346,6 +351,8 @@ void game_handle_interaction(Game *game)
             }
         } else if (tid == 92) {
             /* Tile 4: monitor screen – show zoomed image */
+            game->locker_breathing_active    = 0;
+            game->locker_breathing_successes = 0;
             game->show_monitor_zoom = 1;
             game->state = GAME_STATE_LOCKER;
         }

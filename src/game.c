@@ -90,6 +90,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
     /* Load monitor zoom texture */
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
+    /* Load containment level overlay texture */
+    g->containment_level_texture = render_load_texture(renderer, "assets/containment_level.png");
 
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
@@ -131,6 +133,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    render_texture_destroy(game->containment_level_texture);
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
     render_texture_destroy(game->item_flashlight_texture);
@@ -367,7 +370,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
-        if (game->show_monitor_zoom && !game->passcode_active) {
+        if (game->show_monitor_zoom && !game->passcode_active &&
+            !game->show_containment_level) {
             /* Check if the invisible monitor panel rect was clicked */
             if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 float mx = game->mouse_x, my = game->mouse_y;
@@ -389,6 +393,13 @@ void game_handle_event(Game *game, SDL_Event *event)
                                                (int)game->am_wav_len);
                         SDL_ResumeAudioStreamDevice(game->am_audio_stream);
                     }
+                }
+                /* Check if the containment level rect was clicked */
+                if (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                    mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                    my >= CONTAINMENT_LEVEL_RECT_Y &&
+                    my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H) {
+                    game->show_containment_level = 1;
                 }
             }
         }
@@ -448,14 +459,20 @@ void game_handle_event(Game *game, SDL_Event *event)
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
-                game->show_note_locker  = 0;
-                game->show_monitor_zoom = 0;
-                game->passcode_active    = 0;
-                game->passcode_input_len = 0;
-                game->passcode_input[0]  = '\0';
-                game->passcode_wrong     = 0;
-                game->passcode_correct   = 0;
-                game->state = GAME_STATE_PLAYING;
+                /* If containment level overlay is open, just close it */
+                if (game->show_containment_level) {
+                    game->show_containment_level = 0;
+                } else {
+                    game->show_note_locker       = 0;
+                    game->show_monitor_zoom      = 0;
+                    game->show_containment_level = 0;
+                    game->passcode_active        = 0;
+                    game->passcode_input_len     = 0;
+                    game->passcode_input[0]      = '\0';
+                    game->passcode_wrong         = 0;
+                    game->passcode_correct       = 0;
+                    game->state = GAME_STATE_PLAYING;
+                }
             }
         }
         break;

@@ -448,7 +448,7 @@ void game_render_locker(Game *game)
 
     if (game->show_monitor_zoom) {
         /* Hover indicator on the clickable monitor panel rect */
-        if (!game->passcode_active) {
+        if (!game->passcode_active && !game->show_containment_level) {
             float mx = game->mouse_x, my = game->mouse_y;
             int hovering = (mx >= MONITOR_PANEL_X &&
                             mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
@@ -524,11 +524,18 @@ void game_render_locker(Game *game)
                                      WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
             }
         }
+        /* Containment level overlay (shown when containment rect is clicked) */
+        if (game->show_containment_level && game->containment_level_texture) {
+            render_texture(r, game->containment_level_texture,
+                           0, 0, WINDOW_W, WINDOW_H);
+            render_text_centered(r, "Press E or ESC to close",
+                                 WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        }
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
-}
+} 
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */
 

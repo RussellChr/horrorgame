@@ -326,7 +326,7 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
     int n = snprintf(path, sizeof(path),
              "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);
     if (n < 0 || (size_t)n >= sizeof(path)) {
-        SDL_Log("enemy: sprite path too long for %s/%s%d", dir_name, prefix, frame_no);
+        SDL_Log("enemy: sprite path too long for %s/%s%d.png", dir_name, prefix, frame_no);
         return NULL;
     }
     return render_load_texture(renderer, path);
@@ -350,6 +350,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
             SDL_Log("enemy: missing forward frame %d", frame_no);
             continue;
         }
+        /* Compact loaded frames so animation uses contiguous valid textures. */
         e->forward_frames[e->forward_count++] = t;
     }
     /* Backward and right sets currently have 6 assets each. */
@@ -360,6 +361,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
             SDL_Log("enemy: missing backward frame %d", frame_no);
             continue;
         }
+        /* Compact loaded frames so animation uses contiguous valid textures. */
         e->backward_frames[e->backward_count++] = t;
     }
     for (int i = 0; i < ENEMY_MAX_ANIM_FRAMES; i++) {
@@ -369,6 +371,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
             SDL_Log("enemy: missing left frame %d", frame_no);
             continue;
         }
+        /* Compact loaded frames so animation uses contiguous valid textures. */
         e->left_frames[e->left_count++] = t;
     }
     for (int i = 0; i < ENEMY_RIGHT_FRAMES; i++) {
@@ -378,6 +381,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
             SDL_Log("enemy: missing right frame %d", frame_no);
             continue;
         }
+        /* Compact loaded frames so animation uses contiguous valid textures. */
         e->right_frames[e->right_count++] = t;
     }
 }

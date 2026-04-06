@@ -325,9 +325,6 @@ static void enemy_update_animation(Enemy *e, float dt)
     }
     if (e->is_moving) {
         animation_update(&e->move_anim, dt);
-    } else {
-        e->move_anim.current_frame = 0;
-        e->move_anim.frame_timer = 0.0f;
     }
 }
 

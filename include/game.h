@@ -11,6 +11,7 @@
 #include "ui.h"
 #include "npc.h"
 #include "monologue.h"
+#include "video.h"
 #include "enemy.h"
 
 /* ── Monitor passcode constants ────────────────────────────────────────── */
@@ -45,6 +46,7 @@ typedef enum {
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
     GAME_STATE_SIMON,
+    GAME_STATE_JUMPSCARE,
     GAME_STATE_GAME_OVER,
     GAME_STATE_QUIT
 } GameState;
@@ -165,6 +167,9 @@ typedef struct {
     int   simon_phase;           /* 0=showing, 1=player-input, 2=round-pause       */
     int   simon_lit_button;      /* which button is lit right now (-1 = none)      */
     int   simon_death_triggered; /* 1 if player failed the Simon game              */
+
+    /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
+    VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -197,6 +202,7 @@ void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
 void game_render_simon(Game *game);
+void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
 
 #endif /* GAME_H */

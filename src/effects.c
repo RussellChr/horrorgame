@@ -346,14 +346,18 @@ void render_gasmask_vignette(Game *game)
 void render_screen_vignette(Game *game)
 {
     if (!game || !game->dark_overlay) return;
+    if (!game->player) return;
     if (game->state != GAME_STATE_PLAYING &&
         game->state != GAME_STATE_DIALOGUE &&
         game->state != GAME_STATE_PAUSE) return;
     if (game->gasmask_active) return;
 
     SDL_Renderer *r = game->renderer;
-    float sx0 = (float)WINDOW_W * 0.5f;
-    float sy0 = (float)WINDOW_H * 0.5f;
+    float ox = game->player->x;
+    float oy = game->player->y - (float)PLAYER_COLLIDER_OFFSET_Y
+                            + (float)PLAYER_COLLIDER_H * 0.5f;
+    float sx0 = (float)camera_to_screen_x(&game->camera, ox);
+    float sy0 = (float)camera_to_screen_y(&game->camera, oy);
 
     SDL_SetRenderTarget(r, game->dark_overlay);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);

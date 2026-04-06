@@ -25,7 +25,7 @@
 #define SIMON_GAP_DURATION   0.20f  /* dark gap between lit steps         */
 #define SIMON_ROUND_PAUSE    0.60f  /* pause between a correct round and the next show */
 #define SIMON_START_PAUSE    0.40f  /* brief pause before first show      */
-#define SIMON_JUMPSCARE_ROUND   7   /* round after which the jumpscare fires */
+#define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
@@ -899,7 +899,14 @@ void game_update(Game *game)
             if (game->simon_show_timer <= 0.0f) {
                 game->jumpscare_player =
                     video_player_open(game->renderer, "assets/jumpscare.mov");
-                game->state = GAME_STATE_JUMPSCARE;
+                if (game->jumpscare_player) {
+                    game->state = GAME_STATE_JUMPSCARE;
+                } else {
+                    /* File missing or unreadable — skip straight to player input */
+                    SDL_Log("game: jumpscare.mov could not be opened; skipping");
+                    game->simon_phase      = 1;
+                    game->simon_player_pos = 0;
+                }
             }
         }
     } else if (game->state == GAME_STATE_JUMPSCARE) {

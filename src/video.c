@@ -78,7 +78,10 @@ static void decode_push_audio(VideoPlayer *vp)
 
         int buf_size = out_samples * 2 /* channels */ * sizeof(float);
         uint8_t *out_buf = (uint8_t *)malloc((size_t)buf_size);
-        if (!out_buf) continue;
+        if (!out_buf) {
+            SDL_Log("video: audio malloc failed (need %d bytes)", buf_size);
+            continue;
+        }
 
         uint8_t *out_planes[1] = { out_buf };
         int converted = swr_convert(vp->swr_ctx,
@@ -249,8 +252,10 @@ void video_player_update(VideoPlayer *vp, float dt)
             if (avcodec_send_packet(vp->vid_ctx, vp->av_packet) >= 0) {
                 int got = 0;
                 while (avcodec_receive_frame(vp->vid_ctx, vp->av_frame) >= 0) {
-                    double pts = (double)vp->av_frame->best_effort_timestamp
-                                 * vp->vid_tb;
+                    int64_t raw_pts = vp->av_frame->best_effort_timestamp;
+                    double pts = (raw_pts != AV_NOPTS_VALUE)
+                                 ? (double)raw_pts * vp->vid_tb
+                                 : vp->elapsed; /* treat unknown PTS as "show now" */
                     upload_video_frame(vp);
                     av_frame_unref(vp->av_frame);
                     got = 1;

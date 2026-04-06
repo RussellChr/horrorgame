@@ -170,9 +170,11 @@ void enemy_init(Enemy *e, int room_width, int room_height)
         e->grid_cols = m->cols;
         map_free(m);
     } else {
-        /* Fallback: empty 1×1 walkable grid so the rest of the code is safe */
+        /* Fallback: 1×1 grid with a single walkable cell so the rest of the
+         * code is safe.  -1 is MAP_TILE_FLOOR; A* treats any non-zero value
+         * (including -1) as walkable. */
         e->grid      = calloc(1, sizeof(int));
-        if (e->grid) e->grid[0] = -1;
+        if (e->grid) e->grid[0] = -1; /* MAP_TILE_FLOOR = walkable */
         e->grid_rows = 1;
         e->grid_cols = 1;
     }

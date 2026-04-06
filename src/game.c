@@ -180,12 +180,14 @@ void game_start_new(Game *game)
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
-    /* Initialise the enemy patrol system (uses hallway room dimensions) */
+    /* Initialise the enemy patrol system (uses hallway room dimensions).
+     * Fallback values match the hallway tile comment in world.c:
+     * tile_w = 1920/60 = 32 px, tile_h = 960/30 = 32 px. */
     enemy_free(&game->enemy);
     {
         Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
-        int hw_w = hw ? hw->room_width  : 1920;
-        int hw_h = hw ? hw->room_height : 960;
+        int hw_w = hw ? hw->room_width  : 1920; /* hallway texture width  */
+        int hw_h = hw ? hw->room_height : 960;  /* hallway texture height */
         enemy_init(&game->enemy, hw_w, hw_h);
     }
 

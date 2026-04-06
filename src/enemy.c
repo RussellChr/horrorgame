@@ -322,11 +322,6 @@ static SDL_Texture *load_enemy_frame(SDL_Renderer *renderer,
                                      const char *prefix,
                                      int frame_no)
 {
-    if (frame_no < 1) {
-        SDL_Log("enemy: invalid frame number %d for %s/%s", frame_no, dir_name, prefix);
-        return NULL;
-    }
-
     char path[512];
     int n = snprintf(path, sizeof(path),
              "assets/enemy/%s/%s%d.png", dir_name, prefix, frame_no);
@@ -357,6 +352,7 @@ void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer)
         }
         e->forward_frames[e->forward_count++] = t;
     }
+    /* Backward and right sets currently have 6 assets each. */
     for (int i = 0; i < ENEMY_BACKWARD_FRAMES; i++) {
         int frame_no = i + 1;
         SDL_Texture *t = load_enemy_frame(renderer, "backward", "belakang", frame_no);

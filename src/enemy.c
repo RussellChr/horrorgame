@@ -205,7 +205,7 @@ void enemy_init(Enemy *e, int room_width, int room_height)
     e->last_anim_direction = ENEMY_DIR_FORWARD;
     e->is_moving = 0;
     for (int i = 0; i < 4; i++) e->saved_frame_by_dir[i] = 0;
-    animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 7.5f, 1);
+    animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 5.0f, 1);
 }
 
 void enemy_free(Enemy *e)

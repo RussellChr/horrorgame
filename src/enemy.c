@@ -203,7 +203,7 @@ void enemy_init(Enemy *e, int room_width, int room_height)
     e->active = 0;
     e->direction = ENEMY_DIR_FORWARD;
     e->is_moving = 0;
-    animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 15.0f, 1);
+    animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 7.5f, 1);
 }
 
 void enemy_free(Enemy *e)

@@ -10,6 +10,7 @@
 #include "collision.h"
 #include "effects.h"
 #include "interactions.h"
+#include "video.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,8 @@
 #define SIMON_GAP_DURATION   0.20f  /* dark gap between lit steps         */
 #define SIMON_ROUND_PAUSE    0.60f  /* pause between a correct round and the next show */
 #define SIMON_START_PAUSE    0.40f  /* brief pause before first show      */
+#define SIMON_JUMPSCARE_ROUND   7   /* round after which the jumpscare fires */
+#define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -133,6 +136,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->monitor_zoom_texture);
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
+    video_player_close(game->jumpscare_player);
+    game->jumpscare_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
@@ -681,6 +686,18 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_JUMPSCARE:
+        /* Allow the player to skip the jumpscare by pressing Escape */
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.scancode == SDL_SCANCODE_ESCAPE) {
+            video_player_close(game->jumpscare_player);
+            game->jumpscare_player = NULL;
+            game->simon_phase      = 1; /* resume player-input phase */
+            game->simon_player_pos = 0;
+            game->state            = GAME_STATE_SIMON;
+        }
+        break;
+
     default: break;
     }
 }
@@ -850,9 +867,16 @@ void game_update(Game *game)
                     game->simon_show_lit   = 0;
                     game->simon_lit_button = -1;
                     if (game->simon_show_pos + 1 >= game->simon_length) {
-                        /* All steps shown – switch to player input phase */
-                        game->simon_phase      = 1;
-                        game->simon_player_pos = 0;
+                        /* All steps shown for this round */
+                        if (game->simon_length == SIMON_JUMPSCARE_ROUND) {
+                            /* Round 7: wait 1 s then show the jumpscare */
+                            game->simon_phase      = 3;
+                            game->simon_show_timer = SIMON_JUMPSCARE_DELAY;
+                        } else {
+                            /* All other rounds: go straight to player input */
+                            game->simon_phase      = 1;
+                            game->simon_player_pos = 0;
+                        }
                     } else {
                         /* Advance to next button after a gap */
                         game->simon_show_pos++;
@@ -870,6 +894,23 @@ void game_update(Game *game)
                 game->simon_lit_button = -1;
                 game->simon_show_timer = SIMON_START_PAUSE;
             }
+        } else if (game->simon_phase == 3) {
+            /* Pre-jumpscare delay after round 7 pattern display */
+            if (game->simon_show_timer <= 0.0f) {
+                game->jumpscare_player =
+                    video_player_open(game->renderer, "assets/jumpscare.mov");
+                game->state = GAME_STATE_JUMPSCARE;
+            }
+        }
+    } else if (game->state == GAME_STATE_JUMPSCARE) {
+        /* ── Jumpscare video update ── */
+        video_player_update(game->jumpscare_player, dt);
+        if (video_player_is_done(game->jumpscare_player)) {
+            video_player_close(game->jumpscare_player);
+            game->jumpscare_player = NULL;
+            game->simon_phase      = 1; /* resume player-input phase */
+            game->simon_player_pos = 0;
+            game->state            = GAME_STATE_SIMON;
         }
     }
 
@@ -897,6 +938,7 @@ void game_render(Game *game)
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
+    case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);
@@ -908,7 +950,8 @@ void game_render(Game *game)
      * (skipped in settings so sliders remain visible at all brightness levels)
      * Alpha is capped at 220 rather than 255 so some scene detail is still
      * visible even at the minimum brightness setting. */
-    if (game->brightness < 100.0f && game->state != GAME_STATE_SETTINGS) {
+    if (game->brightness < 100.0f && game->state != GAME_STATE_SETTINGS
+        && game->state != GAME_STATE_JUMPSCARE) {
         Uint8 alpha = (Uint8)((1.0f - game->brightness / 100.0f) * 220.0f);
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
                            0, 0, 0, alpha);

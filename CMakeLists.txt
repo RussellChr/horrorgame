@@ -58,9 +58,16 @@ add_executable(horrorgame
     src/camera.c
     src/collision.c
     src/npc.c
+    src/video.c
 )
 
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
+
+# FFmpeg libraries for video/audio decoding (jumpscare.mov playback)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED libavformat libavcodec libavutil libswscale libswresample)
+target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 
 # If SDL3_image was found, enable PNG loading for the dialogue background
 if(SDL3_IMAGE_LINK_TARGET)

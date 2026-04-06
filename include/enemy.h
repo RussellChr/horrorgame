@@ -11,10 +11,10 @@
 #define ENEMY_W                  20    /* width  of the enemy rect in pixels */
 #define ENEMY_H                  40    /* height of the enemy rect in pixels */
 
-#define ENEMY_PATROL_SPEED      100.0f /* pixels/second while patrolling     */
-#define ENEMY_CHASE_SPEED       200.0f /* pixels/second while chasing        */
-#define ENEMY_CHASE_RADIUS      500.0f /* distance at which chase begins     */
-#define ENEMY_PATROL_RADIUS     650.0f /* distance at which chase ends       */
+#define ENEMY_PATROL_SPEED       90.0f /* pixels/second while patrolling     */
+#define ENEMY_CHASE_SPEED       180.0f /* pixels/second while chasing        */
+#define ENEMY_CHASE_RADIUS      250.0f /* distance at which chase begins     */
+#define ENEMY_PATROL_RADIUS     350.0f /* distance at which chase ends       */
 #define ENEMY_HIT_DIST           36.0f /* distance that triggers game over   */
 #define ENEMY_WAYPOINT_THRESH    18.0f /* "reached" threshold for a waypoint */
 #define ENEMY_REPATH_INTERVAL     0.4f /* seconds between A* recalculations  */

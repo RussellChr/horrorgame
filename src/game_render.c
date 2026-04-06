@@ -455,7 +455,10 @@ void game_render_locker(Game *game)
     }
 
     /* Left-side minimap while hiding in locker: hallway + enemy marker */
-    if (game->world && game->enemy.active) {
+    if (game->world && game->enemy.active &&
+        !game->show_note_locker &&
+        !game->show_monitor_zoom &&
+        !game->show_containment_level) {
         Location *hall = world_get_location(game->world, LOCATION_HALLWAY);
         if (hall && hall->room_width > 0 && hall->room_height > 0) {
             const int mm_x = 20, mm_y = 20, mm_w = 220, mm_h = 64;

@@ -129,7 +129,7 @@
    - On Linux: `sudo apt-get install libsdl3-image-dev`
    - Automatically detected; `HAVE_SDL3_IMAGE` is defined if found
 
-3. **FFmpeg** *(required – for jumpscare video playback)*
+3. **FFmpeg** *(required – for video playback)*
    - Libraries needed: `libavformat`, `libavcodec`, `libavutil`, `libswscale`, `libswresample`
    - On macOS (Homebrew): `brew install ffmpeg`
    - On Linux: `sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev`

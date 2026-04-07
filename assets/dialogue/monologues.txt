@@ -17,7 +17,7 @@
 # ── Opening monologue ──────────────────────────────────────────────────
 
 [game_start]
-???
+Richard
 ---
 Ugh my head, Where am I?
 Who am I, What's happening?
@@ -28,7 +28,7 @@ Perhaps someone knows what's happening.
 # ── Entrance Hall ─────────────────────────────────────────────────────
 
 [portrait]
-Alex
+Richard
 ---
 A portrait hangs on the wall. The painted eyes seem to follow me wherever
 I move. I have heard of optical illusions like this -- clever brushwork
@@ -37,7 +37,7 @@ deliberate.
 ---
 
 [stranger]
-Alex
+Richard
 ---
 There is someone else in this house. That should be reassuring. It is not.
 ---
@@ -45,37 +45,37 @@ There is someone else in this house. That should be reassuring. It is not.
 # ── Hibernation Chamber ────────────────────────────────────────────────
 
 [hibern_zonk]
-Alex
+Richard
 ---
 There's nothing here.
 ---
 
 [hibern_powercell]
-Alex
+Richard
 ---
 You found a power cell.
 ---
 
 [hibern_slot_empty]
-Alex
+Richard
 ---
 It seems like something is needed here.
 ---
 
 [hibern_slot_place]
-Alex
+Richard
 ---
 The power cell slots into place with a satisfying click.
 ---
 
 [hibern_pods_opened]
-Alex
+Richard
 ---
 Some of these are already open, I wonder what these are.
 ---
 
 [hibern_door_locked]
-Alex
+Richard
 ---
 It looks like I have to find a way to turn the power on.
 ---
@@ -83,25 +83,25 @@ It looks like I have to find a way to turn the power on.
 # ── Hallway ────────────────────────────────────────────────────────────
 
 [hallway_nothing]
-Alex
+Richard
 ---
 There's nothing here.
 ---
 
 [hallway_gasmask]
-Alex
+Richard
 ---
 GasMask found.
 ---
 
 [hallway_flashlight]
-Alex
+Richard
 ---
 Flashlight Found.
 ---
 
 [archive_door_locked]
-Alex
+Richard
 ---
 Keycard is required.
 ---
@@ -109,13 +109,13 @@ Keycard is required.
 # ── Lab ─────────────────────────────────────────────────────────────────
 
 [lab_keycard]
-Alex
+Richard
 ---
 You found a keycard.
 ---
 
 [lab_gas_death]
-Alex
+Richard
 ---
 The air, it burns. I can't breathe.
 I should have worn that gas mask.
@@ -125,91 +125,91 @@ Everything is going dark.
 # ── Power Room ──────────────────────────────────────────────────────────
 
 [power_fueltank]
-Alex
+Richard
 ---
 A fuel tank. This must be needed somewhere in here.
 ---
 
 [power_fueltank2]
-Alex
+Richard
 ---
 Another fuel tank. There must be a second slot.
 ---
 
 [power_fueltank_nothing]
-Alex
+Richard
 ---
 There's nothing left to take.
 ---
 
 [power_fueltank_placed]
-Alex
+Richard
 ---
 The fuel tank locks into the housing with a satisfying clunk.
 ---
 
 [power_fueltank_placed2]
-Alex
+Richard
 ---
 Second tank secured. Both fuel lines should be ready now.
 ---
 
 [power_slot_empty]
-Alex
+Richard
 ---
 There's a slot here for a fuel tank. I need to find one first.
 ---
 
 [power_slot_done]
-Alex
+Richard
 ---
 The fuel tank is already in place.
 ---
 
 [power_slot2_locked]
-Alex
+Richard
 ---
 I should fill the first slot before using this one.
 ---
 
 [power_valve_locked]
-Alex
+Richard
 ---
 The valve won't budge. I need to place a fuel tank in the slot first.
 ---
 
 [power_valve_opened]
-Alex
+Richard
 ---
 The valve turns with some resistance. Fuel is flowing through.
 ---
 
 [power_valve_done]
-Alex
+Richard
 ---
 This valve is already open.
 ---
 
 [power_generator_locked]
-Alex
+Richard
 ---
 The generator won't start. I need to open both fuel valves first.
 ---
 
 [power_generator_done]
-Alex
+Richard
 ---
 The generator is already running.
 ---
 
 [power_generator_win]
-Alex
+Richard
 ---
 The generator roars to life. Power is restored to the facility.
 ---
 
 [power_simon_fail]
-Alex
+Richard
 ---
 The panel sparks violently. A surge of electricity throws me back.
 I should have paid more attention to the sequence.

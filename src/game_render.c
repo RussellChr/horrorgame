@@ -568,7 +568,28 @@ void game_render_locker(Game *game)
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
-} 
+}
+
+/* ── Security cutscene ───────────────────────────────────────────────────── */
+
+void game_render_cutscene(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Full-screen scene image */
+    SDL_Texture *tex = (game->cutscene_index >= 0 && game->cutscene_index < 4)
+                       ? game->security_cutscene_textures[game->cutscene_index]
+                       : NULL;
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Dialogue box with inner-monologue text */
+    dialogue_render(&game->cutscene_dialogue_state, r, WINDOW_W, WINDOW_H);
+}
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */
 

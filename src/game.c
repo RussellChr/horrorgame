@@ -29,6 +29,18 @@
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
+/* ── Security cutscene texts ───────────────────────────────────────────── */
+static const char * const security_cutscene_texts[4] = {
+    "The noise is making my head hurt... I have to find a way to silence "
+    "these alarms before something hears them.",
+    "Wait, what is that on the monitor? That's definitely not one of the "
+    "doctors. Is that a monster???",
+    "It's just standing there, watching the camera... please don't let it "
+    "know I'm in here.",
+    "The screen turned green and it's gone--where did it go? "
+    "Wait, isn't that in the hallway?"
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static Button make_button(float x, float y, float w, float h,
@@ -102,6 +114,13 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load containment level overlay texture */
     g->containment_level_texture = render_load_texture(renderer, "assets/containment_level.png");
 
+    /* Load security cutscene images */
+    g->security_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/security_scene_1.png");
+    g->security_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/security_scene_2.png");
+    g->security_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/security_scene_3.png");
+    g->security_cutscene_textures[3] = render_load_texture(renderer, "assets/cutscene/security_scene_4.png");
+    dialogue_load_texture(&g->cutscene_dialogue_state, renderer, "assets/dialogue.png");
+
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
                     &g->am_wav_buf, &g->am_wav_len)) {
@@ -143,6 +162,13 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
     render_texture_destroy(game->containment_level_texture);
+    for (int i = 0; i < 4; i++)
+        render_texture_destroy(game->security_cutscene_textures[i]);
+    dialogue_unload_texture(&game->cutscene_dialogue_state);
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
     video_player_close(game->jumpscare_player);
@@ -327,6 +353,35 @@ void game_start_simon(Game *game)
     game->state = GAME_STATE_SIMON;
 }
 
+/* ── Security cutscene ─────────────────────────────────────────────────── */
+
+void game_start_security_cutscene(Game *game)
+{
+    if (!game) return;
+
+    /* Tear down any previous cutscene tree */
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index          = 0;
+    game->security_cutscene_played = 1;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      security_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    /* Close the monitor overlay and transition state */
+    game->show_monitor_zoom = 0;
+    game->passcode_active   = 0;
+    game->state             = GAME_STATE_CUTSCENE;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -441,6 +496,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len = 0;
                     game->passcode_input[0]  = '\0';
                     game->passcode_wrong     = 0;
+                    /* Start cutscene the first time the passcode is accepted */
+                    if (!game->security_cutscene_played)
+                        game_start_security_cutscene(game);
                 } else if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
@@ -508,6 +566,47 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_wrong         = 0;
                     game->passcode_correct       = 0;
                     game->state = GAME_STATE_PLAYING;
+                }
+            }
+        }
+        break;
+
+    case GAME_STATE_CUTSCENE:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) {
+                if (!game->cutscene_dialogue_state.text_complete) {
+                    /* Skip typewriter – show full text immediately */
+                    game->cutscene_dialogue_state.text_complete = 1;
+                    if (game->cutscene_dialogue_tree) {
+                        DialogueNode *n = dialogue_get_node(
+                            game->cutscene_dialogue_tree,
+                            game->cutscene_dialogue_state.current_node_id);
+                        if (n)
+                            game->cutscene_dialogue_state.chars_visible =
+                                (int)strlen(n->text);
+                    }
+                } else {
+                    /* Advance to the next scene */
+                    game->cutscene_index++;
+                    if (game->cutscene_dialogue_tree) {
+                        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+                        game->cutscene_dialogue_tree = NULL;
+                    }
+                    if (game->cutscene_index >= 4) {
+                        /* All scenes done – return to gameplay */
+                        game->state = GAME_STATE_PLAYING;
+                    } else {
+                        /* Load next scene */
+                        game->cutscene_dialogue_tree = dialogue_tree_create();
+                        if (game->cutscene_dialogue_tree) {
+                            dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                                              security_cutscene_texts[game->cutscene_index],
+                                              1);
+                            dialogue_state_init(&game->cutscene_dialogue_state,
+                                                game->cutscene_dialogue_tree, 0);
+                        }
+                    }
                 }
             }
         }
@@ -933,6 +1032,8 @@ void game_update(Game *game)
 
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
+    } else if (game->state == GAME_STATE_CUTSCENE) {
+        dialogue_state_update(&game->cutscene_dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {
         /* ── Simon Says update ── */
         game->simon_show_timer -= dt;
@@ -1026,6 +1127,7 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;

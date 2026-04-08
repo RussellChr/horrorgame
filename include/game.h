@@ -45,6 +45,7 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
     GAME_STATE_JUMPSCARE,
     GAME_STATE_GAME_OVER,
@@ -160,6 +161,13 @@ typedef struct {
     /* Running flag */
     int running;
 
+    /* Security cutscene (shown once after correct passcode) */
+    SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
+    int           cutscene_index;                /* current scene 0–3  */
+    int           security_cutscene_played;      /* 1 once shown       */
+    DialogueState cutscene_dialogue_state;       /* typewriter/render  */
+    DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
+
     /* Simon Says minigame */
     int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
     int   simon_length;          /* steps in the current sequence (1–10)          */
@@ -194,6 +202,7 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_security_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -204,6 +213,7 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);

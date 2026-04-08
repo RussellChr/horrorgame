@@ -11,6 +11,7 @@
 #include "effects.h"
 #include "interactions.h"
 #include "video.h"
+#include "enemy.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -27,6 +28,18 @@
 #define SIMON_START_PAUSE    0.40f  /* brief pause before first show      */
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
+
+/* ── Security cutscene texts ───────────────────────────────────────────── */
+static const char * const security_cutscene_texts[4] = {
+    "The noise is making my head hurt... I have to find a way to silence "
+    "these alarms before something hears them.",
+    "Wait, what is that on the monitor? That's definitely not one of the "
+    "doctors. Is that a monster???",
+    "It's just standing there, watching the camera... please don't let it "
+    "know I'm in here.",
+    "The screen turned green and it's gone--where did it go? "
+    "Wait, isn't that in the hallway?"
+};
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
@@ -79,6 +92,11 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Seed the PRNG once at startup (used by the Simon minigame) */
     srand((unsigned int)SDL_GetTicks());
 
+    /* Rare ambient flicker defaults */
+    g->ambient_flicker_timer    = 7.0f + (float)(rand() % 12); /* 7-18s */
+    g->ambient_flicker_duration = 0.0f;
+    g->ambient_flicker_alpha    = 0;
+
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
 
@@ -93,6 +111,15 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
     /* Load monitor zoom texture */
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
+    /* Load containment level overlay texture */
+    g->containment_level_texture = render_load_texture(renderer, "assets/containment_level.png");
+
+    /* Load security cutscene images */
+    g->security_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/security_scene_1.png");
+    g->security_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/security_scene_2.png");
+    g->security_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/security_scene_3.png");
+    g->security_cutscene_textures[3] = render_load_texture(renderer, "assets/cutscene/security_scene_4.png");
+    dialogue_load_texture(&g->cutscene_dialogue_state, renderer, "assets/dialogue.png");
 
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
@@ -134,6 +161,14 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    render_texture_destroy(game->containment_level_texture);
+    for (int i = 0; i < 4; i++)
+        render_texture_destroy(game->security_cutscene_textures[i]);
+    dialogue_unload_texture(&game->cutscene_dialogue_state);
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
     video_player_close(game->jumpscare_player);
@@ -142,6 +177,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
     render_texture_destroy(game->dark_overlay);
+    enemy_free(&game->enemy);
     free(game);
 }
 
@@ -180,6 +216,18 @@ void game_start_new(Game *game)
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
+    /* Initialise the enemy patrol system (uses hallway room dimensions).
+     * Fallback values match the hallway tile comment in world.c:
+     * tile_w = 1920/60 = 32 px, tile_h = 960/30 = 32 px. */
+    enemy_free(&game->enemy);
+    {
+        Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+        int hw_w = hw ? hw->room_width  : 1920; /* hallway texture width  */
+        int hw_h = hw ? hw->room_height : 960;  /* hallway texture height */
+        enemy_init(&game->enemy, hw_w, hw_h);
+        enemy_load_sprites(&game->enemy, game->renderer);
+    }
+
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
     Location *start = world_get_location(game->world,
@@ -200,6 +248,9 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
+    game->ambient_flicker_duration = 0.0f;
+    game->ambient_flicker_alpha    = 0;
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -302,6 +353,35 @@ void game_start_simon(Game *game)
     game->state = GAME_STATE_SIMON;
 }
 
+/* ── Security cutscene ─────────────────────────────────────────────────── */
+
+void game_start_security_cutscene(Game *game)
+{
+    if (!game) return;
+
+    /* Tear down any previous cutscene tree */
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index          = 0;
+    game->security_cutscene_played = 1;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      security_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    /* Close the monitor overlay and transition state */
+    game->show_monitor_zoom = 0;
+    game->passcode_active   = 0;
+    game->state             = GAME_STATE_CUTSCENE;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -372,7 +452,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
-        if (game->show_monitor_zoom && !game->passcode_active) {
+        if (game->show_monitor_zoom && !game->passcode_active &&
+            !game->show_containment_level) {
             /* Check if the invisible monitor panel rect was clicked */
             if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 float mx = game->mouse_x, my = game->mouse_y;
@@ -395,6 +476,13 @@ void game_handle_event(Game *game, SDL_Event *event)
                         SDL_ResumeAudioStreamDevice(game->am_audio_stream);
                     }
                 }
+                /* Check if the containment level rect was clicked */
+                if (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                    mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                    my >= CONTAINMENT_LEVEL_RECT_Y &&
+                    my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H) {
+                    game->show_containment_level = 1;
+                }
             }
         }
         if (game->passcode_active) {
@@ -408,6 +496,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len = 0;
                     game->passcode_input[0]  = '\0';
                     game->passcode_wrong     = 0;
+                    /* Start cutscene the first time the passcode is accepted */
+                    if (!game->security_cutscene_played)
+                        game_start_security_cutscene(game);
                 } else if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
@@ -441,6 +532,15 @@ void game_handle_event(Game *game, SDL_Event *event)
                             if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
                                 /* Correct – show success message; overlay stays open */
                                 game->passcode_correct = 1;
+                                /* Activate the hallway enemy the first time */
+                                if (game->player &&
+                                    !player_check_flag(game->player,
+                                                       FLAG_SECURITY_PASSCODE_DONE)) {
+                                    player_set_flag(game->player,
+                                                    FLAG_SECURITY_PASSCODE_DONE);
+                                    game->enemy.active = 1;
+                                    game->enemy.state  = ENEMY_STATE_PATROL;
+                                }
                             } else {
                                 game->passcode_wrong = 1;
                             }
@@ -453,14 +553,61 @@ void game_handle_event(Game *game, SDL_Event *event)
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
-                game->show_note_locker  = 0;
-                game->show_monitor_zoom = 0;
-                game->passcode_active    = 0;
-                game->passcode_input_len = 0;
-                game->passcode_input[0]  = '\0';
-                game->passcode_wrong     = 0;
-                game->passcode_correct   = 0;
-                game->state = GAME_STATE_PLAYING;
+                /* If containment level overlay is open, just close it */
+                if (game->show_containment_level) {
+                    game->show_containment_level = 0;
+                } else {
+                    game->show_note_locker       = 0;
+                    game->show_monitor_zoom      = 0;
+                    game->show_containment_level = 0;
+                    game->passcode_active        = 0;
+                    game->passcode_input_len     = 0;
+                    game->passcode_input[0]      = '\0';
+                    game->passcode_wrong         = 0;
+                    game->passcode_correct       = 0;
+                    game->state = GAME_STATE_PLAYING;
+                }
+            }
+        }
+        break;
+
+    case GAME_STATE_CUTSCENE:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) {
+                if (!game->cutscene_dialogue_state.text_complete) {
+                    /* Skip typewriter – show full text immediately */
+                    game->cutscene_dialogue_state.text_complete = 1;
+                    if (game->cutscene_dialogue_tree) {
+                        DialogueNode *n = dialogue_get_node(
+                            game->cutscene_dialogue_tree,
+                            game->cutscene_dialogue_state.current_node_id);
+                        if (n)
+                            game->cutscene_dialogue_state.chars_visible =
+                                (int)strlen(n->text);
+                    }
+                } else {
+                    /* Advance to the next scene */
+                    game->cutscene_index++;
+                    if (game->cutscene_dialogue_tree) {
+                        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+                        game->cutscene_dialogue_tree = NULL;
+                    }
+                    if (game->cutscene_index >= 4) {
+                        /* All scenes done – return to gameplay */
+                        game->state = GAME_STATE_PLAYING;
+                    } else {
+                        /* Load next scene */
+                        game->cutscene_dialogue_tree = dialogue_tree_create();
+                        if (game->cutscene_dialogue_tree) {
+                            dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                                              security_cutscene_texts[game->cutscene_index],
+                                              1);
+                            dialogue_state_init(&game->cutscene_dialogue_state,
+                                                game->cutscene_dialogue_tree, 0);
+                        }
+                    }
+                }
             }
         }
         break;
@@ -700,6 +847,12 @@ void game_handle_event(Game *game, SDL_Event *event)
 
     default: break;
     }
+
+    /* ── Game Over: any key returns to the main menu ── */
+    if (game->state == GAME_STATE_GAME_OVER &&
+        event->type == SDL_EVENT_KEY_DOWN) {
+        game->state = GAME_STATE_MENU;
+    }
 }
 
 /* ── Per-frame update ──────────────────────────────────────────────────── */
@@ -829,6 +982,22 @@ void game_update(Game *game)
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
+        /* ── Rare subtle ambient flicker ── */
+        if (game->ambient_flicker_duration > 0.0f) {
+            game->ambient_flicker_duration -= dt;
+            if (game->ambient_flicker_duration < 0.0f)
+                game->ambient_flicker_duration = 0.0f;
+        } else {
+            game->ambient_flicker_alpha = 0;
+            game->ambient_flicker_timer -= dt;
+            if (game->ambient_flicker_timer <= 0.0f) {
+                /* Single short pulse, low intensity, and infrequent */
+                game->ambient_flicker_duration = 0.07f + (float)(rand() % 7) / 100.0f; /* 0.07-0.13s */
+                game->ambient_flicker_alpha    = (Uint8)(3 + (rand() % 6));             /* additive 3-8 alpha */
+                game->ambient_flicker_timer    = 7.0f + (float)(rand() % 12);            /* next pulse in 7-18s */
+            }
+        }
+
         /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
         if (p->current_location_id == LOCATION_LAB &&
             !game->lab_death_triggered) {
@@ -849,8 +1018,22 @@ void game_update(Game *game)
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
+        /* ── Enemy patrol / chase update ── */
+        if (game->enemy.active) {
+            int in_hallway = (p->current_location_id == LOCATION_HALLWAY);
+            enemy_update(&game->enemy, p->x, p->y, in_hallway, dt);
+
+            /* Game-over: enemy caught the player while in the hallway */
+            if (in_hallway &&
+                enemy_hits_player(&game->enemy, p->x, p->y)) {
+                game->state = GAME_STATE_GAME_OVER;
+            }
+        }
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
+    } else if (game->state == GAME_STATE_CUTSCENE) {
+        dialogue_state_update(&game->cutscene_dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {
         /* ── Simon Says update ── */
         game->simon_show_timer -= dt;
@@ -944,8 +1127,10 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
+    case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);

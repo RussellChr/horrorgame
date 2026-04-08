@@ -12,6 +12,7 @@
 #include "npc.h"
 #include "monologue.h"
 #include "video.h"
+#include "enemy.h"
 
 /* ── Monitor passcode constants ────────────────────────────────────────── */
 #define MONITOR_PANEL_X      685
@@ -28,6 +29,12 @@
 #define AM_RECORD_W    66   /* 443 - 377 */
 #define AM_RECORD_H   109   /* 383 - 274 */
 
+/* ── Containment level interactable (monitor_zoom screen) ─────────────── */
+#define CONTAINMENT_LEVEL_RECT_X   990
+#define CONTAINMENT_LEVEL_RECT_Y   168
+#define CONTAINMENT_LEVEL_RECT_W   125
+#define CONTAINMENT_LEVEL_RECT_H   122
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {
@@ -38,8 +45,10 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
     GAME_STATE_JUMPSCARE,
+    GAME_STATE_GAME_OVER,
     GAME_STATE_QUIT
 } GameState;
 
@@ -109,6 +118,9 @@ typedef struct {
 
     /* Archive room darkness: full-screen light-mask render target */
     SDL_Texture *dark_overlay;
+    float ambient_flicker_timer;      /* seconds until next rare flicker pulse */
+    float ambient_flicker_duration;   /* remaining seconds of active flicker pulse */
+    Uint8 ambient_flicker_alpha;      /* extra darkness alpha applied during pulse */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
@@ -118,8 +130,10 @@ typedef struct {
     SDL_Texture *locker_texture;
     SDL_Texture *note_locker_texture;   /* shown when reading the security note */
     int          show_note_locker;      /* 1 = show note_locker_texture instead of locker_texture */
-    SDL_Texture *monitor_zoom_texture;  /* shown when examining the security monitor */
-    int          show_monitor_zoom;     /* 1 = show monitor_zoom_texture             */
+    SDL_Texture *monitor_zoom_texture;        /* shown when examining the security monitor  */
+    int          show_monitor_zoom;           /* 1 = show monitor_zoom_texture              */
+    SDL_Texture *containment_level_texture;   /* shown when clicking the containment rect   */
+    int          show_containment_level;      /* 1 = show containment_level_texture overlay */
 
     /* Passcode system (triggered by clicking the monitor panel rect) */
     int  passcode_active;          /* 1 = passcode input overlay is shown */
@@ -134,6 +148,9 @@ typedef struct {
     Uint32           am_wav_len;
     SDL_AudioStream *am_audio_stream;
 
+    /* Enemy patrol / chase system */
+    Enemy         enemy;
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;
@@ -143,6 +160,13 @@ typedef struct {
 
     /* Running flag */
     int running;
+
+    /* Security cutscene (shown once after correct passcode) */
+    SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
+    int           cutscene_index;                /* current scene 0–3  */
+    int           security_cutscene_played;      /* 1 once shown       */
+    DialogueState cutscene_dialogue_state;       /* typewriter/render  */
+    DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
 
     /* Simon Says minigame */
     int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
@@ -178,6 +202,7 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_security_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -188,7 +213,9 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
 void game_render_jumpscare(Game *game);
+void game_render_game_over(Game *game);
 
 #endif /* GAME_H */

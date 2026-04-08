@@ -8,6 +8,7 @@
 #include "story.h"
 #include "dialogue.h"
 #include "video.h"
+#include "enemy.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -89,6 +90,12 @@ void game_render_playing(Game *game)
              - PLAYER_SPRITE_H;
     player_render(game->player, game->renderer, sx, sy);
 
+    /* Enemy (visible only when active and player is in the hallway) */
+    if (game->enemy.active &&
+        game->player->current_location_id == LOCATION_HALLWAY) {
+        enemy_render(&game->enemy, game->renderer, &game->camera);
+    }
+
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
     if (game->gasmask_active)
@@ -102,12 +109,21 @@ void game_render_playing(Game *game)
                            0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
     }
 
-    /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
-     * more atmospheric look without completely obscuring details. */
-    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 55);
+    /* Ambient darkness: keep atmosphere but lighter for readability. */
+    {
+        int ambient_alpha = 48;
+        if (game->ambient_flicker_duration > 0.0f)
+            ambient_alpha += game->ambient_flicker_alpha;
+        if (ambient_alpha > 255) ambient_alpha = 255;
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                           0, 0, 0, (Uint8)ambient_alpha);
+    }
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);
+
+    /* Edge darkening vignette for stronger horror atmosphere. */
+    render_screen_vignette(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.
@@ -115,7 +131,7 @@ void game_render_playing(Game *game)
      * so we only add the visual indicator here. */
 
     /* Interaction prompt */
-    if (game->near_interactive) {
+    if (game->near_interactive && game->state != GAME_STATE_DIALOGUE) {
         int px = camera_to_screen_x(&game->camera, game->player->x);
         int py = camera_to_screen_y(&game->camera,
                                     game->player->y - PLAYER_SPRITE_H - 8);
@@ -449,7 +465,7 @@ void game_render_locker(Game *game)
 
     if (game->show_monitor_zoom) {
         /* Hover indicator on the clickable monitor panel rect */
-        if (!game->passcode_active) {
+        if (!game->passcode_active && !game->show_containment_level) {
             float mx = game->mouse_x, my = game->mouse_y;
             int hovering = (mx >= MONITOR_PANEL_X &&
                             mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
@@ -481,6 +497,22 @@ void game_render_locker(Game *game)
                 render_text_centered(r, "experiment recording #1",
                     AM_RECORD_X + AM_RECORD_W / 2,
                     AM_RECORD_Y - 16, 1, 0, 220, 255);
+            }
+
+            /* Containment level interactable outline and description */
+            int cl_hovering = (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                               mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                               my >= CONTAINMENT_LEVEL_RECT_Y &&
+                               my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H);
+            render_rect_outline(r,
+                CONTAINMENT_LEVEL_RECT_X, CONTAINMENT_LEVEL_RECT_Y,
+                CONTAINMENT_LEVEL_RECT_W, CONTAINMENT_LEVEL_RECT_H,
+                0, cl_hovering ? 255 : 160, cl_hovering ? 80 : 0,
+                cl_hovering ? 255 : 140);
+            if (cl_hovering) {
+                render_text_centered(r, "Containment level",
+                    CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W / 2,
+                    CONTAINMENT_LEVEL_RECT_Y - 16, 1, 0, 220, 255);
             }
         }
 
@@ -525,10 +557,38 @@ void game_render_locker(Game *game)
                                      WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
             }
         }
+        /* Containment level overlay (shown when containment rect is clicked) */
+        if (game->show_containment_level && game->containment_level_texture) {
+            render_texture(r, game->containment_level_texture,
+                           0, 0, WINDOW_W, WINDOW_H);
+            render_text_centered(r, "Press E or ESC to close",
+                                 WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        }
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }
+}
+
+/* ── Security cutscene ───────────────────────────────────────────────────── */
+
+void game_render_cutscene(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Full-screen scene image */
+    SDL_Texture *tex = (game->cutscene_index >= 0 && game->cutscene_index < 4)
+                       ? game->security_cutscene_textures[game->cutscene_index]
+                       : NULL;
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Dialogue box with inner-monologue text */
+    dialogue_render(&game->cutscene_dialogue_state, r, WINDOW_W, WINDOW_H);
 }
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */
@@ -602,6 +662,41 @@ void game_render_jumpscare(Game *game)
 
     /* Black background in case the video hasn't decoded its first frame yet */
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
-
     video_player_render(game->jumpscare_player, r);
+}
+/* ── Game Over ───────────────────────────────────────────────────────────── */
+
+void game_render_game_over(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Black background in case the video hasn't decoded its first frame yet */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+
+    /* Dark red background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 8, 0, 0, 255);
+
+    /* Decorative panel */
+    int pw = 600, ph = 260;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 25, 5, 5, 230);
+    render_rect_outline(r, px, py, pw, ph, 160, 20, 20, 255);
+    render_rect_outline(r, px + 3, py + 3, pw - 6, ph - 6, 80, 10, 10, 180);
+
+    /* Title */
+    render_text_centered(r, "GAME OVER",
+                         WINDOW_W / 2, py + 60, 5, 220, 30, 30);
+
+    /* Separator */
+    render_filled_rect(r, px + 24, py + 130, pw - 48, 2, 100, 15, 15, 200);
+
+    /* Subtitle */
+    render_text_centered(r, "You were caught.",
+                         WINDOW_W / 2, py + 150, 2, 180, 80, 80);
+
+    /* Prompt */
+    render_text_centered(r, "Press any key to return to the menu",
+                         WINDOW_W / 2, py + ph - 28, 1, 110, 40, 40);
 }

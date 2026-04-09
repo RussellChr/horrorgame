@@ -1148,4 +1148,33 @@ void game_render(Game *game)
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
                            0, 0, 0, alpha);
     }
+
+    /* ── DEBUG: mouse-cursor crosshair + coordinate label ──────────────
+     * Draws a yellow crosshair and "X:NNN Y:NNN" near the cursor so you
+     * can read exact positions when placing SDL_FRect / SDL_Rect values.
+     * Remove this block once you no longer need it.                      */
+    {
+        int mx = (int)game->mouse_x;
+        int my = (int)game->mouse_y;
+        char buf[32];
+        SDL_snprintf(buf, sizeof(buf), "X:%d Y:%d", mx, my);
+
+        /* Crosshair arms */
+        render_line(game->renderer, mx - 10, my, mx + 10, my, 255, 255, 0, 255);
+        render_line(game->renderer, mx, my - 10, mx, my + 10, 255, 255, 0, 255);
+
+        /* Coordinate label – offset to the right; flip sides near edges */
+        int scale = 2;
+        int tw = render_text_width(buf, scale);
+        int th = 8 * scale;
+        int tx = mx + 14;
+        int ty = my - th / 2;
+        if (tx + tw + 4 > WINDOW_W) tx = mx - tw - 16;
+        if (ty < 0)             ty = 0;
+        if (ty + th > WINDOW_H) ty = WINDOW_H - th;
+
+        render_filled_rect(game->renderer, tx - 2, ty - 2, tw + 4, th + 4,
+                           0, 0, 0, 180);
+        render_text(game->renderer, buf, tx, ty, scale, 255, 255, 0);
+    }
 }

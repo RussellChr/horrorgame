@@ -56,11 +56,11 @@ static void render_archive_glass(Game *game, const Location *loc)
     int h = game->glass_texture_h;
 
     for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
-        int sx = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
-        int sy = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
-        if (sx >= WINDOW_W || sy >= WINDOW_H || sx + w <= 0 || sy + h <= 0)
+        int screen_x = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
+        int screen_y = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
+        if (screen_x >= WINDOW_W || screen_y >= WINDOW_H || screen_x + w <= 0 || screen_y + h <= 0)
             continue;
-        render_texture(game->renderer, game->glass_texture, sx, sy, w, h);
+        render_texture(game->renderer, game->glass_texture, screen_x, screen_y, w, h);
     }
 }
 

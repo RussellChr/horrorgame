@@ -69,13 +69,35 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
-    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New Game");
-    g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Load Game");
-    g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Settings");
-    g->buttons[3] = make_button(60.0f, 500.0f + 3.0f * (bh + 10.0f), bw, bh, "Quit");
-    g->pause_buttons[0] = make_button(bx, 280.0f, bw, bh, "Resume");
-    g->pause_buttons[1] = make_button(bx, 350.0f, bw, bh, "Save Game");
-    g->pause_buttons[2] = make_button(bx, 420.0f, bw, bh, "Quit to Menu");
+    /* 3 main-menu buttons */
+    g->buttons[MENU_BTN_NEW_LOAD] = make_button(60.0f, 500.0f, bw, bh, "New / Load Game");
+    g->buttons[MENU_BTN_SETTINGS] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Settings");
+    g->buttons[MENU_BTN_QUIT]     = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
+
+    /* Save/load sub-menu buttons */
+    float slw = 280.0f, slh = 48.0f;
+    float slx = (WINDOW_W - slw) / 2.0f;
+    float sly = 200.0f;
+    g->save_load_buttons[SL_BTN_NEW]   = make_button(slx, sly,                     slw, slh, "New Game");
+    g->save_load_buttons[SL_BTN_SLOT1] = make_button(slx, sly + (slh + 10.0f),     slw, slh, "Slot 1");
+    g->save_load_buttons[SL_BTN_SLOT2] = make_button(slx, sly + 2.0f*(slh+10.0f), slw, slh, "Slot 2");
+    g->save_load_buttons[SL_BTN_SLOT3] = make_button(slx, sly + 3.0f*(slh+10.0f), slw, slh, "Slot 3");
+    g->save_load_buttons[SL_BTN_BACK]  = make_button(slx, sly + 4.0f*(slh+10.0f), slw, slh, "Back");
+
+    /* 4 pause-menu buttons */
+    g->pause_buttons[0] = make_button(bx, 240.0f, bw, bh, "Resume");
+    g->pause_buttons[1] = make_button(bx, 310.0f, bw, bh, "Save Game");
+    g->pause_buttons[2] = make_button(bx, 380.0f, bw, bh, "Load Game");
+    g->pause_buttons[3] = make_button(bx, 450.0f, bw, bh, "Quit to Menu");
+
+    /* Pause slot-picker buttons */
+    float spw = 280.0f, sph = 48.0f;
+    float spx = (WINDOW_W - spw) / 2.0f;
+    float spy = 240.0f;
+    g->pause_slot_buttons[0] = make_button(spx, spy,                     spw, sph, "Slot 1");
+    g->pause_slot_buttons[1] = make_button(spx, spy + (sph + 10.0f),     spw, sph, "Slot 2");
+    g->pause_slot_buttons[2] = make_button(spx, spy + 2.0f*(sph+10.0f), spw, sph, "Slot 3");
+    g->pause_slot_buttons[3] = make_button(spx, spy + 3.0f*(sph+10.0f), spw, sph, "Back");
 
     /* Settings defaults */
     g->volume     = 100.0f;
@@ -149,8 +171,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to create dark_overlay texture: %s",
                 SDL_GetError());
 
-    /* Check whether a save file already exists */
-    g->menu_save_exists = savegame_exists();
+    /* (save-slot existence is checked dynamically each time the sub-menu opens) */
 
     return g;
 }
@@ -390,15 +411,14 @@ void game_start_security_cutscene(Game *game)
 
 /* ── Save / Load helpers ───────────────────────────────────────────────── */
 
-void game_save(Game *game)
+void game_save_slot(Game *game, int slot)
 {
     if (!game) return;
-    savegame_save(game);
+    savegame_save_slot(game, slot);
     game->save_feedback_timer = SAVE_FEEDBACK_DURATION_SEC;
-    game->menu_save_exists    = 1;
 }
 
-void game_load(Game *game)
+void game_load_slot(Game *game, int slot)
 {
     if (!game) return;
     /* Start a fresh game first so all textures / subsystems are ready. */
@@ -409,7 +429,7 @@ void game_load(Game *game)
         game->dialogue_tree = NULL;
     }
     /* Overwrite with the saved state. */
-    savegame_load(game);
+    savegame_load_slot(game, slot);
     game->state = GAME_STATE_PLAYING;
 }
 
@@ -430,20 +450,17 @@ void game_handle_event(Game *game, SDL_Event *event)
     switch (game->state) {
 
     case GAME_STATE_MENU:
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 3; i++)
             button_update_hover(&game->buttons[i],
                                 game->mouse_x, game->mouse_y);
 
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < 3; i++) {
                 if (button_is_clicked(&game->buttons[i],
                                       game->mouse_x, game->mouse_y)) {
-                    if      (i == MENU_BUTTON_NEW_GAME)  game_start_new(game);
-                    else if (i == MENU_BUTTON_LOAD_GAME) {
-                        if (game->menu_save_exists) game_load(game);
-                    }
-                    else if (i == MENU_BUTTON_SETTINGS)  game->state = GAME_STATE_SETTINGS;
-                    else if (i == MENU_BUTTON_QUIT)      game->state = GAME_STATE_QUIT;
+                    if      (i == MENU_BTN_NEW_LOAD) game->state = GAME_STATE_SAVE_LOAD_MENU;
+                    else if (i == MENU_BTN_SETTINGS) game->state = GAME_STATE_SETTINGS;
+                    else if (i == MENU_BTN_QUIT)     game->state = GAME_STATE_QUIT;
                 }
             }
         }
@@ -454,19 +471,47 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->current_menu_choice--;
                 break;
             case SDLK_DOWN:
-                if (game->current_menu_choice < 3)
+                if (game->current_menu_choice < 2)
                     game->current_menu_choice++;
                 break;
             case SDLK_RETURN:
-                if      (game->current_menu_choice == MENU_BUTTON_NEW_GAME)  game_start_new(game);
-                else if (game->current_menu_choice == MENU_BUTTON_LOAD_GAME) {
-                    if (game->menu_save_exists) game_load(game);
-                }
-                else if (game->current_menu_choice == MENU_BUTTON_SETTINGS)  game->state = GAME_STATE_SETTINGS;
-                else if (game->current_menu_choice == MENU_BUTTON_QUIT)      game->state = GAME_STATE_QUIT;
+                if      (game->current_menu_choice == MENU_BTN_NEW_LOAD) game->state = GAME_STATE_SAVE_LOAD_MENU;
+                else if (game->current_menu_choice == MENU_BTN_SETTINGS) game->state = GAME_STATE_SETTINGS;
+                else if (game->current_menu_choice == MENU_BTN_QUIT)     game->state = GAME_STATE_QUIT;
                 break;
             default: break;
             }
+        }
+        break;
+
+    case GAME_STATE_SAVE_LOAD_MENU:
+        for (int i = 0; i < SL_BTN_COUNT; i++)
+            button_update_hover(&game->save_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->state = GAME_STATE_MENU;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            if (button_is_clicked(&game->save_load_buttons[SL_BTN_NEW],
+                                  game->mouse_x, game->mouse_y))
+                game_start_new(game);
+            else if (button_is_clicked(&game->save_load_buttons[SL_BTN_SLOT1],
+                                       game->mouse_x, game->mouse_y)) {
+                if (savegame_exists_slot(1)) game_load_slot(game, 1);
+            }
+            else if (button_is_clicked(&game->save_load_buttons[SL_BTN_SLOT2],
+                                       game->mouse_x, game->mouse_y)) {
+                if (savegame_exists_slot(2)) game_load_slot(game, 2);
+            }
+            else if (button_is_clicked(&game->save_load_buttons[SL_BTN_SLOT3],
+                                       game->mouse_x, game->mouse_y)) {
+                if (savegame_exists_slot(3)) game_load_slot(game, 3);
+            }
+            else if (button_is_clicked(&game->save_load_buttons[SL_BTN_BACK],
+                                       game->mouse_x, game->mouse_y))
+                game->state = GAME_STATE_MENU;
         }
         break;
 
@@ -739,23 +784,56 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_PAUSE:
-        for (int i = 0; i < 3; i++)
-            button_update_hover(&game->pause_buttons[i],
-                                game->mouse_x, game->mouse_y);
-        if (event->type == SDL_EVENT_KEY_DOWN) {
-            if (event->key.key == SDLK_ESCAPE)
-                game->state = GAME_STATE_PLAYING;
-        }
-        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            if (button_is_clicked(&game->pause_buttons[0],
-                                  game->mouse_x, game->mouse_y))
-                game->state = GAME_STATE_PLAYING;
-            if (button_is_clicked(&game->pause_buttons[1],
-                                  game->mouse_x, game->mouse_y))
-                game_save(game);
-            if (button_is_clicked(&game->pause_buttons[2],
-                                  game->mouse_x, game->mouse_y)) {
-                game->state = GAME_STATE_MENU;
+        if (game->pause_slot_mode != PAUSE_SLOT_NONE) {
+            /* Slot picker is open */
+            for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++)
+                button_update_hover(&game->pause_slot_buttons[i],
+                                    game->mouse_x, game->mouse_y);
+            if (event->type == SDL_EVENT_KEY_DOWN &&
+                event->key.key == SDLK_ESCAPE) {
+                game->pause_slot_mode = PAUSE_SLOT_NONE;
+            }
+            if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                for (int s = 1; s <= SAVE_SLOT_COUNT; s++) {
+                    if (button_is_clicked(&game->pause_slot_buttons[s - 1],
+                                         game->mouse_x, game->mouse_y)) {
+                        if (game->pause_slot_mode == PAUSE_SLOT_SAVE) {
+                            game_save_slot(game, s);
+                            game->pause_slot_mode = PAUSE_SLOT_NONE;
+                        } else { /* LOAD */
+                            if (savegame_exists_slot(s))
+                                game_load_slot(game, s);
+                        }
+                    }
+                }
+                /* Back button is the last one */
+                if (button_is_clicked(
+                        &game->pause_slot_buttons[SAVE_SLOT_COUNT],
+                        game->mouse_x, game->mouse_y))
+                    game->pause_slot_mode = PAUSE_SLOT_NONE;
+            }
+        } else {
+            /* Normal pause menu */
+            for (int i = 0; i < 4; i++)
+                button_update_hover(&game->pause_buttons[i],
+                                    game->mouse_x, game->mouse_y);
+            if (event->type == SDL_EVENT_KEY_DOWN) {
+                if (event->key.key == SDLK_ESCAPE)
+                    game->state = GAME_STATE_PLAYING;
+            }
+            if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+                if (button_is_clicked(&game->pause_buttons[0],
+                                      game->mouse_x, game->mouse_y))
+                    game->state = GAME_STATE_PLAYING;
+                if (button_is_clicked(&game->pause_buttons[1],
+                                      game->mouse_x, game->mouse_y))
+                    game->pause_slot_mode = PAUSE_SLOT_SAVE;
+                if (button_is_clicked(&game->pause_buttons[2],
+                                      game->mouse_x, game->mouse_y))
+                    game->pause_slot_mode = PAUSE_SLOT_LOAD;
+                if (button_is_clicked(&game->pause_buttons[3],
+                                      game->mouse_x, game->mouse_y))
+                    game->state = GAME_STATE_MENU;
             }
         }
         break;

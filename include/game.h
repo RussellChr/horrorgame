@@ -37,15 +37,30 @@
 
 /* ── Save / menu constants ────────────────────────────────────────────── */
 #define SAVE_FEEDBACK_DURATION_SEC  2.0f  /* seconds "Game Saved!" banner is shown */
-#define MENU_BUTTON_NEW_GAME        0
-#define MENU_BUTTON_LOAD_GAME       1
-#define MENU_BUTTON_SETTINGS        2
-#define MENU_BUTTON_QUIT            3
+
+/* Main-menu button indices (3 buttons) */
+#define MENU_BTN_NEW_LOAD  0   /* "New / Load Game" */
+#define MENU_BTN_SETTINGS  1   /* "Settings"        */
+#define MENU_BTN_QUIT      2   /* "Quit"            */
+
+/* Save/load sub-menu button indices (inside GAME_STATE_SAVE_LOAD_MENU) */
+#define SL_BTN_NEW         0   /* "New Game"        */
+#define SL_BTN_SLOT1       1   /* "Slot 1"          */
+#define SL_BTN_SLOT2       2   /* "Slot 2"          */
+#define SL_BTN_SLOT3       3   /* "Slot 3"          */
+#define SL_BTN_BACK        4   /* "Back"            */
+#define SL_BTN_COUNT       5
+
+/* Pause-menu slot-picker modes */
+#define PAUSE_SLOT_NONE    0   /* normal pause      */
+#define PAUSE_SLOT_SAVE    1   /* save-slot picker  */
+#define PAUSE_SLOT_LOAD    2   /* load-slot picker  */
 
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {
     GAME_STATE_MENU,
+    GAME_STATE_SAVE_LOAD_MENU,   /* New/Load sub-screen from title     */
     GAME_STATE_PLAYING,
     GAME_STATE_DIALOGUE,
     GAME_STATE_INVENTORY,
@@ -88,18 +103,24 @@ typedef struct {
     int  interactive_trigger_id;     /* trigger_id of the nearby obj  */
     char interact_label[64];         /* text shown in the prompt      */
 
-    /* Main menu */
-    Button buttons[4];
+    /* Main menu (3 buttons) */
+    Button buttons[3];
     int    current_menu_choice;
     float  mouse_x, mouse_y;
     int    mouse_clicked;
     SDL_Texture *title_screen_texture;
-    int    menu_save_exists;   /* 1 if a save file was found at startup */
 
-    /* Pause menu */
-    Button pause_buttons[3];
+    /* Save/load sub-menu (from title screen) */
+    Button save_load_buttons[SL_BTN_COUNT]; /* New Game + Slot 1/2/3 + Back */
+    int    save_load_choice;
+
+    /* Pause menu (4 buttons: Resume / Save / Load / Quit) */
+    Button pause_buttons[4];
     int    pause_choice;
     float  save_feedback_timer;  /* counts down from >0 while "Game Saved!" shown */
+    int    pause_slot_mode;      /* PAUSE_SLOT_NONE / PAUSE_SLOT_SAVE / PAUSE_SLOT_LOAD */
+    int    pause_slot_choice;
+    Button pause_slot_buttons[SAVE_SLOT_COUNT + 1]; /* Slot 1/2/3 + Back */
 
     /* Settings menu */
     float  volume;                     /* 0–100 */
@@ -212,12 +233,13 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_security_cutscene(Game *game);
-void game_save(Game *game);
-void game_load(Game *game);
+void game_save_slot(Game *game, int slot);
+void game_load_slot(Game *game, int slot);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
 void game_render_menu(Game *game);
+void game_render_save_load_menu(Game *game);
 void game_render_playing(Game *game);
 void game_render_dialogue_overlay(Game *game);
 void game_render_inventory(Game *game);

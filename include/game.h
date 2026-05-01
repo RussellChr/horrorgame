@@ -13,6 +13,7 @@
 #include "monologue.h"
 #include "video.h"
 #include "enemy.h"
+#include "savegame.h"
 
 /* ── Monitor passcode constants ────────────────────────────────────────── */
 #define MONITOR_PANEL_X      685
@@ -49,6 +50,9 @@ typedef enum {
     GAME_STATE_SIMON,
     GAME_STATE_JUMPSCARE,
     GAME_STATE_GAME_OVER,
+    GAME_STATE_NEW_LOAD_MENU,   /* title-screen "New / Load Game" submenu  */
+    GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
+    GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
     GAME_STATE_QUIT
 } GameState;
 
@@ -88,9 +92,18 @@ typedef struct {
     int    mouse_clicked;
     SDL_Texture *title_screen_texture;
 
+    /* New / Load submenu (title screen) */
+    Button new_load_buttons[3];        /* New Game, Load Game, Back */
+    int    new_load_menu_choice;
+
     /* Pause menu */
-    Button pause_buttons[2];
+    Button pause_buttons[4];           /* Resume, Save, Load, Quit to Menu */
     int    pause_choice;
+
+    /* Save / Load slot selection menus */
+    Button    save_load_buttons[4];              /* Slot 1–3 + Cancel         */
+    char      save_slot_labels[SAVE_SLOT_COUNT][64]; /* dynamic slot text     */
+    GameState save_load_prev_state;              /* state to return to on Cancel */
 
     /* Settings menu */
     float  volume;                     /* 0–100 */
@@ -217,5 +230,8 @@ void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
+void game_render_new_load_menu(Game *game);
+void game_render_save_menu(Game *game);
+void game_render_load_menu(Game *game);
 
 #endif /* GAME_H */

@@ -9,6 +9,7 @@
 #include "dialogue.h"
 #include "video.h"
 #include "enemy.h"
+#include "savegame.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -389,7 +390,7 @@ void game_render_pause(Game *game)
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 145);
 
-    int pw = 320, ph = 200;
+    int pw = 320, ph = 300;
     int qx = (WINDOW_W - pw) / 2, qy = (WINDOW_H - ph) / 2;
 
     render_filled_rect(r, qx, qy, pw, ph, 25, 8, 8, 235);
@@ -397,7 +398,7 @@ void game_render_pause(Game *game)
     render_text_centered(r, "PAUSED", WINDOW_W/2, qy+18, 2, 200,110,110);
     render_filled_rect(r, qx+18, qy+44, pw-36, 2, 70,18,18, 190);
 
-    for (int i = 0; i < 2; i++) draw_button(r, &game->pause_buttons[i]);
+    for (int i = 0; i < 4; i++) draw_button(r, &game->pause_buttons[i]);
     render_text_centered(r, "[ESC] to resume",
                          WINDOW_W/2, qy+ph-20, 1, 78,22,22);
 }
@@ -699,4 +700,94 @@ void game_render_game_over(Game *game)
     /* Prompt */
     render_text_centered(r, "Press any key to return to the menu",
                          WINDOW_W / 2, py + ph - 28, 1, 110, 40, 40);
+}
+
+/* ── New / Load submenu (title screen) ──────────────────────────────────── */
+
+void game_render_new_load_menu(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Reuse the title-screen background */
+    if (game->title_screen_texture) {
+        render_texture(r, game->title_screen_texture, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 130);
+
+    /* Panel */
+    int pw = 320, ph = 230;
+    int px = (WINDOW_W - pw) / 2;
+    int py = 240;
+    render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 235);
+    render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
+    render_text_centered(r, "START GAME", WINDOW_W/2, py + 18, 2, 200, 110, 110);
+    render_filled_rect(r, px + 18, py + 44, pw - 36, 2, 70, 18, 18, 190);
+
+    for (int i = 0; i < 3; i++) {
+        Button btn = game->new_load_buttons[i];
+        if (i == game->new_load_menu_choice) btn.is_hovered = 1;
+        draw_button_menu(r, &btn);
+    }
+    render_text_centered(r, "[ESC] back",
+                         WINDOW_W / 2, py + ph - 18, 1, 78, 22, 22);
+}
+
+/* ── Shared helper: draw the save/load slot panel ────────────────────────── */
+
+static void render_save_load_panel(Game *game, const char *title, int is_save)
+{
+    SDL_Renderer *r = game->renderer;
+
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 160);
+
+    int pw = 460, ph = 360;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 20, 6, 6, 240);
+    render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
+    render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 160);
+
+    render_text_centered(r, title, WINDOW_W/2, py + 18, 2, 200, 110, 110);
+    render_filled_rect(r, px + 18, py + 44, pw - 36, 2, 70, 18, 18, 190);
+
+    for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++) {
+        Button btn = game->save_load_buttons[i];
+        /* For load menu, grey-out empty slots */
+        if (!is_save && i < SAVE_SLOT_COUNT) {
+            if (!savegame_exists(i + 1)) {
+                /* Render disabled-looking button */
+                int bx = (int)btn.rect.x, by_ = (int)btn.rect.y;
+                int bw = (int)btn.rect.w, bh = (int)btn.rect.h;
+                render_filled_rect(r, bx, by_, bw, bh, 25, 8, 8, 160);
+                render_rect_outline(r, bx, by_, bw, bh, 60, 15, 15, 180);
+                if (btn.text)
+                    render_text_centered(r, btn.text,
+                                         bx + bw / 2, by_ + (bh - 16) / 2,
+                                         2, 80, 40, 40);
+                continue;
+            }
+        }
+        draw_button(r, &btn);
+    }
+    render_text_centered(r, "[ESC] cancel",
+                         WINDOW_W / 2, py + ph - 18, 1, 78, 22, 22);
+}
+
+/* ── Save menu ───────────────────────────────────────────────────────────── */
+
+void game_render_save_menu(Game *game)
+{
+    if (!game) return;
+    render_save_load_panel(game, "SAVE GAME", 1);
+}
+
+/* ── Load menu ───────────────────────────────────────────────────────────── */
+
+void game_render_load_menu(Game *game)
+{
+    if (!game) return;
+    render_save_load_panel(game, "LOAD GAME", 0);
 }

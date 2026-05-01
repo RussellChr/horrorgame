@@ -68,7 +68,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
-    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New / Load Game");
+    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "Start Game");
     g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Settings");
     g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
 

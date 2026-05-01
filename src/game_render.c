@@ -111,7 +111,6 @@ void game_render_playing(Game *game)
                                        game->player->current_location_id);
     if (loc) {
         world_render_room(loc, game->renderer, &game->camera);
-        render_archive_glass(game, loc);
     }
 
     /* Player */
@@ -133,6 +132,8 @@ void game_render_playing(Game *game)
         render_gasmask_vignette(game);
     else
         render_archive_darkness(game);
+
+    render_archive_glass(game, loc);
 
     /* Lab poisonous gas: green tint overlay when in the lab */
     if (game->player->current_location_id == LOCATION_LAB) {

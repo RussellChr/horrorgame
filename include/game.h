@@ -35,6 +35,13 @@
 #define CONTAINMENT_LEVEL_RECT_W   125
 #define CONTAINMENT_LEVEL_RECT_H   122
 
+/* ── Save / menu constants ────────────────────────────────────────────── */
+#define SAVE_FEEDBACK_DURATION_SEC  2.0f  /* seconds "Game Saved!" banner is shown */
+#define MENU_BUTTON_NEW_GAME        0
+#define MENU_BUTTON_LOAD_GAME       1
+#define MENU_BUTTON_SETTINGS        2
+#define MENU_BUTTON_QUIT            3
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {

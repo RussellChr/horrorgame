@@ -160,6 +160,11 @@ int savegame_load(Game *game)
 
     fclose(f);
 
+    /* Validate version */
+    if (version < 1) {
+        return 0;
+    }
+
     /* Restore inventory */
     p->inventory_count = 0;
     for (int i = 0; i < inv_count; i++)

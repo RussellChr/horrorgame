@@ -394,7 +394,7 @@ void game_save(Game *game)
 {
     if (!game) return;
     savegame_save(game);
-    game->save_feedback_timer = 2.0f;   /* show "Game Saved!" for 2 s */
+    game->save_feedback_timer = SAVE_FEEDBACK_DURATION_SEC;
     game->menu_save_exists    = 1;
 }
 
@@ -438,12 +438,12 @@ void game_handle_event(Game *game, SDL_Event *event)
             for (int i = 0; i < 4; i++) {
                 if (button_is_clicked(&game->buttons[i],
                                       game->mouse_x, game->mouse_y)) {
-                    if      (i == 0) game_start_new(game);
-                    else if (i == 1) {
+                    if      (i == MENU_BUTTON_NEW_GAME)  game_start_new(game);
+                    else if (i == MENU_BUTTON_LOAD_GAME) {
                         if (game->menu_save_exists) game_load(game);
                     }
-                    else if (i == 2) game->state = GAME_STATE_SETTINGS;
-                    else if (i == 3) game->state = GAME_STATE_QUIT;
+                    else if (i == MENU_BUTTON_SETTINGS)  game->state = GAME_STATE_SETTINGS;
+                    else if (i == MENU_BUTTON_QUIT)      game->state = GAME_STATE_QUIT;
                 }
             }
         }
@@ -458,12 +458,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->current_menu_choice++;
                 break;
             case SDLK_RETURN:
-                if      (game->current_menu_choice == 0) game_start_new(game);
-                else if (game->current_menu_choice == 1) {
+                if      (game->current_menu_choice == MENU_BUTTON_NEW_GAME)  game_start_new(game);
+                else if (game->current_menu_choice == MENU_BUTTON_LOAD_GAME) {
                     if (game->menu_save_exists) game_load(game);
                 }
-                else if (game->current_menu_choice == 2) game->state = GAME_STATE_SETTINGS;
-                else if (game->current_menu_choice == 3) game->state = GAME_STATE_QUIT;
+                else if (game->current_menu_choice == MENU_BUTTON_SETTINGS)  game->state = GAME_STATE_SETTINGS;
+                else if (game->current_menu_choice == MENU_BUTTON_QUIT)      game->state = GAME_STATE_QUIT;
                 break;
             default: break;
             }

@@ -60,19 +60,19 @@ void game_render_menu(Game *game)
         Button btn = game->buttons[i];
         if (i == game->current_menu_choice) btn.is_hovered = 1;
         /* Grey-out the Load Game button when no save exists */
-        if (i == 1 && !game->menu_save_exists) btn.is_hovered = 0;
+        if (i == MENU_BUTTON_LOAD_GAME && !game->menu_save_exists) btn.is_hovered = 0;
         draw_button_menu(r, &btn);
     }
     /* Show a small hint below the Load Game button when a save exists */
     if (game->menu_save_exists) {
         render_text(r, "Save file found",
-                    (int)game->buttons[1].rect.x,
-                    (int)(game->buttons[1].rect.y + game->buttons[1].rect.h + 4),
+                    (int)game->buttons[MENU_BUTTON_LOAD_GAME].rect.x,
+                    (int)(game->buttons[MENU_BUTTON_LOAD_GAME].rect.y + game->buttons[MENU_BUTTON_LOAD_GAME].rect.h + 4),
                     1, 160, 200, 160);
     } else {
         render_text(r, "No save file",
-                    (int)game->buttons[1].rect.x,
-                    (int)(game->buttons[1].rect.y + game->buttons[1].rect.h + 4),
+                    (int)game->buttons[MENU_BUTTON_LOAD_GAME].rect.x,
+                    (int)(game->buttons[MENU_BUTTON_LOAD_GAME].rect.y + game->buttons[MENU_BUTTON_LOAD_GAME].rect.h + 4),
                     1, 100, 100, 100);
     }
     /* mouse coordinates */

@@ -54,13 +54,6 @@ static void render_archive_glass(Game *game, const Location *loc)
 
     int w = game->glass_texture_w;
     int h = game->glass_texture_h;
-    if (w <= 0 || h <= 0) {
-        float tw = 0.0f, th = 0.0f;
-        if (SDL_GetTextureSize(game->glass_texture, &tw, &th) && tw > 0.0f && th > 0.0f) {
-            w = (int)tw;
-            h = (int)th;
-        }
-    }
     if (w <= 0 || h <= 0) return;
 
     for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {

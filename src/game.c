@@ -139,6 +139,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     /* Load archive glass overlay */
     g->glass_texture = render_load_texture(renderer, "assets/glass.png");
+    g->glass_texture_w = 0;
+    g->glass_texture_h = 0;
     if (g->glass_texture) {
         float tw = 0.0f, th = 0.0f;
         if (SDL_GetTextureSize(g->glass_texture, &tw, &th) && tw > 0.0f && th > 0.0f) {

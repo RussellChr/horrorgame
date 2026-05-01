@@ -52,9 +52,8 @@ static void render_archive_glass(Game *game, const Location *loc)
     if (!game || !loc || loc->id != LOCATION_ARCHIVE) return;
     if (!game->glass_texture) return;
 
-    int w = 32;
-    int h = 32;
-    if (w <= 0 || h <= 0) return;
+    int w = game->glass_texture_w;
+    int h = game->glass_texture_h;
 
     for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
         int sx = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);

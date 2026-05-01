@@ -143,13 +143,12 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->glass_texture_h = 0;
     if (g->glass_texture) {
         float tw = 0.0f, th = 0.0f;
-        if (SDL_GetTextureSize(g->glass_texture, &tw, &th)) {
-            if (tw > 0.0f && th > 0.0f) {
-                g->glass_texture_w = (int)tw;
-                g->glass_texture_h = (int)th;
-            }
-        } else {
+        int size_result = SDL_GetTextureSize(g->glass_texture, &tw, &th);
+        if (size_result < 0 || tw <= 0.0f || th <= 0.0f) {
             SDL_Log("game_init: failed to get glass texture size: %s", SDL_GetError());
+        } else {
+            g->glass_texture_w = (int)tw;
+            g->glass_texture_h = (int)th;
         }
     }
 

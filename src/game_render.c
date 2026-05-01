@@ -56,10 +56,24 @@ void game_render_menu(Game *game)
         // ... existing menu button code ...
     }
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
         Button btn = game->buttons[i];
         if (i == game->current_menu_choice) btn.is_hovered = 1;
+        /* Grey-out the Load Game button when no save exists */
+        if (i == 1 && !game->menu_save_exists) btn.is_hovered = 0;
         draw_button_menu(r, &btn);
+    }
+    /* Show a small hint below the Load Game button when a save exists */
+    if (game->menu_save_exists) {
+        render_text(r, "Save file found",
+                    (int)game->buttons[1].rect.x,
+                    (int)(game->buttons[1].rect.y + game->buttons[1].rect.h + 4),
+                    1, 160, 200, 160);
+    } else {
+        render_text(r, "No save file",
+                    (int)game->buttons[1].rect.x,
+                    (int)(game->buttons[1].rect.y + game->buttons[1].rect.h + 4),
+                    1, 100, 100, 100);
     }
     /* mouse coordinates */
     render_text_centered(r,
@@ -389,7 +403,7 @@ void game_render_pause(Game *game)
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 145);
 
-    int pw = 320, ph = 200;
+    int pw = 320, ph = 270;
     int qx = (WINDOW_W - pw) / 2, qy = (WINDOW_H - ph) / 2;
 
     render_filled_rect(r, qx, qy, pw, ph, 25, 8, 8, 235);
@@ -397,7 +411,14 @@ void game_render_pause(Game *game)
     render_text_centered(r, "PAUSED", WINDOW_W/2, qy+18, 2, 200,110,110);
     render_filled_rect(r, qx+18, qy+44, pw-36, 2, 70,18,18, 190);
 
-    for (int i = 0; i < 2; i++) draw_button(r, &game->pause_buttons[i]);
+    for (int i = 0; i < 3; i++) draw_button(r, &game->pause_buttons[i]);
+
+    /* "Game Saved!" feedback */
+    if (game->save_feedback_timer > 0.0f) {
+        render_text_centered(r, "Game Saved!",
+                             WINDOW_W/2, qy+ph-40, 1, 100, 220, 100);
+    }
+
     render_text_centered(r, "[ESC] to resume",
                          WINDOW_W/2, qy+ph-20, 1, 78,22,22);
 }

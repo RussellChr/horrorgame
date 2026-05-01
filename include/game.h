@@ -82,15 +82,17 @@ typedef struct {
     char interact_label[64];         /* text shown in the prompt      */
 
     /* Main menu */
-    Button buttons[3];
+    Button buttons[4];
     int    current_menu_choice;
     float  mouse_x, mouse_y;
     int    mouse_clicked;
     SDL_Texture *title_screen_texture;
+    int    menu_save_exists;   /* 1 if a save file was found at startup */
 
     /* Pause menu */
-    Button pause_buttons[2];
+    Button pause_buttons[3];
     int    pause_choice;
+    float  save_feedback_timer;  /* counts down from >0 while "Game Saved!" shown */
 
     /* Settings menu */
     float  volume;                     /* 0–100 */
@@ -203,6 +205,8 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_security_cutscene(Game *game);
+void game_save(Game *game);
+void game_load(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 

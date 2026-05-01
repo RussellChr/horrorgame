@@ -12,6 +12,7 @@
 #include "interactions.h"
 #include "video.h"
 #include "enemy.h"
+#include "savegame.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -69,10 +70,12 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
     g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New Game");
-    g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Settings");
-    g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
-    g->pause_buttons[0] = make_button(bx, 310.0f, bw, bh, "Resume");
-    g->pause_buttons[1] = make_button(bx, 380.0f, bw, bh, "Quit to Menu");
+    g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Load Game");
+    g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Settings");
+    g->buttons[3] = make_button(60.0f, 500.0f + 3.0f * (bh + 10.0f), bw, bh, "Quit");
+    g->pause_buttons[0] = make_button(bx, 280.0f, bw, bh, "Resume");
+    g->pause_buttons[1] = make_button(bx, 350.0f, bw, bh, "Save Game");
+    g->pause_buttons[2] = make_button(bx, 420.0f, bw, bh, "Quit to Menu");
 
     /* Settings defaults */
     g->volume     = 100.0f;
@@ -145,6 +148,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     if (!g->dark_overlay)
         SDL_Log("game_init: failed to create dark_overlay texture: %s",
                 SDL_GetError());
+
+    /* Check whether a save file already exists */
+    g->menu_save_exists = savegame_exists();
 
     return g;
 }
@@ -382,6 +388,31 @@ void game_start_security_cutscene(Game *game)
     game->state             = GAME_STATE_CUTSCENE;
 }
 
+/* ── Save / Load helpers ───────────────────────────────────────────────── */
+
+void game_save(Game *game)
+{
+    if (!game) return;
+    savegame_save(game);
+    game->save_feedback_timer = 2.0f;   /* show "Game Saved!" for 2 s */
+    game->menu_save_exists    = 1;
+}
+
+void game_load(Game *game)
+{
+    if (!game) return;
+    /* Start a fresh game first so all textures / subsystems are ready. */
+    game_start_new(game);
+    /* Clear any pending opening monologue so it doesn't replay on load. */
+    if (game->dialogue_tree) {
+        dialogue_tree_destroy(game->dialogue_tree);
+        game->dialogue_tree = NULL;
+    }
+    /* Overwrite with the saved state. */
+    savegame_load(game);
+    game->state = GAME_STATE_PLAYING;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -399,17 +430,20 @@ void game_handle_event(Game *game, SDL_Event *event)
     switch (game->state) {
 
     case GAME_STATE_MENU:
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
             button_update_hover(&game->buttons[i],
                                 game->mouse_x, game->mouse_y);
 
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 if (button_is_clicked(&game->buttons[i],
                                       game->mouse_x, game->mouse_y)) {
                     if      (i == 0) game_start_new(game);
-                    else if (i == 1) game->state = GAME_STATE_SETTINGS;
-                    else if (i == 2) game->state = GAME_STATE_QUIT;
+                    else if (i == 1) {
+                        if (game->menu_save_exists) game_load(game);
+                    }
+                    else if (i == 2) game->state = GAME_STATE_SETTINGS;
+                    else if (i == 3) game->state = GAME_STATE_QUIT;
                 }
             }
         }
@@ -420,13 +454,16 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->current_menu_choice--;
                 break;
             case SDLK_DOWN:
-                if (game->current_menu_choice < 2)
+                if (game->current_menu_choice < 3)
                     game->current_menu_choice++;
                 break;
             case SDLK_RETURN:
                 if      (game->current_menu_choice == 0) game_start_new(game);
-                else if (game->current_menu_choice == 1) game->state = GAME_STATE_SETTINGS;
-                else if (game->current_menu_choice == 2) game->state = GAME_STATE_QUIT;
+                else if (game->current_menu_choice == 1) {
+                    if (game->menu_save_exists) game_load(game);
+                }
+                else if (game->current_menu_choice == 2) game->state = GAME_STATE_SETTINGS;
+                else if (game->current_menu_choice == 3) game->state = GAME_STATE_QUIT;
                 break;
             default: break;
             }
@@ -702,7 +739,7 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_PAUSE:
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 3; i++)
             button_update_hover(&game->pause_buttons[i],
                                 game->mouse_x, game->mouse_y);
         if (event->type == SDL_EVENT_KEY_DOWN) {
@@ -714,6 +751,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                                   game->mouse_x, game->mouse_y))
                 game->state = GAME_STATE_PLAYING;
             if (button_is_clicked(&game->pause_buttons[1],
+                                  game->mouse_x, game->mouse_y))
+                game_save(game);
+            if (button_is_clicked(&game->pause_buttons[2],
                                   game->mouse_x, game->mouse_y)) {
                 game->state = GAME_STATE_MENU;
             }
@@ -1102,6 +1142,13 @@ void game_update(Game *game)
             game->simon_player_pos = 0;
             game->state            = GAME_STATE_SIMON;
         }
+    }
+
+    /* Tick the save feedback notification regardless of game state */
+    if (game->save_feedback_timer > 0.0f) {
+        game->save_feedback_timer -= dt;
+        if (game->save_feedback_timer < 0.0f)
+            game->save_feedback_timer = 0.0f;
     }
 
     /* Tick the pickup notification regardless of game state */

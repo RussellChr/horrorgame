@@ -122,6 +122,11 @@ typedef struct {
     float ambient_flicker_duration;   /* remaining seconds of active flicker pulse */
     Uint8 ambient_flicker_alpha;      /* extra darkness alpha applied during pulse */
 
+    /* Archive room glass overlay */
+    SDL_Texture *glass_texture;
+    int glass_texture_w;
+    int glass_texture_h;
+
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */

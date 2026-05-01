@@ -137,6 +137,16 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
 
+    /* Load archive glass overlay */
+    g->glass_texture = render_load_texture(renderer, "assets/glass.png");
+    if (g->glass_texture) {
+        float tw = 0.0f, th = 0.0f;
+        if (SDL_GetTextureSize(g->glass_texture, &tw, &th) && tw > 0.0f && th > 0.0f) {
+            g->glass_texture_w = (int)tw;
+            g->glass_texture_h = (int)th;
+        }
+    }
+
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
                                         SDL_PIXELFORMAT_RGBA8888,
@@ -176,6 +186,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
+    render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
     free(game);

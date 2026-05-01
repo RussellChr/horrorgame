@@ -759,13 +759,13 @@ static void render_save_load_panel(Game *game, const char *title, int is_save)
         if (!is_save && i < SAVE_SLOT_COUNT) {
             if (!savegame_exists(i + 1)) {
                 /* Render disabled-looking button */
-                int bx = (int)btn.rect.x, by_ = (int)btn.rect.y;
+                int bx = (int)btn.rect.x, button_y = (int)btn.rect.y;
                 int bw = (int)btn.rect.w, bh = (int)btn.rect.h;
-                render_filled_rect(r, bx, by_, bw, bh, 25, 8, 8, 160);
-                render_rect_outline(r, bx, by_, bw, bh, 60, 15, 15, 180);
+                render_filled_rect(r, bx, button_y, bw, bh, 25, 8, 8, 160);
+                render_rect_outline(r, bx, button_y, bw, bh, 60, 15, 15, 180);
                 if (btn.text)
                     render_text_centered(r, btn.text,
-                                         bx + bw / 2, by_ + (bh - 16) / 2,
+                                         bx + bw / 2, button_y + (bh - 16) / 2,
                                          2, 80, 40, 40);
                 continue;
             }

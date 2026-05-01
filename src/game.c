@@ -317,8 +317,7 @@ static void game_do_save(Game *game, int slot)
 
     SaveData data;
     memset(&data, 0, sizeof(data));
-    memcpy(data.magic, SAVE_MAGIC, 7);
-    data.magic[7] = '\0';
+    memcpy(data.magic, SAVE_MAGIC, 8); /* copies "HGSAVE1\0" (7 chars + NUL) */
 
     data.player_flags             = game->player->flags;
     data.player_x                 = game->player->x;
@@ -441,7 +440,6 @@ static void game_do_load(Game *game, int slot)
     game->passcode_wrong          = 0;
     game->passcode_correct        = 0;
     game->simon_death_triggered   = 0;
-    game->lab_death_triggered     = 0;
 }
 
 void game_change_location(Game *game, int location_id,

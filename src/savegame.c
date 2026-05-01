@@ -71,7 +71,7 @@ int savegame_read(int slot, SaveData *data)
     fclose(f);
 
     if (!ok) return 0;
-    /* Validate magic bytes */
-    if (memcmp(data->magic, SAVE_MAGIC, 7) != 0) return 0;
+    /* Validate magic bytes (all 8, including the NUL terminator) */
+    if (memcmp(data->magic, SAVE_MAGIC, 8) != 0) return 0;
     return 1;
 }

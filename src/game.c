@@ -68,11 +68,34 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
-    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New Game");
+    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "Start Game");
     g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Settings");
     g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
-    g->pause_buttons[0] = make_button(bx, 310.0f, bw, bh, "Resume");
-    g->pause_buttons[1] = make_button(bx, 380.0f, bw, bh, "Quit to Menu");
+
+    /* New / Load submenu buttons */
+    float nlx = (WINDOW_W - bw) / 2.0f;
+    float nly = 300.0f;
+    g->new_load_buttons[0] = make_button(nlx, nly,                       bw, bh, "New Game");
+    g->new_load_buttons[1] = make_button(nlx, nly + (bh + 10.0f),       bw, bh, "Load Game");
+    g->new_load_buttons[2] = make_button(nlx, nly + 2.0f * (bh + 10.0f),bw, bh, "Back");
+
+    /* Pause menu (4 buttons) */
+    g->pause_buttons[0] = make_button(bx, 220.0f, bw, bh, "Resume");
+    g->pause_buttons[1] = make_button(bx, 290.0f, bw, bh, "Save Game");
+    g->pause_buttons[2] = make_button(bx, 360.0f, bw, bh, "Load Game");
+    g->pause_buttons[3] = make_button(bx, 430.0f, bw, bh, "Quit to Menu");
+
+    /* Save / Load slot buttons – text points into save_slot_labels[] */
+    float slw = 400.0f, slh = 60.0f;
+    float slx = (WINDOW_W - slw) / 2.0f;
+    for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+        snprintf(g->save_slot_labels[i], sizeof(g->save_slot_labels[i]),
+                 "Slot %d - [Empty]", i + 1);
+        g->save_load_buttons[i] = make_button(slx, 230.0f + (float)i * (slh + 12.0f),
+                                              slw, slh, g->save_slot_labels[i]);
+    }
+    g->save_load_buttons[SAVE_SLOT_COUNT] = make_button(
+        slx, 230.0f + (float)SAVE_SLOT_COUNT * (slh + 12.0f), slw, slh, "Cancel");
 
     /* Settings defaults */
     g->volume     = 100.0f;
@@ -262,6 +285,163 @@ void game_start_new(Game *game)
     }
 }
 
+/* ── Save / Load helpers ────────────────────────────────────────────────── */
+
+/* Refresh save_slot_labels[] by reading the label from each save file. */
+static void game_refresh_save_slot_labels(Game *game)
+{
+    for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+        if (savegame_exists(i + 1)) {
+            char lbl[SAVE_LABEL_MAX];
+            if (savegame_read_label(i + 1, lbl, sizeof(lbl)) && lbl[0] != '\0')
+                snprintf(game->save_slot_labels[i],
+                         sizeof(game->save_slot_labels[i]), "%s", lbl);
+            else
+                snprintf(game->save_slot_labels[i],
+                         sizeof(game->save_slot_labels[i]),
+                         "Slot %d - Save File", i + 1);
+        } else {
+            snprintf(game->save_slot_labels[i],
+                     sizeof(game->save_slot_labels[i]),
+                     "Slot %d - [Empty]", i + 1);
+        }
+        /* Button text pointer already points into save_slot_labels[i] */
+        game->save_load_buttons[i].text = game->save_slot_labels[i];
+    }
+}
+
+/* Save current game state to a slot (1-based). */
+static void game_do_save(Game *game, int slot)
+{
+    if (!game || !game->player || !game->story) return;
+
+    SaveData data;
+    memset(&data, 0, sizeof(data));
+    memcpy(data.magic, SAVE_MAGIC, 8); /* copies "HGSAVE1\0" (7 chars + NUL) */
+
+    data.player_flags             = game->player->flags;
+    data.player_x                 = game->player->x;
+    data.player_y                 = game->player->y;
+    data.location_id              = game->player->current_location_id;
+    data.inventory_count          = game->player->inventory_count;
+    memcpy(data.inventory, game->player->inventory, sizeof(data.inventory));
+    data.current_chapter          = game->story->current_chapter;
+    data.choices_made             = game->story->choices_made;
+    data.enemy_active             = game->enemy.active;
+    data.flashlight_active        = game->flashlight_active;
+    data.gasmask_active           = game->gasmask_active;
+    data.security_cutscene_played = game->security_cutscene_played;
+
+    /* Build a human-readable label */
+    const char *loc_name = "Unknown";
+    if      (data.location_id == LOCATION_ARCHIVE) loc_name = "Archive";
+    else if (data.location_id == LOCATION_LAB)     loc_name = "Lab";
+    else if (data.location_id == LOCATION_HALLWAY) loc_name = "Hallway";
+    snprintf(data.save_label, sizeof(data.save_label),
+             "Slot %d - %s", slot, loc_name);
+
+    savegame_write(slot, &data);
+}
+
+/* Load a saved game from a slot (1-based) and switch to GAME_STATE_PLAYING. */
+static void game_do_load(Game *game, int slot)
+{
+    if (!game) return;
+
+    SaveData data;
+    if (!savegame_read(slot, &data)) return;
+
+    /* --- Tear down existing game state ---------------------------------- */
+    if (game->player)        { player_destroy(game->player);      game->player        = NULL; }
+    if (game->world)         { world_destroy(game->world);         game->world         = NULL; }
+    if (game->story)         { story_destroy(game->story);         game->story         = NULL; }
+    if (game->dialogue_tree) { dialogue_tree_destroy(game->dialogue_tree);
+                               game->dialogue_tree = NULL; }
+
+    /* --- Re-create subsystems ------------------------------------------- */
+    game->player = player_create("Alex");
+    game->world  = world_create();
+    game->story  = story_create();
+
+    /* Load player textures (same as game_start_new) */
+    game->player->idle_texture_north = render_load_texture(game->renderer, "assets/player/player_idle_north.png");
+    game->player->idle_texture_south = render_load_texture(game->renderer, "assets/player/player_idle_south.png");
+    game->player->idle_texture_east  = render_load_texture(game->renderer, "assets/player/player_idle_east.png");
+    game->player->idle_texture_west  = render_load_texture(game->renderer, "assets/player/player_idle_west.png");
+    game->player->walk_frames_north[0] = render_load_texture(game->renderer, "assets/player/player_walk_north_0.png");
+    game->player->walk_frames_north[1] = render_load_texture(game->renderer, "assets/player/player_walk_north_1.png");
+    game->player->walk_frames_south[0] = render_load_texture(game->renderer, "assets/player/player_walk_south_0.png");
+    game->player->walk_frames_south[1] = render_load_texture(game->renderer, "assets/player/player_walk_south_1.png");
+    game->player->walk_frames_east[0]  = render_load_texture(game->renderer, "assets/player/player_walk_east_0.png");
+    game->player->walk_frames_east[1]  = render_load_texture(game->renderer, "assets/player/player_walk_east_1.png");
+    game->player->walk_frames_west[0]  = render_load_texture(game->renderer, "assets/player/player_walk_west_0.png");
+    game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
+
+    game->player->current_direction = DIRECTION_EAST;
+    game->player->frame_index       = 0;
+    game->player->frame_timer       = 0.0f;
+    game->player->frame_duration    = 0.15f;
+
+    story_populate_world(game->world, "assets/locations.txt");
+    world_setup_rooms(game->world, game->renderer);
+
+    /* --- Apply saved data ----------------------------------------------- */
+    game->player->flags               = data.player_flags;
+    game->player->x                   = data.player_x;
+    game->player->y                   = data.player_y;
+    game->player->current_location_id = data.location_id;
+    /* Clamp inventory_count to valid range */
+    if (data.inventory_count < 0) data.inventory_count = 0;
+    if (data.inventory_count > INVENTORY_CAPACITY) data.inventory_count = INVENTORY_CAPACITY;
+    game->player->inventory_count     = data.inventory_count;
+    memcpy(game->player->inventory, data.inventory, sizeof(game->player->inventory));
+    game->story->current_chapter      = data.current_chapter;
+    game->story->choices_made         = data.choices_made;
+    game->flashlight_active           = data.flashlight_active;
+    game->gasmask_active              = data.gasmask_active;
+    game->security_cutscene_played    = data.security_cutscene_played;
+
+    /* Re-init enemy */
+    enemy_free(&game->enemy);
+    {
+        Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+        int hw_w = hw ? hw->room_width  : 1920;
+        int hw_h = hw ? hw->room_height : 960;
+        enemy_init(&game->enemy, hw_w, hw_h);
+        enemy_load_sprites(&game->enemy, game->renderer);
+    }
+    game->enemy.active = data.enemy_active;
+    if (data.enemy_active) game->enemy.state = ENEMY_STATE_PATROL;
+
+    /* Camera */
+    Location *loc = world_get_location(game->world, data.location_id);
+    int loc_w = loc ? loc->room_width  : ROOM_W;
+    int loc_h = loc ? loc->room_height : ROOM_H;
+    camera_init(&game->camera, WINDOW_W, WINDOW_H, loc_w, loc_h);
+    camera_snap(&game->camera, data.player_x, data.player_y);
+
+    /* Reset transient state */
+    game->state                   = GAME_STATE_PLAYING;
+    game->near_interactive        = 0;
+    game->interactive_trigger_id  = -1;
+    game->selected_inventory_slot = 0;
+    game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered     = 0;
+    game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7);
+    game->ambient_flicker_duration = 0.0f;
+    game->ambient_flicker_alpha    = 0;
+    game->pickup_notify_timer      = 0.0f;
+    game->show_note_locker        = 0;
+    game->show_monitor_zoom       = 0;
+    game->show_containment_level  = 0;
+    game->passcode_active         = 0;
+    game->passcode_input_len      = 0;
+    game->passcode_input[0]       = '\0';
+    game->passcode_wrong          = 0;
+    game->passcode_correct        = 0;
+    game->simon_death_triggered   = 0;
+}
+
 void game_change_location(Game *game, int location_id,
                           float spawn_x, float spawn_y)
 {
@@ -407,7 +587,7 @@ void game_handle_event(Game *game, SDL_Event *event)
             for (int i = 0; i < 3; i++) {
                 if (button_is_clicked(&game->buttons[i],
                                       game->mouse_x, game->mouse_y)) {
-                    if      (i == 0) game_start_new(game);
+                    if      (i == 0) game->state = GAME_STATE_NEW_LOAD_MENU;
                     else if (i == 1) game->state = GAME_STATE_SETTINGS;
                     else if (i == 2) game->state = GAME_STATE_QUIT;
                 }
@@ -424,9 +604,56 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->current_menu_choice++;
                 break;
             case SDLK_RETURN:
-                if      (game->current_menu_choice == 0) game_start_new(game);
+                if      (game->current_menu_choice == 0) game->state = GAME_STATE_NEW_LOAD_MENU;
                 else if (game->current_menu_choice == 1) game->state = GAME_STATE_SETTINGS;
                 else if (game->current_menu_choice == 2) game->state = GAME_STATE_QUIT;
+                break;
+            default: break;
+            }
+        }
+        break;
+
+    case GAME_STATE_NEW_LOAD_MENU:
+        for (int i = 0; i < 3; i++)
+            button_update_hover(&game->new_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            if (button_is_clicked(&game->new_load_buttons[0],
+                                  game->mouse_x, game->mouse_y))
+                game_start_new(game);
+            else if (button_is_clicked(&game->new_load_buttons[1],
+                                       game->mouse_x, game->mouse_y)) {
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_NEW_LOAD_MENU;
+                game->state = GAME_STATE_LOAD_MENU;
+            } else if (button_is_clicked(&game->new_load_buttons[2],
+                                         game->mouse_x, game->mouse_y))
+                game->state = GAME_STATE_MENU;
+        }
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            switch (event->key.key) {
+            case SDLK_UP:
+                if (game->new_load_menu_choice > 0)
+                    game->new_load_menu_choice--;
+                break;
+            case SDLK_DOWN:
+                if (game->new_load_menu_choice < 2)
+                    game->new_load_menu_choice++;
+                break;
+            case SDLK_RETURN:
+                if (game->new_load_menu_choice == 0)
+                    game_start_new(game);
+                else if (game->new_load_menu_choice == 1) {
+                    game_refresh_save_slot_labels(game);
+                    game->save_load_prev_state = GAME_STATE_NEW_LOAD_MENU;
+                    game->state = GAME_STATE_LOAD_MENU;
+                } else {
+                    game->state = GAME_STATE_MENU;
+                }
+                break;
+            case SDLK_ESCAPE:
+                game->state = GAME_STATE_MENU;
                 break;
             default: break;
             }
@@ -702,7 +929,7 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_PAUSE:
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 4; i++)
             button_update_hover(&game->pause_buttons[i],
                                 game->mouse_x, game->mouse_y);
         if (event->type == SDL_EVENT_KEY_DOWN) {
@@ -714,6 +941,20 @@ void game_handle_event(Game *game, SDL_Event *event)
                                   game->mouse_x, game->mouse_y))
                 game->state = GAME_STATE_PLAYING;
             if (button_is_clicked(&game->pause_buttons[1],
+                                  game->mouse_x, game->mouse_y)) {
+                /* Save Game */
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_PAUSE;
+                game->state = GAME_STATE_SAVE_MENU;
+            }
+            if (button_is_clicked(&game->pause_buttons[2],
+                                  game->mouse_x, game->mouse_y)) {
+                /* Load Game (from in-game) */
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_PAUSE;
+                game->state = GAME_STATE_LOAD_MENU;
+            }
+            if (button_is_clicked(&game->pause_buttons[3],
                                   game->mouse_x, game->mouse_y)) {
                 game->state = GAME_STATE_MENU;
             }
@@ -842,6 +1083,57 @@ void game_handle_event(Game *game, SDL_Event *event)
             game->simon_phase      = 1; /* resume player-input phase */
             game->simon_player_pos = 0;
             game->state            = GAME_STATE_SIMON;
+        }
+        break;
+
+    case GAME_STATE_SAVE_MENU:
+        for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++)
+            button_update_hover(&game->save_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->state = game->save_load_prev_state;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Slot buttons 0–2 */
+            for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+                if (button_is_clicked(&game->save_load_buttons[i],
+                                      game->mouse_x, game->mouse_y)) {
+                    game_do_save(game, i + 1);
+                    game_refresh_save_slot_labels(game);
+                    game->state = game->save_load_prev_state;
+                }
+            }
+            /* Cancel button */
+            if (button_is_clicked(&game->save_load_buttons[SAVE_SLOT_COUNT],
+                                  game->mouse_x, game->mouse_y)) {
+                game->state = game->save_load_prev_state;
+            }
+        }
+        break;
+
+    case GAME_STATE_LOAD_MENU:
+        for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++)
+            button_update_hover(&game->save_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->state = game->save_load_prev_state;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Slot buttons 0–2 */
+            for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+                if (button_is_clicked(&game->save_load_buttons[i],
+                                      game->mouse_x, game->mouse_y)) {
+                    game_do_load(game, i + 1);
+                    /* game_do_load sets state to PLAYING on success */
+                }
+            }
+            /* Cancel button */
+            if (button_is_clicked(&game->save_load_buttons[SAVE_SLOT_COUNT],
+                                  game->mouse_x, game->mouse_y)) {
+                game->state = game->save_load_prev_state;
+            }
         }
         break;
 
@@ -1131,6 +1423,25 @@ void game_render(Game *game)
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
+    case GAME_STATE_NEW_LOAD_MENU: game_render_new_load_menu(game); break;
+    case GAME_STATE_SAVE_MENU:
+        game_render_playing(game);
+        game_render_save_menu(game);
+        break;
+    case GAME_STATE_LOAD_MENU:
+        if (game->player)
+            game_render_playing(game);
+        else {
+            /* Draw title screen background without menu buttons */
+            if (game->title_screen_texture)
+                render_texture(game->renderer, game->title_screen_texture,
+                               0, 0, WINDOW_W, WINDOW_H);
+            else
+                render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                                   0, 0, 0, 255);
+        }
+        game_render_load_menu(game);
+        break;
     case GAME_STATE_PAUSE:
         game_render_playing(game);
         game_render_pause(game);

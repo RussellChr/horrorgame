@@ -60,6 +60,7 @@ add_executable(horrorgame
     src/npc.c
     src/video.c
     src/enemy.c
+    src/savegame.c
 )
 
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})

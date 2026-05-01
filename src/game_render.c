@@ -37,6 +37,7 @@ static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
 }
 
 #define ARCHIVE_GLASS_COUNT 6
+#define ARCHIVE_GLASS_SIZE  32
 
 static const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT] = {
     { 4019, 1192 },
@@ -52,16 +53,16 @@ static void render_archive_glass(Game *game, const Location *loc)
     if (!game || !loc || loc->id != LOCATION_ARCHIVE) return;
     if (!game->glass_texture) return;
 
-    const int w = game->glass_texture_w;
-    const int h = game->glass_texture_h;
+    const int w = ARCHIVE_GLASS_SIZE;
+    const int h = ARCHIVE_GLASS_SIZE;
 
     for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
-        int glass_screen_x = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
-        int glass_screen_y = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
-        if (glass_screen_x >= WINDOW_W || glass_screen_y >= WINDOW_H ||
-            glass_screen_x + w <= 0 || glass_screen_y + h <= 0)
+        int screen_x = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
+        int screen_y = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
+        if (screen_x >= WINDOW_W || screen_y >= WINDOW_H ||
+            screen_x + w <= 0 || screen_y + h <= 0)
             continue;
-        render_texture(game->renderer, game->glass_texture, glass_screen_x, glass_screen_y, w, h);
+        render_texture(game->renderer, game->glass_texture, screen_x, screen_y, w, h);
     }
 }
 

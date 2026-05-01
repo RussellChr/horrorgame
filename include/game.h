@@ -124,8 +124,6 @@ typedef struct {
 
     /* Archive room glass overlay */
     SDL_Texture *glass_texture;
-    int glass_texture_w;
-    int glass_texture_h;
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */

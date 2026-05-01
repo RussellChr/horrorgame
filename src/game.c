@@ -139,9 +139,6 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     /* Load archive glass overlay */
     g->glass_texture = render_load_texture(renderer, "assets/glass.png");
-    /* Glass overlays are rendered at a fixed size, independent of asset dimensions. */
-    g->glass_texture_w = 32;
-    g->glass_texture_h = 32;
 
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,

@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Lab overlay alpha ──────────────────────────────────────────────────── */
 /* Alpha of the green gas overlay (0-255). */
@@ -528,7 +529,10 @@ static void render_locker_minimap(Game *game)
     float room_w = (hw && hw->room_width  > 0) ? (float)hw->room_width  : 3840.0f;
     float room_h = (hw && hw->room_height > 0) ? (float)hw->room_height : 720.0f;
 
-    /* Draw enemy dot if the hallway enemy is active */
+    /* Darkness fog-of-war: cover the whole room area in near-opaque black,
+     * revealing only a small circle around the enemy ("sight vision"). */
+    const int SIGHT_R = 40; /* radius in minimap pixels */
+
     if (game->enemy.active) {
         float scale_x = (float)RW / room_w;
         float scale_y = (float)RH / room_h;
@@ -540,11 +544,27 @@ static void render_locker_minimap(Game *game)
         int ex = RX + (int)(ecx * scale_x);
         int ey = RY + (int)(ecy * scale_y);
 
-        /* Clamp to room rect */
+        /* Clamp dot to room rect */
         if (ex < RX + 2)        ex = RX + 2;
         if (ex > RX + RW - 6)   ex = RX + RW - 6;
         if (ey < RY + 2)        ey = RY + 2;
         if (ey > RY + RH - 6)   ey = RY + RH - 6;
+
+        /* Scanline darkness: full dark rows outside circle, split rows inside */
+        for (int row = RY; row < RY + RH; row++) {
+            int dy = row - ey;
+            if (dy < -SIGHT_R || dy > SIGHT_R) {
+                render_filled_rect(r, RX, row, RW, 1, 0, 0, 0, 220);
+            } else {
+                int dx = (int)sqrtf((float)(SIGHT_R * SIGHT_R - dy * dy));
+                int lx1 = ex - dx;
+                int lx2 = ex + dx;
+                if (lx1 > RX)
+                    render_filled_rect(r, RX, row, lx1 - RX, 1, 0, 0, 0, 220);
+                if (lx2 < RX + RW)
+                    render_filled_rect(r, lx2, row, RX + RW - lx2, 1, 0, 0, 0, 220);
+            }
+        }
 
         /* Red dot (6×6) */
         render_filled_rect(r, ex - 3, ey - 3, 6, 6, 220, 40, 40, 255);
@@ -555,6 +575,9 @@ static void render_locker_minimap(Game *game)
         if (label_x < RX)              label_x = RX;
         if (label_x > RX + RW - 40)    label_x = RX + RW - 40;
         render_text(r, "ENEMY", label_x, ey - 14, 1, 220, 60, 60);
+    } else {
+        /* Enemy not active — cover the whole room in darkness */
+        render_filled_rect(r, RX, RY, RW, RH, 0, 0, 0, 220);
     }
 }
 

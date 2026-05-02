@@ -314,6 +314,73 @@ void game_handle_interaction(Game *game)
     else if (tid == 40 && loc_id == 0) {
         game_set_dialogue_tree(game, "stranger", 40);
     }
+    /* ── Archive room item/door interactions (loc 0, triggers 120-122) ───── */
+    else if (loc_id == 0 && (tid == 120 || tid == 121 || tid == 122)) {
+        if (tid == 121) {
+            /* Tile 3: fingerprint pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+                Item fp;
+                strncpy(fp.name, "Fingerprint", ITEM_NAME_MAX - 1);
+                fp.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp.description, "A dusty fingerprint impression.",
+                        ITEM_DESC_MAX - 1);
+                fp.description[ITEM_DESC_MAX - 1] = '\0';
+                fp.id     = ITEM_ID_FINGERPRINT;
+                fp.usable = 0;
+                player_add_item(game->player, &fp);
+                game_set_dialogue_tree(game, "archive_fingerprint", 0);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", 0);
+            }
+        } else if (tid == 122) {
+            /* Tile 4: thermal fuse pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+                Item tf;
+                strncpy(tf.name, "Thermal Fuse", ITEM_NAME_MAX - 1);
+                tf.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(tf.description, "A small thermal fuse used in electronic door systems.",
+                        ITEM_DESC_MAX - 1);
+                tf.description[ITEM_DESC_MAX - 1] = '\0';
+                tf.id     = ITEM_ID_THERMALFUSE;
+                tf.usable = 0;
+                player_add_item(game->player, &tf);
+                game_set_dialogue_tree(game, "archive_thermalfuse", 0);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", 0);
+            }
+        } else if (tid == 120) {
+            /* Tile 2: archive inner door */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED) &&
+                player_has_item(game->player, ITEM_ID_FINGERPRINT) &&
+                player_has_item(game->player, ITEM_ID_THERMALFUSE)) {
+                /* Unlock: remove door collision and the interactive trigger */
+                player_set_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED);
+                Location *aloc = world_get_location(game->world, 0);
+                if (aloc) {
+                    aloc->collider_count = aloc->door_collider_start;
+                    /* Remove trigger 120 so the player is not prompted again */
+                    for (int i = 0; i < aloc->trigger_count; i++) {
+                        if (aloc->triggers[i].trigger_id == 120) {
+                            /* Shift remaining triggers down */
+                            for (int j = i; j < aloc->trigger_count - 1; j++)
+                                aloc->triggers[j] = aloc->triggers[j + 1];
+                            aloc->trigger_count--;
+                            break;
+                        }
+                    }
+                }
+                game_set_dialogue_tree(game, "archive_door_opened", 0);
+            } else if (!player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED)) {
+                /* Door is locked – show two-part diagnostic message */
+                game_set_dialogue_tree(game, "archive_door_locked", 0);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
     /* ── Security room interactions (loc 5) ────────────────────────────── */
     else if (loc_id == 5) {
         if (tid == 91) {

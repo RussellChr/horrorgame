@@ -136,6 +136,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
+    g->item_fingerprint_texture = render_load_texture(renderer, "assets/fingerprint.png");
+    g->item_thermalfuse_texture = render_load_texture(renderer, "assets/thermalfuse.png");
 
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
@@ -176,6 +178,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
+    render_texture_destroy(game->item_fingerprint_texture);
+    render_texture_destroy(game->item_thermalfuse_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
     free(game);
@@ -965,6 +969,12 @@ void game_update(Game *game)
                             label = "Press [E] to examine";
                         else if (tz->trigger_id == 95)
                             label = "Press [E] to interact";
+                        else if (tz->trigger_id == 120)
+                            label = "Press [E] to interact";
+                        else if (tz->trigger_id == 121)
+                            label = "Press [E] to examine";
+                        else if (tz->trigger_id == 122)
+                            label = "Press [E] to examine";
                         else
                             label = "Press E to talk";
                         strncpy(game->interact_label, label,

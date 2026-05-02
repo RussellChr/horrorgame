@@ -32,6 +32,8 @@ static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
     case ITEM_ID_FLASHLIGHT: return game->item_flashlight_texture;
     case ITEM_ID_GASMASK:    return game->item_gasmask_texture;
     case ITEM_ID_KEYCARD:    return game->item_keycard_texture;
+    case ITEM_ID_FINGERPRINT: return game->item_fingerprint_texture;
+    case ITEM_ID_THERMALFUSE: return game->item_thermalfuse_texture;
     default:                 return NULL;
     }
 }

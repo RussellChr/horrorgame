@@ -208,11 +208,31 @@ Richard
 The generator roars to life. Power is restored to the facility.
 ---
 
-[power_simon_fail]
+# ── Archive Room ────────────────────────────────────────────────────────
+
+[archive_fingerprint]
 Richard
 ---
-The panel sparks violently. A surge of electricity throws me back.
-I should have paid more attention to the sequence.
-Everything goes dark.
+A fingerprint... Perhaps I can use this to open the door to the archive.
 ---
+
+[archive_thermalfuse]
+Richard
+---
+A thermal fuse. This could be useful.
+---
+
+[archive_door_locked]
+Richard
+---
+Require fingerprint... It also seems to be malfunctioning, I need some sort of thermal fuse to fix this.
+---
+
+[archive_door_opened]
+Richard
+---
+Door is now opened.
+---
+
+
 

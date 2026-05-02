@@ -226,6 +226,22 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
+                    /* Tile 2: archive inner door – blocked until both items are
+                       collected.  Record the collider range so we can remove it
+                       when the door is opened, then add an interactive trigger
+                       so the player can examine the door (trigger 120).
+                       Spawn coords for trigger 120 are patched in post-setup. */
+                    loc->door_collider_start = loc->collider_count;
+                    map_build_colliders_for_tile(m, loc, 2);
+                    loc->door_collider_count = loc->collider_count - loc->door_collider_start;
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 120, 0.0f, 0.0f);
+
+                    /* Tile 3: fingerprint pickup (trigger 121). */
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 121, 0.0f, 0.0f);
+
+                    /* Tile 4: thermal fuse pickup (trigger 122). */
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 122, 0.0f, 0.0f);
+
                     /* Spawn in front of the door tiles (rows 10-12, cols ~271-279).
                        Hint one row below the door run so we land on floor. */
                     float sx = (float)(loc->room_width / 2);
@@ -572,12 +588,21 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
             }
         }
 
-        /* Archive tile-1 → Hallway (spawn near the tile-5 door). */
+        /* Archive tile-1 → Hallway (spawn near the tile-5 door).
+           Also patch the archive inner-door trigger (120) with the hallway
+           spawn so it knows where to land if it gets converted to an exit. */
         if (loc0 && loc2) {
             Map *m = map_load_csv("maps/archive_close.csv");
             if (m) {
                 map_build_door_triggers(m, loc0, 2, hw5x, hw5y);
                 map_free(m);
+            }
+            /* Patch spawn coords into trigger 120 (archive inner door). */
+            for (int i = 0; i < loc0->trigger_count; i++) {
+                if (loc0->triggers[i].trigger_id == 120) {
+                    loc0->triggers[i].spawn_x = hw5x;
+                    loc0->triggers[i].spawn_y = hw5y;
+                }
             }
         }
 

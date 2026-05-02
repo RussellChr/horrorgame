@@ -172,6 +172,12 @@ typedef struct {
     Uint32           am_wav_len;
     SDL_AudioStream *am_audio_stream;
 
+    /* Glass cracking SFX (played when player steps on an archive glass shard) */
+    SDL_AudioSpec    glass_sfx_wav_spec;
+    Uint8           *glass_sfx_wav_buf;
+    Uint32           glass_sfx_wav_len;
+    SDL_AudioStream *glass_sfx_audio_stream;
+
     /* Enemy patrol / chase system */
     Enemy         enemy;          /* hallway enemy (activated by passcode)    */
     Enemy         archive_enemy;  /* archive enemy (activated on first visit) */

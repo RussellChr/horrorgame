@@ -607,6 +607,61 @@ void game_render_locker(Game *game)
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+
+        /* ── Locker minimap: show hallway map with enemy position ── */
+        if (!game->show_note_locker && game->world) {
+            Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+            float room_w = hw ? (float)hw->room_width  : 1920.0f;
+            float room_h = hw ? (float)hw->room_height : 960.0f;
+
+            /* Minimap panel dimensions – aspect-correct, capped to a usable size */
+            int mm_w = 240;
+            int mm_h = (int)(240.0f * room_h / room_w);
+            if (mm_h < 60)  mm_h = 60;
+            if (mm_h > 180) mm_h = 180;
+
+            /* Position: top-right corner with a small margin */
+            int mm_x = WINDOW_W - mm_w - 16;
+            int mm_y = 16;
+
+            /* Outer panel (includes room label below the map) */
+            int label_h = 10;
+            render_filled_rect(r, mm_x - 3, mm_y - 3,
+                               mm_w + 6, mm_h + 6 + label_h, 0, 0, 0, 200);
+            render_rect_outline(r, mm_x - 3, mm_y - 3,
+                                mm_w + 6, mm_h + 6 + label_h, 80, 80, 80, 200);
+
+            /* Floor area */
+            render_filled_rect(r, mm_x, mm_y, mm_w, mm_h, 28, 28, 38, 240);
+            render_rect_outline(r, mm_x, mm_y, mm_w, mm_h, 70, 70, 100, 200);
+
+            /* Wall colliders */
+            if (hw) {
+                for (int i = 0; i < hw->collider_count; i++) {
+                    const Rect *c = &hw->colliders[i];
+                    int wx = mm_x + (int)(c->x / room_w * (float)mm_w);
+                    int wy = mm_y + (int)(c->y / room_h * (float)mm_h);
+                    int ww = (int)(c->w / room_w * (float)mm_w);
+                    int wh = (int)(c->h / room_h * (float)mm_h);
+                    if (ww < 1) ww = 1;
+                    if (wh < 1) wh = 1;
+                    render_filled_rect(r, wx, wy, ww, wh, 80, 80, 110, 220);
+                }
+            }
+
+            /* Enemy dot (hallway enemy) */
+            if (game->enemy.active) {
+                int ex = mm_x + (int)(game->enemy.x / room_w * (float)mm_w);
+                int ey = mm_y + (int)(game->enemy.y / room_h * (float)mm_h);
+                render_filled_rect(r, ex - 3, ey - 3, 7, 7, 220, 50, 50, 255);
+                render_rect_outline(r, ex - 3, ey - 3, 7, 7, 255, 0, 0, 255);
+            }
+
+            /* "MAP" label below the minimap panel */
+            render_text_centered(r, "MAP",
+                                 mm_x + mm_w / 2,
+                                 mm_y + mm_h + 2, 1, 180, 180, 180);
+        }
     }
 }
 

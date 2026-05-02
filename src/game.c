@@ -334,9 +334,12 @@ static void game_do_save(Game *game, int slot)
 
     /* Build a human-readable label */
     const char *loc_name = "Unknown";
-    if      (data.location_id == LOCATION_ARCHIVE) loc_name = "Archive";
-    else if (data.location_id == LOCATION_LAB)     loc_name = "Lab";
-    else if (data.location_id == LOCATION_HALLWAY) loc_name = "Hallway";
+    if      (data.location_id == LOCATION_ARCHIVE)     loc_name = "Archive";
+    else if (data.location_id == LOCATION_LAB)         loc_name = "Lab";
+    else if (data.location_id == LOCATION_HALLWAY)     loc_name = "Hallway";
+    else if (data.location_id == LOCATION_HIBERNATION) loc_name = "Chamber Room";
+    else if (data.location_id == LOCATION_POWER)       loc_name = "Power Room";
+    else if (data.location_id == LOCATION_SECURITY)    loc_name = "Security Room";
     snprintf(data.save_label, sizeof(data.save_label),
              "Slot %d - %s", slot, loc_name);
 
@@ -462,6 +465,10 @@ void game_change_location(Game *game, int location_id,
         player_set_flag(game->player, FLAG_ENTERED_LAB);
     else if (location_id == LOCATION_HALLWAY)
         player_set_flag(game->player, FLAG_ENTERED_HALLWAY);
+    else if (location_id == LOCATION_POWER)
+        player_set_flag(game->player, FLAG_ENTERED_POWER);
+    else if (location_id == LOCATION_SECURITY)
+        player_set_flag(game->player, FLAG_ENTERED_SECURITY);
 
     Location *next = world_get_location(game->world, location_id);
     if (next) {

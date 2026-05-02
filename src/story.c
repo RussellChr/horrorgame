@@ -55,13 +55,19 @@ int story_load(StoryState *state, const char *filepath) {
 
 const char *story_get_objective(const Player *player)
 {
-    if (!player) return "Find out what is happening";
+    if (!player) return "Find a way to open the door";
 
-    if (player_check_flag(player, FLAG_ENTERED_HALLWAY))
-        return "Find a way out of the building";
+    if (player_check_flag(player, FLAG_KEYCARD_COLLECTED))
+        return "Use the keycard to unlock the archive";
 
-    if (player_check_flag(player, FLAG_ENTERED_LAB))
-        return "Look for clues in the chemistry lab";
+    if (player_check_flag(player, FLAG_SECURITY_PASSCODE_DONE))
+        return "Find the keycard in the lab";
 
-    return "Find out what is happening";
+    if (player_check_flag(player, FLAG_POWER_GENERATOR_ON))
+        return "Find the security access code";
+
+    if (player_check_flag(player, FLAG_HIBERN_POWERCELL_PLACED))
+        return "Restore power to the facility";
+
+    return "Find a way to open the door";
 }

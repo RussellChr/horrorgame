@@ -60,13 +60,13 @@ const char *story_get_objective(const Player *player)
     if (player_check_flag(player, FLAG_KEYCARD_COLLECTED))
         return "Use the keycard to unlock the archive";
 
-    if (player_check_flag(player, FLAG_ENTERED_LAB))
+    if (player_check_flag(player, FLAG_SECURITY_PASSCODE_DONE))
         return "Find the keycard in the lab";
 
-    if (player_check_flag(player, FLAG_ENTERED_SECURITY))
+    if (player_check_flag(player, FLAG_POWER_GENERATOR_ON))
         return "Find the security access code";
 
-    if (player_check_flag(player, FLAG_ENTERED_POWER))
+    if (player_check_flag(player, FLAG_HIBERN_POWERCELL_PLACED))
         return "Restore power to the facility";
 
     return "Find a way to open the door";

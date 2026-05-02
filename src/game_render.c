@@ -496,8 +496,8 @@ static void render_locker_minimap(Game *game)
     SDL_Renderer *r = game->renderer;
 
     /* Panel layout */
-    const int PX = WINDOW_W - 250, PY = 14;
-    const int PW = 236,            PH = 120;
+    const int PX = WINDOW_W - 474, PY = 14;
+    const int PW = 460,            PH = 220;
 
     /* Room area within the panel (leave room for title and border) */
     const int RX = PX + 10, RY = PY + 22;

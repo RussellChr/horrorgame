@@ -53,14 +53,14 @@ void game_handle_interaction(Game *game)
     if (game->dialogue_tree) return;
 
     /* Locker interaction (Hallway, trigger 60) */
-    if (tid == 60 && loc_id == 2) {
+    if (tid == TRIGGER_LOCKER && loc_id == 2) {
         game->state = GAME_STATE_LOCKER;
         return;
     }
 
     /* ── Archive room interactions (loc 0) ─────────────────────────────── */
     if (loc_id == 0) {
-        if (tid == 110) {
+        if (tid == TRIGGER_ARCHIVE_INNER_DOOR) {
             /* Tile 2: inner archive door */
             if (!player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED)) {
                 if (player_has_item(game->player, ITEM_ID_FINGERPRINT) &&
@@ -73,7 +73,7 @@ void game_handle_interaction(Game *game)
                         aloc->collider_count = aloc->door_collider_start;
                         /* Neutralise the interactive trigger so it no longer fires */
                         for (int i = 0; i < aloc->trigger_count; i++) {
-                            if (aloc->triggers[i].trigger_id == 110) {
+                            if (aloc->triggers[i].trigger_id == TRIGGER_ARCHIVE_INNER_DOOR) {
                                 aloc->triggers[i].trigger_id = -1;
                             }
                         }
@@ -106,7 +106,7 @@ void game_handle_interaction(Game *game)
                     }
                 }
             }
-        } else if (tid == 111) {
+        } else if (tid == TRIGGER_ARCHIVE_FINGERPRINT) {
             /* Tile 3: fingerprint pickup */
             if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED)) {
                 player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
@@ -137,9 +137,9 @@ void game_handle_interaction(Game *game)
                     game->dialogue_tree = tree;
                 }
             } else {
-                game_set_dialogue_tree(game, "hallway_nothing", 0);
+                game_set_dialogue_tree(game, "archive_nothing", 0);
             }
-        } else if (tid == 112) {
+        } else if (tid == TRIGGER_ARCHIVE_THERMALFUSE) {
             /* Tile 4: thermal fuse pickup */
             if (!player_check_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED)) {
                 player_set_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
@@ -159,11 +159,11 @@ void game_handle_interaction(Game *game)
                     game->dialogue_tree = tree;
                 }
             } else {
-                game_set_dialogue_tree(game, "hallway_nothing", 0);
+                game_set_dialogue_tree(game, "archive_nothing", 0);
             }
-        } else if (tid == 30) {
+        } else if (tid == TRIGGER_ENTRANCE_PORTRAIT) {
             game_set_dialogue_tree(game, "portrait", 30);
-        } else if (tid == 40) {
+        } else if (tid == TRIGGER_ENTRANCE_STRANGER) {
             game_set_dialogue_tree(game, "stranger", 40);
         } else {
             game->dialogue_tree = dialogue_build_for_location(loc_id);

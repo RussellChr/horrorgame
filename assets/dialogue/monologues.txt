@@ -106,6 +106,14 @@ Richard
 Keycard is required.
 ---
 
+# ── Archive Room ──────────────────────────────────────────────────────
+
+[archive_nothing]
+Richard
+---
+There's nothing here.
+---
+
 # ── Lab ─────────────────────────────────────────────────────────────────
 
 [lab_keycard]

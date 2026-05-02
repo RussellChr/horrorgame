@@ -10,7 +10,7 @@ LOCATION 2 Hallway
 DESC A long, narrow hallway.
 ATMO The floorboards creak with every step.
 
-LOCATION 3 Hibernation
+LOCATION 3 Chamber Room
 DESC A cold, sterile hibernation chamber.
 ATMO The cryo-pods hum quietly in the darkness.
 

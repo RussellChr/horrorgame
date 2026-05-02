@@ -226,6 +226,21 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
+                    /* Tile 2: inner archive door – collidable until opened.
+                       Record the door-collider range so interactions.c can
+                       remove them when the player supplies both items. */
+                    loc->door_collider_start = loc->collider_count;
+                    map_build_colliders_for_tile(m, loc, 2);
+                    loc->door_collider_count =
+                        loc->collider_count - loc->door_collider_start;
+
+                    /* Tile 2: interactive trigger (archive inner door) */
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 110, 0.0f, 0.0f);
+                    /* Tile 3: fingerprint item pickup */
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 111, 0.0f, 0.0f);
+                    /* Tile 4: thermal fuse item pickup */
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 112, 0.0f, 0.0f);
+
                     /* Spawn in front of the door tiles (rows 10-12, cols ~271-279).
                        Hint one row below the door run so we land on floor. */
                     float sx = (float)(loc->room_width / 2);

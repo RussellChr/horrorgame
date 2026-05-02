@@ -58,6 +58,121 @@ void game_handle_interaction(Game *game)
         return;
     }
 
+    /* ── Archive room interactions (loc 0) ─────────────────────────────── */
+    if (loc_id == 0) {
+        if (tid == 110) {
+            /* Tile 2: inner archive door */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED)) {
+                if (player_has_item(game->player, ITEM_ID_FINGERPRINT) &&
+                    player_has_item(game->player, ITEM_ID_THERMALFUSE)) {
+                    /* Both items present – open the door */
+                    player_set_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_UNLOCKED);
+                    Location *aloc = world_get_location(game->world, 0);
+                    if (aloc) {
+                        /* Remove door colliders */
+                        aloc->collider_count = aloc->door_collider_start;
+                        /* Neutralise the interactive trigger so it no longer fires */
+                        for (int i = 0; i < aloc->trigger_count; i++) {
+                            if (aloc->triggers[i].trigger_id == 110) {
+                                aloc->triggers[i].trigger_id = -1;
+                            }
+                        }
+                    }
+                    /* Show "Door is now opened" as a single-node dialogue */
+                    DialogueTree *tree = dialogue_tree_create();
+                    if (tree) {
+                        dialogue_add_node(tree, 0, "Richard",
+                            "Door is now opened.", 1);
+                        game->dialogue_tree = tree;
+                    }
+                } else {
+                    /* Missing one or both items – show two-line locked message */
+                    DialogueTree *tree = dialogue_tree_create();
+                    if (tree) {
+                        DialogueNode *n0 = dialogue_add_node(tree, 0, "Richard",
+                            "Require fingerprint...", 0);
+                        if (n0) {
+                            DialogueChoice adv;
+                            memset(&adv, 0, sizeof(adv));
+                            adv.id           = 0;
+                            adv.next_node_id = 1;
+                            strncpy(adv.text, "...", DIALOGUE_TEXT_MAX - 1);
+                            dialogue_add_choice(n0, &adv);
+                        }
+                        dialogue_add_node(tree, 1, "Richard",
+                            "It also seems to be malfunctioning, I need some sort of"
+                            " thermal fuse to fix this.", 1);
+                        game->dialogue_tree = tree;
+                    }
+                }
+            }
+        } else if (tid == 111) {
+            /* Tile 3: fingerprint pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+                Item fp;
+                strncpy(fp.name, "Fingerprint", ITEM_NAME_MAX - 1);
+                fp.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp.description, "A fingerprint lifted from the scene.",
+                        ITEM_DESC_MAX - 1);
+                fp.description[ITEM_DESC_MAX - 1] = '\0';
+                fp.id     = ITEM_ID_FINGERPRINT;
+                fp.usable = 0;
+                player_add_item(game->player, &fp);
+                /* Two-sentence pickup monologue built manually to preserve ellipsis */
+                DialogueTree *tree = dialogue_tree_create();
+                if (tree) {
+                    DialogueNode *n0 = dialogue_add_node(tree, 0, "Richard",
+                        "A fingerprint...", 0);
+                    if (n0) {
+                        DialogueChoice adv;
+                        memset(&adv, 0, sizeof(adv));
+                        adv.id           = 0;
+                        adv.next_node_id = 1;
+                        strncpy(adv.text, "...", DIALOGUE_TEXT_MAX - 1);
+                        dialogue_add_choice(n0, &adv);
+                    }
+                    dialogue_add_node(tree, 1, "Richard",
+                        "Perhaps I can use this to open the door to the archive.", 1);
+                    game->dialogue_tree = tree;
+                }
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", 0);
+            }
+        } else if (tid == 112) {
+            /* Tile 4: thermal fuse pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+                Item tf;
+                strncpy(tf.name, "Thermal Fuse", ITEM_NAME_MAX - 1);
+                tf.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(tf.description, "A small thermal fuse.",
+                        ITEM_DESC_MAX - 1);
+                tf.description[ITEM_DESC_MAX - 1] = '\0';
+                tf.id     = ITEM_ID_THERMALFUSE;
+                tf.usable = 0;
+                player_add_item(game->player, &tf);
+                DialogueTree *tree = dialogue_tree_create();
+                if (tree) {
+                    dialogue_add_node(tree, 0, "Richard",
+                        "A thermal fuse. This might be useful.", 1);
+                    game->dialogue_tree = tree;
+                }
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", 0);
+            }
+        } else if (tid == 30) {
+            game_set_dialogue_tree(game, "portrait", 30);
+        } else if (tid == 40) {
+            game_set_dialogue_tree(game, "stranger", 40);
+        } else {
+            game->dialogue_tree = dialogue_build_for_location(loc_id);
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
+
     /* ── Lab interactions (loc 1) ──────────────────────────────────────── */
     if (loc_id == 1) {
         if (tid == 61) {
@@ -306,16 +421,8 @@ void game_handle_interaction(Game *game)
         return;
     }
 
-    /* Portrait interaction (Entrance Hall, trigger 30) */
-    if (tid == 30 && loc_id == 0) {
-        game_set_dialogue_tree(game, "portrait", 30);
-    }
-    /* Stranger NPC interaction (Entrance Hall, trigger 40) */
-    else if (tid == 40 && loc_id == 0) {
-        game_set_dialogue_tree(game, "stranger", 40);
-    }
     /* ── Security room interactions (loc 5) ────────────────────────────── */
-    else if (loc_id == 5) {
+    if (loc_id == 5) {
         if (tid == 91) {
             /* Tile 2: readable note – Yes/No prompt */
             DialogueTree *tree = dialogue_tree_create();
@@ -349,10 +456,9 @@ void game_handle_interaction(Game *game)
         }
         return;
     }
+
     /* Default interaction */
-    else {
-        game->dialogue_tree = dialogue_build_for_location(loc_id);
-    }
+    game->dialogue_tree = dialogue_build_for_location(loc_id);
 
     if (game->dialogue_tree)
         game_start_dialogue(game, 0);

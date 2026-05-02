@@ -34,6 +34,8 @@
 #define ITEM_ID_GASMASK     13  /* Hallway gas mask */
 #define ITEM_ID_KEYCARD     14  /* Kimia lab keycard */
 #define ITEM_ID_FUELTANK    15  /* Power room fuel tank */
+#define ITEM_ID_FINGERPRINT 16  /* Archive close fingerprint */
+#define ITEM_ID_THERMALFUSE 17  /* Archive close thermal fuse */
 
 /* ── Item ──────────────────────────────────────────────────────────────── */
 

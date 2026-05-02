@@ -23,6 +23,11 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Archive room glass shard constants ─────────────────────────────────── */
+#define ARCHIVE_GLASS_COUNT  6
+#define ARCHIVE_GLASS_SIZE  40
+extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
+
 /* ── AM recording interactable (monitor_zoom screen) ──────────────────── */
 #define AM_RECORD_X   377
 #define AM_RECORD_Y   274
@@ -124,6 +129,7 @@ typedef struct {
 
     /* Archive room glass overlay */
     SDL_Texture *glass_texture;
+    int          archive_glass_collected[6]; /* 1 = this shard was stepped on */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */

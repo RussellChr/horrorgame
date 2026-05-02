@@ -1022,6 +1022,20 @@ void game_update(Game *game)
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
+        /* ── Archive glass: disappear when player steps on shard ── */
+        if (p->current_location_id == LOCATION_ARCHIVE) {
+            float px = p->x, py = p->y;
+            for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
+                if (game->archive_glass_collected[i]) continue;
+                float gx = (float)archive_glass_positions[i].x;
+                float gy = (float)archive_glass_positions[i].y;
+                if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
+                    py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
+                    game->archive_glass_collected[i] = 1;
+                }
+            }
+        }
+
         /* ── Enemy patrol / chase update ── */
         if (game->enemy.active) {
             int in_hallway = (p->current_location_id == LOCATION_HALLWAY);

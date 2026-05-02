@@ -61,6 +61,11 @@ typedef enum {
     GAME_STATE_QUIT
 } GameState;
 
+/* ── Cutscene type identifiers ────────────────────────────────────────── */
+#define CUTSCENE_TYPE_HIBERNATION  0   /* intro cutscene shown at game start */
+#define CUTSCENE_TYPE_SECURITY     1   /* cutscene after correct passcode    */
+#define CUTSCENE_TYPE_POWER        2   /* cutscene after Simon Says win      */
+
 /* ── Game context ─────────────────────────────────────────────────────── */
 
 typedef struct {
@@ -186,12 +191,21 @@ typedef struct {
     /* Running flag */
     int running;
 
+    /* Cutscene system (shared by all cutscene types) */
+    int           cutscene_type;                 /* 0=hibernation, 1=security, 2=power */
+    int           cutscene_index;                /* current scene index                */
+    DialogueState cutscene_dialogue_state;       /* typewriter/render                  */
+    DialogueTree *cutscene_dialogue_tree;        /* text for the current scene         */
+
+    /* Hibernation cutscene (shown on new game) */
+    SDL_Texture  *hibernation_cutscene_textures[3]; /* scene images 1–3 */
+
     /* Security cutscene (shown once after correct passcode) */
-    SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
-    int           cutscene_index;                /* current scene 0–3  */
-    int           security_cutscene_played;      /* 1 once shown       */
-    DialogueState cutscene_dialogue_state;       /* typewriter/render  */
-    DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
+    SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4 */
+    int           security_cutscene_played;      /* 1 once shown     */
+
+    /* Power cutscene (shown once after Simon Says is won) */
+    SDL_Texture  *power_cutscene_textures[3];    /* scene images 1–3 */
 
     /* Simon Says minigame */
     int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
@@ -227,7 +241,9 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_hibernation_cutscene(Game *game);
 void game_start_security_cutscene(Game *game);
+void game_start_power_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 

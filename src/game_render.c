@@ -488,8 +488,8 @@ void game_render_settings(Game *game)
 /* ── Locker minimap ──────────────────────────────────────────────────────── */
 
 /* Renders a small minimap in the top-right corner showing the hallway room
- * layout and the enemy's current position.  The player is not shown because
- * they are hiding inside the locker. */
+ * background texture and the enemy's current position.  The player is not
+ * shown because they are hiding inside the locker. */
 static void render_locker_minimap(Game *game)
 {
     if (!game || !game->world) return;
@@ -503,7 +503,7 @@ static void render_locker_minimap(Game *game)
     const int RX = PX + 10, RY = PY + 22;
     const int RW = PW - 20, RH = PH - 32;
 
-    /* Semi-transparent dark background */
+    /* Semi-transparent dark panel background */
     render_filled_rect(r, PX, PY, PW, PH, 10, 8, 18, 210);
     render_rect_outline(r, PX, PY, PW, PH, 120, 40, 40, 230);
     render_rect_outline(r, PX + 2, PY + 2, PW - 4, PH - 4, 60, 20, 20, 140);
@@ -511,15 +511,20 @@ static void render_locker_minimap(Game *game)
     /* Title */
     render_text_centered(r, "MINIMAP", PX + PW / 2, PY + 6, 1, 200, 100, 100);
 
-    /* Hallway room outline */
-    render_filled_rect(r, RX, RY, RW, RH, 25, 20, 35, 255);
+    /* Get hallway location for texture and room dimensions */
+    Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+
+    /* Draw the actual hallway room background, scaled to the panel area */
+    if (hw && hw->background_texture) {
+        render_texture(r, hw->background_texture, RX, RY, RW, RH);
+    } else {
+        /* Fallback: plain filled rect */
+        render_filled_rect(r, RX, RY, RW, RH, 25, 20, 35, 255);
+    }
+
+    /* Room area border */
     render_rect_outline(r, RX, RY, RW, RH, 80, 60, 80, 200);
 
-    /* "HALLWAY" label */
-    render_text(r, "HALLWAY", RX + 2, RY + 2, 1, 60, 60, 80);
-
-    /* Get hallway room dimensions for scaling */
-    Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
     float room_w = (hw && hw->room_width  > 0) ? (float)hw->room_width  : 3840.0f;
     float room_h = (hw && hw->room_height > 0) ? (float)hw->room_height : 720.0f;
 

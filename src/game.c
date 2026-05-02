@@ -1432,6 +1432,17 @@ void game_update(Game *game)
             }
         }
 
+    } else if (game->state == GAME_STATE_LOCKER && game->player && game->world) {
+        /* Enemy keeps patrolling while player hides in locker.
+         * Pass player_in_room=0 so the enemy only patrols — it cannot
+         * detect or catch the player while they are hidden. */
+        if (game->enemy.active) {
+            enemy_update(&game->enemy, game->player->x, game->player->y, 0, dt);
+        }
+        if (game->archive_enemy.active) {
+            enemy_update(&game->archive_enemy,
+                         game->player->x, game->player->y, 0, dt);
+        }
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     } else if (game->state == GAME_STATE_CUTSCENE) {

@@ -160,6 +160,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
 
+    /* Load archive glass overlay */
+    g->glass_texture = render_load_texture(renderer, "assets/glass.png");
+
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
                                         SDL_PIXELFORMAT_RGBA8888,
@@ -199,6 +202,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
+    render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
     free(game);
@@ -1315,6 +1319,20 @@ void game_update(Game *game)
         } else if (p->current_location_id != LOCATION_LAB) {
             /* Outside the lab — reset the timer for the next visit */
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
+        }
+
+        /* ── Archive glass: disappear when player steps on shard ── */
+        if (p->current_location_id == LOCATION_ARCHIVE) {
+            float px = p->x, py = p->y;
+            for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
+                if (game->archive_glass_collected[i]) continue;
+                float gx = (float)archive_glass_positions[i].x;
+                float gy = (float)archive_glass_positions[i].y;
+                if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
+                    py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
+                    game->archive_glass_collected[i] = 1;
+                }
+            }
         }
 
         /* ── Enemy patrol / chase update ── */

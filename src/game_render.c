@@ -37,6 +37,33 @@ static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
     }
 }
 
+
+const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT] = {
+    { 4019, 1192 },
+    { 3715,  612 },
+    { 2996,  833 },
+    { 2641, 1473 },
+    { 2186,  962 },
+    { 2482,  628 }
+};
+
+static void render_archive_glass(Game *game, const Location *loc)
+{
+    if (!game || !loc || loc->id != LOCATION_ARCHIVE) return;
+    if (!game->glass_texture) return;
+
+    for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
+        if (game->archive_glass_collected[i]) continue;
+        int screen_x = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
+        int screen_y = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
+        if (screen_x >= game->camera.viewport_w || screen_y >= game->camera.viewport_h ||
+            screen_x + ARCHIVE_GLASS_SIZE <= 0 || screen_y + ARCHIVE_GLASS_SIZE <= 0)
+            continue;
+        render_texture(game->renderer, game->glass_texture,
+                       screen_x, screen_y, ARCHIVE_GLASS_SIZE, ARCHIVE_GLASS_SIZE);
+    }
+}
+
 /* ── Menu ────────────────────────────────────────────────────────────────── */
 
 void game_render_menu(Game *game)
@@ -82,7 +109,9 @@ void game_render_playing(Game *game)
 
     Location *loc = world_get_location(game->world,
                                        game->player->current_location_id);
-    if (loc) world_render_room(loc, game->renderer, &game->camera);
+    if (loc) {
+        world_render_room(loc, game->renderer, &game->camera);
+    }
 
     /* Player */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
@@ -103,6 +132,8 @@ void game_render_playing(Game *game)
         render_gasmask_vignette(game);
     else
         render_archive_darkness(game);
+
+    render_archive_glass(game, loc);
 
     /* Lab poisonous gas: green tint overlay when in the lab */
     if (game->player->current_location_id == LOCATION_LAB) {

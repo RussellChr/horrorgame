@@ -239,7 +239,7 @@ void enemy_free(Enemy *e)
 
 /* ── Archive enemy initialisation ─────────────────────────────────────── */
 
-#define ARCHIVE_ENEMY_CHASE_RADIUS   150.0f /* much smaller than hallway */
+#define ARCHIVE_ENEMY_CHASE_RADIUS   150.0f /* much smaller than hallway (350.0f) */
 #define ARCHIVE_ENEMY_PATROL_RADIUS  250.0f
 
 void enemy_init_archive(Enemy *e, int room_width, int room_height)
@@ -631,20 +631,14 @@ void enemy_update(Enemy *e, float player_x, float player_y,
                     e, node->x, node->y, ENEMY_PATROL_SPEED, dt);
             }
         } else {
-            /* Reached inspect target — check if directly at target */
+            /* Path exhausted or A* found no path — walk directly to target */
             float cx, cy;
             enemy_centre(e, &cx, &cy);
             float dx = e->inspect_x - cx, dy = e->inspect_y - cy;
             float d  = sqrtf(dx * dx + dy * dy);
             if (d > ENEMY_WAYPOINT_THRESH) {
-                /* Fallback: walk directly to target */
                 e->is_moving = move_towards_animated(
                     e, e->inspect_x, e->inspect_y, ENEMY_PATROL_SPEED, dt);
-                /* Close enough — return to patrol */
-                enemy_centre(e, &cx, &cy);
-                dx = e->inspect_x - cx; dy = e->inspect_y - cy;
-                if (sqrtf(dx*dx + dy*dy) <= ENEMY_WAYPOINT_THRESH)
-                    e->state = ENEMY_STATE_PATROL;
             } else {
                 /* Arrived at inspect target — resume patrol */
                 e->state = ENEMY_STATE_PATROL;

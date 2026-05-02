@@ -610,10 +610,53 @@ void game_render_locker(Game *game)
     }
 }
 
+/* ── Archive reader ──────────────────────────────────────────────────────── */
+
+void game_render_archive_read(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Draw current page full-screen */
+    SDL_Texture *tex = (game->archive_page == 0)
+                       ? game->archive_pg1_texture
+                       : game->archive_pg2_texture;
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Page-flip transition: smooth fade to black and back */
+    if (game->archive_flip_timer > 0.0f) {
+        float half  = ARCHIVE_FLIP_DURATION * 0.5f;
+        float alpha_f;
+        if (game->archive_flip_timer > half) {
+            /* Fading in (toward black) */
+            alpha_f = (ARCHIVE_FLIP_DURATION - game->archive_flip_timer) / half;
+        } else {
+            /* Fading out (from black) */
+            alpha_f = game->archive_flip_timer / half;
+        }
+        if (alpha_f > 1.0f) alpha_f = 1.0f;
+        Uint8 a = (Uint8)(alpha_f * 255.0f);
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, a);
+    }
+
+    /* Top bar: arrow key instruction */
+    render_filled_rect(r, 0, 0, WINDOW_W, 40, 0, 0, 0, 200);
+    render_text_centered(r, "Use keyboard arrow keys to flip pages",
+                         WINDOW_W / 2, 12, 2, 220, 220, 220);
+
+    /* Bottom bar: close hint */
+    render_filled_rect(r, 0, WINDOW_H - 36, WINDOW_W, 36, 0, 0, 0, 180);
+    render_text_centered(r, "[ESC] / [E] to close",
+                         WINDOW_W / 2, WINDOW_H - 24, 1, 160, 160, 160);
+}
+
 /* ── Security cutscene ───────────────────────────────────────────────────── */
 
-void game_render_cutscene(Game *game)
-{
+void game_render_cutscene(Game *game){
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 

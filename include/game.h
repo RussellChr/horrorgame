@@ -35,6 +35,10 @@ extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
 #define AM_RECORD_W    66   /* 443 - 377 */
 #define AM_RECORD_H   109   /* 383 - 274 */
 
+/* ── Archive reader ────────────────────────────────────────────────────── */
+/* Duration of the page-flip black-screen transition (seconds). */
+#define ARCHIVE_FLIP_DURATION  0.30f
+
 /* ── Containment level interactable (monitor_zoom screen) ─────────────── */
 #define CONTAINMENT_LEVEL_RECT_X   990
 #define CONTAINMENT_LEVEL_RECT_Y   168
@@ -58,6 +62,7 @@ typedef enum {
     GAME_STATE_NEW_LOAD_MENU,   /* title-screen "New / Load Game" submenu  */
     GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
     GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
+    GAME_STATE_ARCHIVE_READ,    /* reading archive pages (pg1/pg2)         */
     GAME_STATE_QUIT
 } GameState;
 
@@ -206,6 +211,14 @@ typedef struct {
 
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
+
+    /* Archive reader (trigger 55, tile 6 in archive_close.csv) */
+    SDL_Texture *archive_pg1_texture;   /* first page image                 */
+    SDL_Texture *archive_pg2_texture;   /* second page image                */
+    int   archive_page;                 /* 0 = pg1 visible, 1 = pg2 visible */
+    float archive_flip_timer;           /* counts down from ARCHIVE_FLIP_DURATION */
+    int   archive_flip_target;          /* page to show after transition    */
+    int   archive_flip_page_changed;    /* 1 once page has been swapped     */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -245,5 +258,6 @@ void game_render_game_over(Game *game);
 void game_render_new_load_menu(Game *game);
 void game_render_save_menu(Game *game);
 void game_render_load_menu(Game *game);
+void game_render_archive_read(Game *game);
 
 #endif /* GAME_H */

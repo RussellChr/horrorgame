@@ -135,6 +135,13 @@ void game_handle_interaction(Game *game)
             } else {
                 game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
             }
+        } else if (tid == 55) {
+            /* Tile 6: archive document reader (pg1 / pg2) */
+            game->archive_page             = 0;
+            game->archive_flip_timer       = 0.0f;
+            game->archive_flip_page_changed = 0;
+            game->state = GAME_STATE_ARCHIVE_READ;
+            return;
         }
         if (game->dialogue_tree)
             game_start_dialogue(game, 0);

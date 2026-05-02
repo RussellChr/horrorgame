@@ -165,6 +165,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load archive glass overlay */
     g->glass_texture = render_load_texture(renderer, "assets/glass.png");
 
+    /* Load archive reader page images */
+    g->archive_pg1_texture = render_load_texture(renderer, "assets/archive_pg1.png");
+    g->archive_pg2_texture = render_load_texture(renderer, "assets/archive_pg2.png");
+
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
                                         SDL_PIXELFORMAT_RGBA8888,
@@ -207,6 +211,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_fingerprint_texture);
     render_texture_destroy(game->item_thermalfuse_texture);
     render_texture_destroy(game->glass_texture);
+    render_texture_destroy(game->archive_pg1_texture);
+    render_texture_destroy(game->archive_pg2_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
     enemy_free(&game->archive_enemy);
@@ -1191,6 +1197,29 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_ARCHIVE_READ:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            if (k == SDLK_ESCAPE || k == SDLK_E) {
+                game->state = GAME_STATE_PLAYING;
+            } else if (k == SDLK_RIGHT &&
+                       game->archive_page == 0 &&
+                       game->archive_flip_timer <= 0.0f) {
+                /* Turn to next page */
+                game->archive_flip_target      = 1;
+                game->archive_flip_page_changed = 0;
+                game->archive_flip_timer       = ARCHIVE_FLIP_DURATION;
+            } else if (k == SDLK_LEFT &&
+                       game->archive_page == 1 &&
+                       game->archive_flip_timer <= 0.0f) {
+                /* Turn to previous page */
+                game->archive_flip_target      = 0;
+                game->archive_flip_page_changed = 0;
+                game->archive_flip_timer       = ARCHIVE_FLIP_DURATION;
+            }
+        }
+        break;
+
     default: break;
     }
 
@@ -1315,6 +1344,8 @@ void game_update(Game *game)
                                  tz->trigger_id == 53 ||
                                  tz->trigger_id == 54)
                             label = "Press [E] to interact";
+                        else if (tz->trigger_id == 55)
+                            label = "Press [E] to read";
                         else
                             label = "Press E to talk";
                         strncpy(game->interact_label, label,
@@ -1484,6 +1515,20 @@ void game_update(Game *game)
         }
     }
 
+    /* ── Archive reader: page-flip transition timer ── */
+    if (game->state == GAME_STATE_ARCHIVE_READ &&
+        game->archive_flip_timer > 0.0f) {
+        game->archive_flip_timer -= dt;
+        /* Swap page at the midpoint of the transition */
+        if (!game->archive_flip_page_changed &&
+            game->archive_flip_timer <= ARCHIVE_FLIP_DURATION * 0.5f) {
+            game->archive_page             = game->archive_flip_target;
+            game->archive_flip_page_changed = 1;
+        }
+        if (game->archive_flip_timer < 0.0f)
+            game->archive_flip_timer = 0.0f;
+    }
+
     /* Tick the pickup notification regardless of game state */
     if (game->pickup_notify_timer > 0.0f) {
         game->pickup_notify_timer -= dt;
@@ -1506,7 +1551,8 @@ void game_render(Game *game)
         game_render_dialogue_overlay(game);
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
-    case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_LOCKER:    game_render_locker(game);        break;
+    case GAME_STATE_ARCHIVE_READ: game_render_archive_read(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;

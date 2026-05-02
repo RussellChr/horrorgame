@@ -485,6 +485,74 @@ void game_render_settings(Game *game)
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);
 }
 
+/* ── Locker minimap ──────────────────────────────────────────────────────── */
+
+/* Renders a small minimap in the top-right corner showing the hallway room
+ * layout and the enemy's current position.  The player is not shown because
+ * they are hiding inside the locker. */
+static void render_locker_minimap(Game *game)
+{
+    if (!game || !game->world) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Panel layout */
+    const int PX = WINDOW_W - 250, PY = 14;
+    const int PW = 236,            PH = 120;
+
+    /* Room area within the panel (leave room for title and border) */
+    const int RX = PX + 10, RY = PY + 22;
+    const int RW = PW - 20, RH = PH - 32;
+
+    /* Semi-transparent dark background */
+    render_filled_rect(r, PX, PY, PW, PH, 10, 8, 18, 210);
+    render_rect_outline(r, PX, PY, PW, PH, 120, 40, 40, 230);
+    render_rect_outline(r, PX + 2, PY + 2, PW - 4, PH - 4, 60, 20, 20, 140);
+
+    /* Title */
+    render_text_centered(r, "MINIMAP", PX + PW / 2, PY + 6, 1, 200, 100, 100);
+
+    /* Hallway room outline */
+    render_filled_rect(r, RX, RY, RW, RH, 25, 20, 35, 255);
+    render_rect_outline(r, RX, RY, RW, RH, 80, 60, 80, 200);
+
+    /* "HALLWAY" label */
+    render_text(r, "HALLWAY", RX + 2, RY + 2, 1, 60, 60, 80);
+
+    /* Get hallway room dimensions for scaling */
+    Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+    float room_w = (hw && hw->room_width  > 0) ? (float)hw->room_width  : 3840.0f;
+    float room_h = (hw && hw->room_height > 0) ? (float)hw->room_height : 720.0f;
+
+    /* Draw enemy dot if the hallway enemy is active */
+    if (game->enemy.active) {
+        float scale_x = (float)RW / room_w;
+        float scale_y = (float)RH / room_h;
+
+        /* Centre the enemy sprite on the dot */
+        float ecx = game->enemy.x + ENEMY_W * 0.5f;
+        float ecy = game->enemy.y + ENEMY_H * 0.5f;
+
+        int ex = RX + (int)(ecx * scale_x);
+        int ey = RY + (int)(ecy * scale_y);
+
+        /* Clamp to room rect */
+        if (ex < RX + 2)        ex = RX + 2;
+        if (ex > RX + RW - 6)   ex = RX + RW - 6;
+        if (ey < RY + 2)        ey = RY + 2;
+        if (ey > RY + RH - 6)   ey = RY + RH - 6;
+
+        /* Red dot (6×6) */
+        render_filled_rect(r, ex - 3, ey - 3, 6, 6, 220, 40, 40, 255);
+        render_rect_outline(r, ex - 3, ey - 3, 6, 6, 255, 120, 120, 255);
+
+        /* "ENEMY" label above the dot */
+        int label_x = ex - 14;
+        if (label_x < RX)              label_x = RX;
+        if (label_x > RX + RW - 40)    label_x = RX + RW - 40;
+        render_text(r, "ENEMY", label_x, ey - 14, 1, 220, 60, 60);
+    }
+}
+
 /* ── Locker view ─────────────────────────────────────────────────────────── */
 
 void game_render_locker(Game *game)
@@ -605,6 +673,10 @@ void game_render_locker(Game *game)
                                  WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
         }
     } else {
+        /* Base locker view: show minimap and exit hint */
+        if (!game->show_note_locker) {
+            render_locker_minimap(game);
+        }
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
     }

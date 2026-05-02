@@ -155,6 +155,17 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to load AM.wav: %s", SDL_GetError());
     }
 
+    /* Load glass cracking sound effect */
+    if (SDL_LoadWAV("assets/sfx/glass cracking.wav", &g->glass_crack_wav_spec,
+                    &g->glass_crack_wav_buf, &g->glass_crack_wav_len)) {
+        g->glass_crack_audio_stream = SDL_OpenAudioDeviceStream(
+            SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &g->glass_crack_wav_spec, NULL, NULL);
+        if (!g->glass_crack_audio_stream)
+            SDL_Log("game_init: failed to open glass crack audio stream: %s", SDL_GetError());
+    } else {
+        SDL_Log("game_init: failed to load glass cracking.wav: %s", SDL_GetError());
+    }
+
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
@@ -199,6 +210,8 @@ void game_cleanup(Game *game)
     }
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
+    if (game->glass_crack_audio_stream) SDL_DestroyAudioStream(game->glass_crack_audio_stream);
+    if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
@@ -1378,6 +1391,15 @@ void game_update(Game *game)
                 if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
                     py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
                     game->archive_glass_collected[i] = 1;
+                    /* Play glass cracking sound effect */
+                    if (game->glass_crack_audio_stream && game->glass_crack_wav_buf &&
+                        game->glass_crack_wav_len <= (Uint32)SDL_MAX_SINT32) {
+                        SDL_ClearAudioStream(game->glass_crack_audio_stream);
+                        SDL_PutAudioStreamData(game->glass_crack_audio_stream,
+                                               game->glass_crack_wav_buf,
+                                               (int)game->glass_crack_wav_len);
+                        SDL_ResumeAudioStreamDevice(game->glass_crack_audio_stream);
+                    }
                     /* Alert the archive enemy to investigate the glass location */
                     enemy_alert_inspect(&game->archive_enemy,
                                         gx + ARCHIVE_GLASS_SIZE * 0.5f,

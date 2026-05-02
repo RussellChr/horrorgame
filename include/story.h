@@ -39,6 +39,9 @@
 #define FLAG_SECURITY_PASSCODE_DONE       (1u << 16) /* correct passcode entered in security room */
 #define FLAG_ENTERED_POWER                (1u << 17) /* player visited the power room             */
 #define FLAG_ENTERED_SECURITY             (1u << 18) /* player visited the security room          */
+#define FLAG_ARCHIVE_FINGERPRINT_COLLECTED (1u << 19) /* fingerprint picked up in Archive          */
+#define FLAG_ARCHIVE_THERMALFUSE_COLLECTED (1u << 20) /* thermal fuse picked up in Archive         */
+#define FLAG_ARCHIVE_INNER_DOOR_OPENED     (1u << 21) /* tile-2 archive door opened                */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

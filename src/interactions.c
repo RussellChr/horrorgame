@@ -40,6 +40,43 @@ void game_apply_dialogue_choice_flag(Game *game)
         game->player->flags |= (uint32_t)ch->story_flag;
 }
 
+static void game_set_simple_dialogue(Game *game,
+                                      const char *speaker,
+                                      const char *line1,
+                                      const char *line2)
+{
+    if (!game || !line1) return;
+
+    DialogueTree *tree = dialogue_tree_create();
+    if (!tree) return;
+
+    DialogueNode *first = dialogue_add_node(tree, 0, speaker ? speaker : "",
+                                            line1, line2 ? 0 : 1);
+    if (line2 && first) {
+        DialogueChoice next;
+        memset(&next, 0, sizeof(next));
+        next.id = 0;
+        next.next_node_id = 1;
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        dialogue_add_choice(first, &next);
+        dialogue_add_node(tree, 1, speaker ? speaker : "", line2, 1);
+    }
+
+    game->dialogue_tree = tree;
+}
+
+static void game_open_archive_inner_door(Game *game)
+{
+    if (!game || !game->world || !game->player) return;
+
+    player_set_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_OPENED);
+
+    Location *loc = world_get_location(game->world, LOCATION_ARCHIVE);
+    if (loc && loc->door_collider_count > 0) {
+        loc->collider_count = loc->door_collider_start;
+    }
+}
+
 /* ── Interaction handler ─────────────────────────────────────────────────── */
 
 void game_handle_interaction(Game *game)
@@ -51,6 +88,58 @@ void game_handle_interaction(Game *game)
 
     /* Guard: don't open duplicate dialogue */
     if (game->dialogue_tree) return;
+
+    /* ── Archive interactions (loc 0) ─────────────────────────────────── */
+    if (loc_id == LOCATION_ARCHIVE) {
+        if (tid == 52) {
+            if (player_has_item(game->player, ITEM_ID_FINGERPRINT) &&
+                player_has_item(game->player, ITEM_ID_THERMALFUSE)) {
+                game_open_archive_inner_door(game);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Door is now opened", NULL);
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "Require fringerprint...",
+                                         "It also seems to be malfunctioning, I need some sort of thermal fuse to fix this");
+            }
+        } else if (tid == 53) {
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+                Item fp;
+                strncpy(fp.name, "Fingerprint", ITEM_NAME_MAX - 1);
+                fp.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp.description, "A lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp.description[ITEM_DESC_MAX - 1] = '\0';
+                fp.id = ITEM_ID_FINGERPRINT;
+                fp.usable = 0;
+                player_add_item(game->player, &fp);
+                game_set_simple_dialogue(game, "Richard",
+                                         "A fingerprint... Perhaps I can use this to open the door to the archive",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 54) {
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+                Item fuse;
+                strncpy(fuse.name, "Thermal Fuse", ITEM_NAME_MAX - 1);
+                fuse.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fuse.description, "A thermal fuse for a malfunctioning archive door.", ITEM_DESC_MAX - 1);
+                fuse.description[ITEM_DESC_MAX - 1] = '\0';
+                fuse.id = ITEM_ID_THERMALFUSE;
+                fuse.usable = 0;
+                player_add_item(game->player, &fuse);
+                game_set_simple_dialogue(game, "Richard",
+                                         "You obtained a thermal fuse.", NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
 
     /* Locker interaction (Hallway, trigger 60) */
     if (tid == 60 && loc_id == 2) {

@@ -159,6 +159,8 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
+    g->item_fingerprint_texture = render_load_texture(renderer, "assets/fingerprint.png");
+    g->item_thermalfuse_texture = render_load_texture(renderer, "assets/thermalfuse.png");
 
     /* Load archive glass overlay */
     g->glass_texture = render_load_texture(renderer, "assets/glass.png");
@@ -202,6 +204,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
+    render_texture_destroy(game->item_fingerprint_texture);
+    render_texture_destroy(game->item_thermalfuse_texture);
     render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
@@ -407,6 +411,12 @@ static void game_do_load(Game *game, int slot)
     game->flashlight_active           = data.flashlight_active;
     game->gasmask_active              = data.gasmask_active;
     game->security_cutscene_played    = data.security_cutscene_played;
+
+    if (player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_OPENED)) {
+        Location *archive = world_get_location(game->world, LOCATION_ARCHIVE);
+        if (archive && archive->door_collider_count > 0)
+            archive->collider_count = archive->door_collider_start;
+    }
 
     /* Re-init enemy */
     enemy_free(&game->enemy);
@@ -1267,6 +1277,10 @@ void game_update(Game *game)
                         else if (tz->trigger_id == 92)
                             label = "Press [E] to examine";
                         else if (tz->trigger_id == 95)
+                            label = "Press [E] to interact";
+                        else if (tz->trigger_id == 52 ||
+                                 tz->trigger_id == 53 ||
+                                 tz->trigger_id == 54)
                             label = "Press [E] to interact";
                         else
                             label = "Press E to talk";

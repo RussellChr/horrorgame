@@ -225,6 +225,15 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/archive_close.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
+                    loc->door_collider_start = loc->collider_count;
+                    map_build_colliders_for_tile(m, loc, 2);
+                    loc->door_collider_count =
+                        loc->collider_count - loc->door_collider_start;
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 52, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 53, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 54, 0.0f, 0.0f);
 
                     /* Spawn in front of the door tiles (rows 10-12, cols ~271-279).
                        Hint one row below the door run so we land on floor. */
@@ -301,6 +310,8 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/hallway.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
 
                     float sx = (float)(loc->room_width  / 2);
                     float sy = (float)(loc->room_height / 2);
@@ -406,6 +417,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_colliders_for_tile(m, loc, 1);
                     map_build_colliders_for_tile(m, loc, 2);
                     map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
 
                     /* Spawn to the left of the tile-5 connector (rows 19-25, cols 53-55).
                        Hint into the floor area adjacent to the connector so the player

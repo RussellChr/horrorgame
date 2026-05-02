@@ -566,24 +566,29 @@ static void render_locker_minimap(Game *game)
         }
     }
 
-    /* Enemy dot — drawn on top of darkness so it always shows as a blip */
+    /* Enemy dot — only shown when within the player's sight circle */
     if (game->enemy.active) {
         float ecx = game->enemy.x + ENEMY_W * 0.5f;
         float ecy = game->enemy.y + ENEMY_H * 0.5f;
         int ex = RX + (int)(ecx * scale_x);
         int ey = RY + (int)(ecy * scale_y);
-        if (ex < RX + 2)        ex = RX + 2;
-        if (ex > RX + RW - 6)   ex = RX + RW - 6;
-        if (ey < RY + 2)        ey = RY + 2;
-        if (ey > RY + RH - 6)   ey = RY + RH - 6;
 
-        render_filled_rect(r, ex - 3, ey - 3, 6, 6, 220, 40, 40, 255);
-        render_rect_outline(r, ex - 3, ey - 3, 6, 6, 255, 120, 120, 255);
+        int ddx = ex - px_dot;
+        int ddy = ey - py_dot;
+        if (ddx * ddx + ddy * ddy <= SIGHT_R * SIGHT_R) {
+            if (ex < RX + 2)        ex = RX + 2;
+            if (ex > RX + RW - 6)   ex = RX + RW - 6;
+            if (ey < RY + 2)        ey = RY + 2;
+            if (ey > RY + RH - 6)   ey = RY + RH - 6;
 
-        int label_x = ex - 14;
-        if (label_x < RX)              label_x = RX;
-        if (label_x > RX + RW - 40)    label_x = RX + RW - 40;
-        render_text(r, "ENEMY", label_x, ey - 14, 1, 220, 60, 60);
+            render_filled_rect(r, ex - 3, ey - 3, 6, 6, 220, 40, 40, 255);
+            render_rect_outline(r, ex - 3, ey - 3, 6, 6, 255, 120, 120, 255);
+
+            int label_x = ex - 14;
+            if (label_x < RX)              label_x = RX;
+            if (label_x > RX + RW - 40)    label_x = RX + RW - 40;
+            render_text(r, "ENEMY", label_x, ey - 14, 1, 220, 60, 60);
+        }
     }
 }
 

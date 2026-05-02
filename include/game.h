@@ -173,7 +173,8 @@ typedef struct {
     SDL_AudioStream *am_audio_stream;
 
     /* Enemy patrol / chase system */
-    Enemy         enemy;
+    Enemy         enemy;          /* hallway enemy (activated by passcode)    */
+    Enemy         archive_enemy;  /* archive enemy (activated on first visit) */
 
     /* Timing */
     Uint64 last_ticks;

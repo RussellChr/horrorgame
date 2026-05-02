@@ -206,6 +206,15 @@ void enemy_init(Enemy *e, int room_width, int room_height)
     e->is_moving = 0;
     for (int i = 0; i < 4; i++) e->saved_frame_by_dir[i] = 0;
     animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 5.0f, 1);
+
+    /* Per-enemy detection radii: hallway uses the global defaults */
+    e->chase_radius  = ENEMY_CHASE_RADIUS;
+    e->patrol_radius = ENEMY_PATROL_RADIUS;
+
+    /* Inspection target – cleared until triggered */
+    e->inspect_x       = 0.0f;
+    e->inspect_y       = 0.0f;
+    e->inspect_pending = 0;
 }
 
 void enemy_free(Enemy *e)
@@ -228,7 +237,78 @@ void enemy_free(Enemy *e)
     e->right_count = 0;
 }
 
-/* ── Helpers ──────────────────────────────────────────────────────────── */
+/* ── Archive enemy initialisation ─────────────────────────────────────── */
+
+#define ARCHIVE_ENEMY_CHASE_RADIUS   150.0f /* much smaller than hallway (350.0f) */
+#define ARCHIVE_ENEMY_PATROL_RADIUS  250.0f
+
+void enemy_init_archive(Enemy *e, int room_width, int room_height)
+{
+    if (!e) return;
+    memset(e, 0, sizeof(*e));
+
+    /* Load the archive tile grid for A* (open version for full walkability) */
+    Map *m = map_load_csv("maps/archive_open.csv");
+    if (m) {
+        int n = m->rows * m->cols;
+        e->grid = malloc(sizeof(int) * (size_t)n);
+        if (e->grid)
+            memcpy(e->grid, m->cells, sizeof(int) * (size_t)n);
+        e->grid_rows = m->rows;
+        e->grid_cols = m->cols;
+        map_free(m);
+    } else {
+        e->grid      = calloc(1, sizeof(int));
+        if (e->grid) e->grid[0] = -1;
+        e->grid_rows = 1;
+        e->grid_cols = 1;
+    }
+
+    e->tile_w = (e->grid_cols > 0) ? (float)room_width  / (float)e->grid_cols : 32.0f;
+    e->tile_h = (e->grid_rows > 0) ? (float)room_height / (float)e->grid_rows : 32.0f;
+
+    /* Seven patrol waypoints for the archive room (world-space) */
+    e->waypoints[0] = (EnemyPoint){2174.0f,  790.0f};
+    e->waypoints[1] = (EnemyPoint){2174.0f, 1472.0f};
+    e->waypoints[2] = (EnemyPoint){2951.0f, 1472.0f};
+    e->waypoints[3] = (EnemyPoint){2951.0f, 1149.0f};
+    e->waypoints[4] = (EnemyPoint){3062.0f, 1149.0f};
+    e->waypoints[5] = (EnemyPoint){3062.0f,  932.0f};
+    e->waypoints[6] = (EnemyPoint){4019.0f,  932.0f};
+    e->waypoint_count   = 7;
+    e->current_waypoint = 0;
+    e->patrol_dir       = 1;
+
+    /* Spawn at first waypoint */
+    e->x = e->waypoints[0].x;
+    e->y = e->waypoints[0].y;
+
+    e->state  = ENEMY_STATE_INACTIVE;
+    e->active = 0;
+    e->direction = ENEMY_DIR_FORWARD;
+    e->last_anim_direction = ENEMY_DIR_FORWARD;
+    e->is_moving = 0;
+    for (int i = 0; i < 4; i++) e->saved_frame_by_dir[i] = 0;
+    animation_init(&e->move_anim, ENEMY_MAX_ANIM_FRAMES, 5.0f, 1);
+
+    /* Smaller detection radii for the archive room */
+    e->chase_radius  = ARCHIVE_ENEMY_CHASE_RADIUS;
+    e->patrol_radius = ARCHIVE_ENEMY_PATROL_RADIUS;
+
+    e->inspect_x       = 0.0f;
+    e->inspect_y       = 0.0f;
+    e->inspect_pending = 0;
+}
+
+/* ── Inspect alert ────────────────────────────────────────────────────── */
+
+void enemy_alert_inspect(Enemy *e, float wx, float wy)
+{
+    if (!e || !e->active) return;
+    e->inspect_x       = wx;
+    e->inspect_y       = wy;
+    e->inspect_pending = 1;
+}
 
 /* Convert a world-space x to a grid column index (clamped). */
 static int world_to_col(const Enemy *e, float wx)
@@ -409,18 +489,35 @@ void enemy_update(Enemy *e, float player_x, float player_y,
         ? enemy_dist(e, player_x, player_y)
         : FLT_MAX;
 
+    /* ── Inspect alert: interrupt current state immediately ── */
+    if (e->inspect_pending) {
+        e->inspect_pending = 0;
+        e->state        = ENEMY_STATE_INSPECT;
+        e->path_len     = 0;
+        e->path_idx     = 0;
+        e->repath_timer = 0.0f;
+    }
+
     /* ── State transitions ── */
     if (e->state == ENEMY_STATE_PATROL) {
-        if (player_in_room && dist_to_player <= ENEMY_CHASE_RADIUS) {
+        if (player_in_room && dist_to_player <= e->chase_radius) {
             e->state        = ENEMY_STATE_CHASE;
             e->path_len     = 0;
             e->path_idx     = 0;
             e->repath_timer = 0.0f; /* compute path immediately */
         }
     } else if (e->state == ENEMY_STATE_CHASE) {
-        if (!player_in_room || dist_to_player > ENEMY_PATROL_RADIUS) {
+        if (!player_in_room || dist_to_player > e->patrol_radius) {
             e->state = ENEMY_STATE_PATROL;
             e->path_len = 0;
+        }
+    } else if (e->state == ENEMY_STATE_INSPECT) {
+        /* If player comes close during investigation, switch to chase */
+        if (player_in_room && dist_to_player <= e->chase_radius) {
+            e->state        = ENEMY_STATE_CHASE;
+            e->path_len     = 0;
+            e->path_idx     = 0;
+            e->repath_timer = 0.0f;
         }
     } else {
         /* INACTIVE — should not reach here once active=1 */
@@ -494,6 +591,59 @@ void enemy_update(Enemy *e, float player_x, float player_y,
             /* Path exhausted — move directly towards player as fallback */
             e->is_moving = move_towards_animated(
                 e, player_x, player_y, ENEMY_CHASE_SPEED, dt);
+        }
+        enemy_update_animation(e, dt);
+        return;
+    }
+
+    /* ── Inspect (A* to noise source) ── */
+    if (e->state == ENEMY_STATE_INSPECT) {
+        e->repath_timer -= dt;
+        if (e->repath_timer <= 0.0f || e->path_len == 0) {
+            e->repath_timer = ENEMY_REPATH_INTERVAL;
+
+            float cx, cy;
+            enemy_centre(e, &cx, &cy);
+            int sr = world_to_row(e, cy), sc = world_to_col(e, cx);
+            int gr = world_to_row(e, e->inspect_y);
+            int gc = world_to_col(e, e->inspect_x);
+
+            int new_len = 0;
+            astar(e->grid, e->grid_rows, e->grid_cols,
+                  sr, sc, gr, gc,
+                  e->path, &new_len,
+                  e->tile_w, e->tile_h);
+            e->path_len = new_len;
+            e->path_idx = 0;
+        }
+
+        if (e->path_len > 0 && e->path_idx < e->path_len) {
+            EnemyPoint *node = &e->path[e->path_idx];
+            float cx, cy;
+            enemy_centre(e, &cx, &cy);
+            float dx = node->x - cx, dy = node->y - cy;
+            float d  = sqrtf(dx * dx + dy * dy);
+
+            if (d <= ENEMY_WAYPOINT_THRESH) {
+                e->path_idx++;
+            } else {
+                e->is_moving = move_towards_animated(
+                    e, node->x, node->y, ENEMY_PATROL_SPEED, dt);
+            }
+        } else {
+            /* Path exhausted or A* found no path — walk directly to target */
+            float cx, cy;
+            enemy_centre(e, &cx, &cy);
+            float dx = e->inspect_x - cx, dy = e->inspect_y - cy;
+            float d  = sqrtf(dx * dx + dy * dy);
+            if (d > ENEMY_WAYPOINT_THRESH) {
+                e->is_moving = move_towards_animated(
+                    e, e->inspect_x, e->inspect_y, ENEMY_PATROL_SPEED, dt);
+            } else {
+                /* Arrived at inspect target — resume patrol */
+                e->state = ENEMY_STATE_PATROL;
+                e->path_len = 0;
+            }
         }
         enemy_update_animation(e, dt);
     }

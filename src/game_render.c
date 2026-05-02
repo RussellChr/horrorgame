@@ -128,6 +128,12 @@ void game_render_playing(Game *game)
         enemy_render(&game->enemy, game->renderer, &game->camera);
     }
 
+    /* Archive enemy (visible only when active and player is in the archive) */
+    if (game->archive_enemy.active &&
+        game->player->current_location_id == LOCATION_ARCHIVE) {
+        enemy_render(&game->archive_enemy, game->renderer, &game->camera);
+    }
+
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
     if (game->gasmask_active)

@@ -489,8 +489,9 @@ void game_render_settings(Game *game)
 /* ── Locker minimap ──────────────────────────────────────────────────────── */
 
 /* Renders a small minimap in the top-right corner showing the hallway room
- * background texture and the enemy's current position.  The player is not
- * shown because they are hiding inside the locker. */
+ * background texture with a fog-of-war overlay.  A sight circle centred on
+ * the player's locker position reveals a small area of the room; the enemy
+ * dot is always drawn on top as a radar blip. */
 static void render_locker_minimap(Game *game)
 {
     if (!game || !game->world) return;
@@ -530,54 +531,59 @@ static void render_locker_minimap(Game *game)
     float room_h = (hw && hw->room_height > 0) ? (float)hw->room_height : 720.0f;
 
     /* Darkness fog-of-war: cover the whole room area in near-opaque black,
-     * revealing only a small circle around the enemy ("sight vision"). */
-    const int SIGHT_R = 40; /* radius in minimap pixels */
+     * revealing only a small circle around the player ("sight vision"). */
+    const int SIGHT_R = 55; /* radius in minimap pixels */
 
+    float scale_x = (float)RW / room_w;
+    float scale_y = (float)RH / room_h;
+
+    /* Player centre in minimap coordinates */
+    int px_dot = RX, py_dot = RY + RH / 2;
+    if (game->player) {
+        float pcx = game->player->x + PLAYER_W * 0.5f;
+        float pcy = game->player->y + PLAYER_SPRITE_H * 0.5f;
+        px_dot = RX + (int)(pcx * scale_x);
+        py_dot = RY + (int)(pcy * scale_y);
+        if (px_dot < RX + 2)        px_dot = RX + 2;
+        if (px_dot > RX + RW - 2)   px_dot = RX + RW - 2;
+        if (py_dot < RY + 2)        py_dot = RY + 2;
+        if (py_dot > RY + RH - 2)   py_dot = RY + RH - 2;
+    }
+
+    /* Scanline darkness: full dark rows outside circle, split rows inside */
+    for (int row = RY; row < RY + RH; row++) {
+        int dy = row - py_dot;
+        if (dy < -SIGHT_R || dy > SIGHT_R) {
+            render_filled_rect(r, RX, row, RW, 1, 0, 0, 0, 220);
+        } else {
+            int dx = (int)sqrtf((float)(SIGHT_R * SIGHT_R - dy * dy));
+            int lx1 = px_dot - dx;
+            int lx2 = px_dot + dx;
+            if (lx1 > RX)
+                render_filled_rect(r, RX, row, lx1 - RX, 1, 0, 0, 0, 220);
+            if (lx2 < RX + RW)
+                render_filled_rect(r, lx2, row, RX + RW - lx2, 1, 0, 0, 0, 220);
+        }
+    }
+
+    /* Enemy dot — drawn on top of darkness so it always shows as a blip */
     if (game->enemy.active) {
-        float scale_x = (float)RW / room_w;
-        float scale_y = (float)RH / room_h;
-
-        /* Centre the enemy sprite on the dot */
         float ecx = game->enemy.x + ENEMY_W * 0.5f;
         float ecy = game->enemy.y + ENEMY_H * 0.5f;
-
         int ex = RX + (int)(ecx * scale_x);
         int ey = RY + (int)(ecy * scale_y);
-
-        /* Clamp dot to room rect */
         if (ex < RX + 2)        ex = RX + 2;
         if (ex > RX + RW - 6)   ex = RX + RW - 6;
         if (ey < RY + 2)        ey = RY + 2;
         if (ey > RY + RH - 6)   ey = RY + RH - 6;
 
-        /* Scanline darkness: full dark rows outside circle, split rows inside */
-        for (int row = RY; row < RY + RH; row++) {
-            int dy = row - ey;
-            if (dy < -SIGHT_R || dy > SIGHT_R) {
-                render_filled_rect(r, RX, row, RW, 1, 0, 0, 0, 220);
-            } else {
-                int dx = (int)sqrtf((float)(SIGHT_R * SIGHT_R - dy * dy));
-                int lx1 = ex - dx;
-                int lx2 = ex + dx;
-                if (lx1 > RX)
-                    render_filled_rect(r, RX, row, lx1 - RX, 1, 0, 0, 0, 220);
-                if (lx2 < RX + RW)
-                    render_filled_rect(r, lx2, row, RX + RW - lx2, 1, 0, 0, 0, 220);
-            }
-        }
-
-        /* Red dot (6×6) */
         render_filled_rect(r, ex - 3, ey - 3, 6, 6, 220, 40, 40, 255);
         render_rect_outline(r, ex - 3, ey - 3, 6, 6, 255, 120, 120, 255);
 
-        /* "ENEMY" label above the dot */
         int label_x = ex - 14;
         if (label_x < RX)              label_x = RX;
         if (label_x > RX + RW - 40)    label_x = RX + RW - 40;
         render_text(r, "ENEMY", label_x, ey - 14, 1, 220, 60, 60);
-    } else {
-        /* Enemy not active — cover the whole room in darkness */
-        render_filled_rect(r, RX, RY, RW, RH, 0, 0, 0, 220);
     }
 }
 

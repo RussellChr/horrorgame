@@ -42,6 +42,7 @@
 #define FLAG_ARCHIVE_FINGERPRINT_COLLECTED (1u << 19) /* fingerprint picked up in Archive          */
 #define FLAG_ARCHIVE_THERMALFUSE_COLLECTED (1u << 20) /* thermal fuse picked up in Archive         */
 #define FLAG_ARCHIVE_INNER_DOOR_OPENED     (1u << 21) /* tile-2 archive door opened                */
+#define FLAG_ARCHIVE_ENEMY_SPAWNED         (1u << 22) /* archive-room enemy has been activated     */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

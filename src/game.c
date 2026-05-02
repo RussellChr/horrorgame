@@ -209,6 +209,7 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
     enemy_free(&game->enemy);
+    enemy_free(&game->archive_enemy);
     free(game);
 }
 
@@ -257,6 +258,16 @@ void game_start_new(Game *game)
         int hw_h = hw ? hw->room_height : 960;  /* hallway texture height */
         enemy_init(&game->enemy, hw_w, hw_h);
         enemy_load_sprites(&game->enemy, game->renderer);
+    }
+
+    /* Initialise the archive enemy (inactive until player enters archive). */
+    enemy_free(&game->archive_enemy);
+    {
+        Location *ar = world_get_location(game->world, LOCATION_ARCHIVE);
+        int ar_w = ar ? ar->room_width  : 4500;
+        int ar_h = ar ? ar->room_height : 2000;
+        enemy_init_archive(&game->archive_enemy, ar_w, ar_h);
+        enemy_load_sprites(&game->archive_enemy, game->renderer);
     }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
@@ -430,6 +441,21 @@ static void game_do_load(Game *game, int slot)
     game->enemy.active = data.enemy_active;
     if (data.enemy_active) game->enemy.state = ENEMY_STATE_PATROL;
 
+    /* Re-init archive enemy */
+    enemy_free(&game->archive_enemy);
+    {
+        Location *ar = world_get_location(game->world, LOCATION_ARCHIVE);
+        int ar_w = ar ? ar->room_width  : 4500;
+        int ar_h = ar ? ar->room_height : 2000;
+        enemy_init_archive(&game->archive_enemy, ar_w, ar_h);
+        enemy_load_sprites(&game->archive_enemy, game->renderer);
+    }
+    /* Re-activate archive enemy if it was previously spawned */
+    if (player_check_flag(game->player, FLAG_ARCHIVE_ENEMY_SPAWNED)) {
+        game->archive_enemy.active = 1;
+        game->archive_enemy.state  = ENEMY_STATE_PATROL;
+    }
+
     /* Camera */
     Location *loc = world_get_location(game->world, data.location_id);
     int loc_w = loc ? loc->room_width  : ROOM_W;
@@ -483,6 +509,13 @@ void game_change_location(Game *game, int location_id,
         player_set_flag(game->player, FLAG_ENTERED_POWER);
     else if (location_id == LOCATION_SECURITY)
         player_set_flag(game->player, FLAG_ENTERED_SECURITY);
+
+    /* Activate archive enemy the first time the player enters the archive room */
+    if (location_id == LOCATION_ARCHIVE && !game->archive_enemy.active) {
+        game->archive_enemy.active = 1;
+        game->archive_enemy.state  = ENEMY_STATE_PATROL;
+        player_set_flag(game->player, FLAG_ARCHIVE_ENEMY_SPAWNED);
+    }
 
     Location *next = world_get_location(game->world, location_id);
     if (next) {
@@ -1345,7 +1378,23 @@ void game_update(Game *game)
                 if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
                     py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
                     game->archive_glass_collected[i] = 1;
+                    /* Alert the archive enemy to investigate the glass location */
+                    enemy_alert_inspect(&game->archive_enemy,
+                                        gx + ARCHIVE_GLASS_SIZE * 0.5f,
+                                        gy + ARCHIVE_GLASS_SIZE * 0.5f);
                 }
+            }
+        }
+
+        /* ── Archive enemy update ── */
+        if (game->archive_enemy.active) {
+            int in_archive = (p->current_location_id == LOCATION_ARCHIVE);
+            enemy_update(&game->archive_enemy, p->x, p->y, in_archive, dt);
+
+            /* Game-over: archive enemy caught the player while in the archive */
+            if (in_archive &&
+                enemy_hits_player(&game->archive_enemy, p->x, p->y)) {
+                game->state = GAME_STATE_GAME_OVER;
             }
         }
 

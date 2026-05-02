@@ -7,7 +7,7 @@
 
 /* ── Enemy constants ──────────────────────────────────────────────────── */
 
-#define ENEMY_WAYPOINT_COUNT      6
+#define ENEMY_WAYPOINT_COUNT      7
 #define ENEMY_PATH_MAX          256
 #define ENEMY_MAX_ANIM_FRAMES     8
 #define ENEMY_BACKWARD_FRAMES     6  /* available backward asset frames */
@@ -28,7 +28,8 @@
 typedef enum {
     ENEMY_STATE_INACTIVE = 0,
     ENEMY_STATE_PATROL,
-    ENEMY_STATE_CHASE
+    ENEMY_STATE_CHASE,
+    ENEMY_STATE_INSPECT  /* investigating a noise source (glass break etc.) */
 } EnemyState;
 
 typedef enum {
@@ -59,6 +60,14 @@ typedef struct {
     int        waypoint_count;
     int        current_waypoint; /* index of the waypoint we are heading to */
     int        patrol_dir;       /* +1 = forward (0→5), -1 = backward (5→0) */
+
+    /* Detection radii (per-enemy, so different rooms can use different values) */
+    float chase_radius;   /* distance at which chase begins  */
+    float patrol_radius;  /* distance at which chase ends    */
+
+    /* Inspection target (set by enemy_alert_inspect) */
+    float inspect_x, inspect_y;  /* world-space target to investigate   */
+    int   inspect_pending;        /* 1 = alert has been set, not yet processed */
 
     /* A* chase path (world-space node centres) */
     EnemyPoint path[ENEMY_PATH_MAX];
@@ -97,6 +106,13 @@ typedef struct {
  * room_width / room_height are known.
  */
 void enemy_init(Enemy *e, int room_width, int room_height);
+
+/*
+ * Initialise the archive-room enemy: load the archive CSV, store the grid
+ * for A*, and set the seven archive patrol waypoints.
+ */
+void enemy_init_archive(Enemy *e, int room_width, int room_height);
+
 void enemy_load_sprites(Enemy *e, SDL_Renderer *renderer);
 
 /* Free the grid memory allocated by enemy_init(). */
@@ -105,7 +121,7 @@ void enemy_free(Enemy *e);
 /*
  * Per-frame update.
  *   player_x / player_y : player world-space position.
- *   player_in_room      : 1 if the player is currently in the hallway.
+ *   player_in_room      : 1 if the player is currently in the room.
  *   dt                  : elapsed seconds since the last frame.
  */
 void enemy_update(Enemy *e, float player_x, float player_y,
@@ -116,5 +132,12 @@ int  enemy_hits_player(const Enemy *e, float player_x, float player_y);
 
 /* Render the enemy rect.  cam is used to convert world→screen coordinates. */
 void enemy_render(const Enemy *e, SDL_Renderer *renderer, const Camera *cam);
+
+/*
+ * Alert the enemy to investigate a noise at (wx, wy).
+ * If the enemy is active, it switches to INSPECT state and A*-paths to the
+ * given world-space position.  Safe to call from any state.
+ */
+void enemy_alert_inspect(Enemy *e, float wx, float wy);
 
 #endif /* ENEMY_INCLUDE_H */

@@ -13,6 +13,11 @@
 #include "video.h"
 #include "enemy.h"
 
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -99,6 +104,218 @@ static const char * const security_cutscene_texts[4] = {
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */
+
+static void decoded_audio_free(DecodedAudio *audio)
+{
+    if (!audio) return;
+    if (audio->stream) {
+        SDL_DestroyAudioStream(audio->stream);
+        audio->stream = NULL;
+    }
+    if (audio->buf) {
+        SDL_free(audio->buf);
+        audio->buf = NULL;
+    }
+    audio->len = 0;
+}
+
+static int decoded_audio_append(DecodedAudio *audio,
+                                const Uint8 *data, int bytes)
+{
+    if (!audio || !data || bytes <= 0) return 1;
+    if (audio->len > (Uint32)SDL_MAX_UINT32 - (Uint32)bytes) return 0;
+
+    Uint8 *new_buf = (Uint8 *)SDL_realloc(audio->buf,
+                                          (size_t)audio->len + (size_t)bytes);
+    if (!new_buf) return 0;
+
+    audio->buf = new_buf;
+    SDL_memcpy(audio->buf + audio->len, data, (size_t)bytes);
+    audio->len += (Uint32)bytes;
+    return 1;
+}
+
+static int decoded_audio_load_mp3(DecodedAudio *audio, const char *path)
+{
+    AVFormatContext *fmt_ctx = NULL;
+    AVCodecContext  *codec_ctx = NULL;
+    SwrContext      *swr_ctx = NULL;
+    AVFrame         *frame = NULL;
+    AVPacket        *packet = NULL;
+    int audio_stream = -1;
+    int ok = 0;
+
+    if (!audio || !path) return 0;
+    decoded_audio_free(audio);
+
+    if (avformat_open_input(&fmt_ctx, path, NULL, NULL) < 0) {
+        SDL_Log("audio: cannot open '%s'", path);
+        goto done;
+    }
+    if (avformat_find_stream_info(fmt_ctx, NULL) < 0) {
+        SDL_Log("audio: cannot read stream info for '%s'", path);
+        goto done;
+    }
+
+    audio_stream = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO,
+                                       -1, -1, NULL, 0);
+    if (audio_stream < 0) {
+        SDL_Log("audio: no audio stream in '%s'", path);
+        goto done;
+    }
+
+    AVStream *st = fmt_ctx->streams[audio_stream];
+    const AVCodec *decoder = avcodec_find_decoder(st->codecpar->codec_id);
+    if (!decoder) {
+        SDL_Log("audio: no decoder for '%s'", path);
+        goto done;
+    }
+
+    codec_ctx = avcodec_alloc_context3(decoder);
+    if (!codec_ctx) goto done;
+    if (avcodec_parameters_to_context(codec_ctx, st->codecpar) < 0) goto done;
+    if (avcodec_open2(codec_ctx, decoder, NULL) < 0) {
+        SDL_Log("audio: decoder open failed for '%s'", path);
+        goto done;
+    }
+
+    AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
+    if (swr_alloc_set_opts2(&swr_ctx,
+                            &stereo, AV_SAMPLE_FMT_FLT, 44100,
+                            &codec_ctx->ch_layout,
+                            codec_ctx->sample_fmt,
+                            codec_ctx->sample_rate,
+                            0, NULL) < 0 || swr_init(swr_ctx) < 0) {
+        SDL_Log("audio: resampler init failed for '%s'", path);
+        goto done;
+    }
+
+    frame = av_frame_alloc();
+    packet = av_packet_alloc();
+    if (!frame || !packet) goto done;
+
+    while (av_read_frame(fmt_ctx, packet) >= 0) {
+        if (packet->stream_index == audio_stream &&
+            avcodec_send_packet(codec_ctx, packet) >= 0) {
+            while (avcodec_receive_frame(codec_ctx, frame) >= 0) {
+                int out_samples = (int)av_rescale_rnd(
+                    swr_get_delay(swr_ctx, codec_ctx->sample_rate) +
+                        frame->nb_samples,
+                    44100, codec_ctx->sample_rate, AV_ROUND_UP);
+                int bytes = out_samples * 2 * (int)sizeof(float);
+                Uint8 *out_buf = (Uint8 *)SDL_malloc((size_t)bytes);
+                if (!out_buf) goto done;
+
+                Uint8 *out_planes[1] = { out_buf };
+                int converted = swr_convert(swr_ctx, out_planes, out_samples,
+                                            (const Uint8 **)frame->data,
+                                            frame->nb_samples);
+                if (converted > 0) {
+                    int converted_bytes = converted * 2 * (int)sizeof(float);
+                    if (!decoded_audio_append(audio, out_buf, converted_bytes)) {
+                        SDL_free(out_buf);
+                        goto done;
+                    }
+                }
+                SDL_free(out_buf);
+                av_frame_unref(frame);
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    avcodec_send_packet(codec_ctx, NULL);
+    while (avcodec_receive_frame(codec_ctx, frame) >= 0) {
+        int out_samples = (int)av_rescale_rnd(
+            swr_get_delay(swr_ctx, codec_ctx->sample_rate) + frame->nb_samples,
+            44100, codec_ctx->sample_rate, AV_ROUND_UP);
+        int bytes = out_samples * 2 * (int)sizeof(float);
+        Uint8 *out_buf = (Uint8 *)SDL_malloc((size_t)bytes);
+        if (!out_buf) goto done;
+
+        Uint8 *out_planes[1] = { out_buf };
+        int converted = swr_convert(swr_ctx, out_planes, out_samples,
+                                    (const Uint8 **)frame->data,
+                                    frame->nb_samples);
+        if (converted > 0) {
+            int converted_bytes = converted * 2 * (int)sizeof(float);
+            if (!decoded_audio_append(audio, out_buf, converted_bytes)) {
+                SDL_free(out_buf);
+                goto done;
+            }
+        }
+        SDL_free(out_buf);
+        av_frame_unref(frame);
+    }
+
+    audio->spec = (SDL_AudioSpec){ SDL_AUDIO_F32, 2, 44100 };
+    audio->stream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &audio->spec, NULL, NULL);
+    if (!audio->stream) {
+        SDL_Log("audio: failed to open stream for '%s': %s",
+                path, SDL_GetError());
+        goto done;
+    }
+
+    ok = audio->buf && audio->len > 0;
+
+done:
+    if (packet) av_packet_free(&packet);
+    if (frame) av_frame_free(&frame);
+    if (swr_ctx) swr_free(&swr_ctx);
+    if (codec_ctx) avcodec_free_context(&codec_ctx);
+    if (fmt_ctx) avformat_close_input(&fmt_ctx);
+    if (!ok) decoded_audio_free(audio);
+    return ok;
+}
+
+static void decoded_audio_play_once(DecodedAudio *audio)
+{
+    if (!audio || !audio->stream || !audio->buf ||
+        audio->len > (Uint32)SDL_MAX_SINT32) return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static void ambient_ost_start(Game *game)
+{
+    DecodedAudio *audio = &game->ambient_ost_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static void ambient_ost_update(Game *game)
+{
+    DecodedAudio *audio = &game->ambient_ost_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
+
+    if (game->am_audio_pause_timer > 0.0f) {
+        SDL_PauseAudioStreamDevice(audio->stream);
+        return;
+    }
+
+    if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
+        SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static float audio_duration_seconds(const SDL_AudioSpec *spec, Uint32 len)
+{
+    if (!spec || spec->freq <= 0 || spec->channels <= 0) return 0.0f;
+    int bytes_per_sample = SDL_AUDIO_BITSIZE(spec->format) / 8;
+    int bytes_per_second = spec->freq * spec->channels * bytes_per_sample;
+    if (bytes_per_second <= 0) return 0.0f;
+    return (float)len / (float)bytes_per_second;
+}
 
 static Button make_button(float x, float y, float w, float h,
                           const char *text)
@@ -227,6 +444,14 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to load glass cracking.wav: %s", SDL_GetError());
     }
 
+    /* Load MP3-backed door SFX and looping hospital atmosphere */
+    if (!decoded_audio_load_mp3(&g->door_open_audio,
+                                "assets/sfx/soundreality-door-opening-2-455061.mp3"))
+        SDL_Log("game_init: failed to load door opening MP3");
+    if (!decoded_audio_load_mp3(&g->ambient_ost_audio,
+                                "assets/OST/OST NTE - Abandoned Hospital.mp3"))
+        SDL_Log("game_init: failed to load abandoned hospital OST");
+
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
@@ -275,6 +500,8 @@ void game_cleanup(Game *game)
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
     if (game->glass_crack_audio_stream) SDL_DestroyAudioStream(game->glass_crack_audio_stream);
     if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
+    decoded_audio_free(&game->door_open_audio);
+    decoded_audio_free(&game->ambient_ost_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
@@ -372,6 +599,8 @@ void game_start_new(Game *game)
     game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
+    game->am_audio_pause_timer     = 0.0f;
+    ambient_ost_start(game);
 
     /* Show the opening inner monologue if one is defined */
     const MonologueSection *open_mono =
@@ -566,6 +795,8 @@ static void game_do_load(Game *game, int slot)
     game->passcode_correct        = 0;
     game->simon_death_triggered   = 0;
     game->simon_jumpscare_played  = 0;
+    game->am_audio_pause_timer    = 0.0f;
+    ambient_ost_start(game);
 }
 
 void game_change_location(Game *game, int location_id,
@@ -610,6 +841,7 @@ void game_change_location(Game *game, int location_id,
     game->lab_gas_timer      = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered = 0;
 
+    decoded_audio_play_once(&game->door_open_audio);
     camera_snap(&game->camera, spawn_x, spawn_y);
 }
 
@@ -838,6 +1070,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                                                game->am_wav_buf,
                                                (int)game->am_wav_len);
                         SDL_ResumeAudioStreamDevice(game->am_audio_stream);
+                        game->am_audio_pause_timer =
+                            audio_duration_seconds(&game->am_wav_spec,
+                                                   game->am_wav_len);
                     }
                 }
                 /* Check if the containment level rect was clicked */
@@ -1320,6 +1555,13 @@ void game_update(Game *game)
     if (dt > 0.1f) dt = 0.1f;
     game->delta_time = dt;
     game->last_ticks = now;
+
+    if (game->am_audio_pause_timer > 0.0f) {
+        game->am_audio_pause_timer -= dt;
+        if (game->am_audio_pause_timer < 0.0f)
+            game->am_audio_pause_timer = 0.0f;
+    }
+    ambient_ost_update(game);
 
     if (game->state == GAME_STATE_PLAYING &&
         game->player && game->world) {

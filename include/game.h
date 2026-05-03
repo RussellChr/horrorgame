@@ -29,6 +29,13 @@
 #define ARCHIVE_GLASS_SIZE  40
 extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
 
+typedef struct DecodedAudio {
+    SDL_AudioSpec    spec;
+    Uint8           *buf;
+    Uint32           len;
+    SDL_AudioStream *stream;
+} DecodedAudio;
+
 /* ── AM recording interactable (monitor_zoom screen) ──────────────────── */
 #define AM_RECORD_X   377
 #define AM_RECORD_Y   274
@@ -178,6 +185,11 @@ typedef struct {
     Uint8           *glass_crack_wav_buf;
     Uint32           glass_crack_wav_len;
     SDL_AudioStream *glass_crack_audio_stream;
+
+    /* Door and looping hospital atmosphere MP3s */
+    DecodedAudio door_open_audio;
+    DecodedAudio ambient_ost_audio;
+    float        am_audio_pause_timer;
 
     /* Enemy patrol / chase system */
     Enemy         enemy;          /* hallway enemy (activated by passcode)    */

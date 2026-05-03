@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Lab overlay alpha ──────────────────────────────────────────────────── */
 /* Alpha of the green gas overlay (0-255). */
@@ -552,6 +553,102 @@ void game_render_archive_book(Game *game)
                          WINDOW_W / 2, WINDOW_H - 20, 1, 200, 200, 200);
 }
 
+/* ── Locker minimap ──────────────────────────────────────────────────────── */
+
+/* Layout of the minimap panel (top-right corner of the locker view). */
+#define MINIMAP_X         (WINDOW_W - 310)
+#define MINIMAP_Y         10
+#define MINIMAP_W         300
+#define MINIMAP_H         150
+/* Fog-of-war: area visible around the player's last known (locker) position. */
+#define MINIMAP_VISION_R  70.0f
+
+/*
+ * Draw a tile-accurate minimap of the hallway on top of the locker background.
+ * The whole panel is pitch-black; tiles are revealed only inside a small
+ * circular vision zone centred on the player's world position (the locker).
+ * The hallway enemy is shown as a red square only when inside that zone.
+ */
+static void render_locker_minimap(Game *game)
+{
+    if (!game || !game->player) return;
+
+    /* The enemy struct owns the hallway grid – nothing to show without it. */
+    const Enemy *e = &game->enemy;
+    if (!e->grid || e->grid_rows <= 0 || e->grid_cols <= 0) return;
+
+    SDL_Renderer *r = game->renderer;
+    int   rows    = e->grid_rows;
+    int   cols    = e->grid_cols;
+    float world_w = e->tile_w * (float)cols;
+    float world_h = e->tile_h * (float)rows;
+
+    /* Tile size in minimap pixels (fractional for accuracy). */
+    float tw = (float)MINIMAP_W / (float)cols;   /* ~5.0 px for 300/60 */
+    float th = (float)MINIMAP_H / (float)rows;   /* ~5.0 px for 150/30 */
+
+    /* Solid black background for the entire panel. */
+    render_filled_rect(r, MINIMAP_X - 2, MINIMAP_Y - 2,
+                       MINIMAP_W + 4, MINIMAP_H + 4, 0, 0, 0, 255);
+
+    /* Vision centre: the player's world position mapped to minimap space.
+     * The player is hiding in the locker so this is their last position. */
+    float vcx = MINIMAP_X + (game->player->x / world_w) * (float)MINIMAP_W;
+    float vcy = MINIMAP_Y + (game->player->y / world_h) * (float)MINIMAP_H;
+
+    /* Draw each tile that falls inside the vision circle. */
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            /* Centre of this tile on the minimap. */
+            float tile_cx = MINIMAP_X + ((float)col + 0.5f) * tw;
+            float tile_cy = MINIMAP_Y + ((float)row + 0.5f) * th;
+            float dx   = tile_cx - vcx;
+            float dy   = tile_cy - vcy;
+            float dist = sqrtf(dx * dx + dy * dy);
+            if (dist >= MINIMAP_VISION_R) continue; /* pitch black outside */
+
+            /* Alpha fades to 0 at the vision boundary for a soft edge. */
+            float fade  = 1.0f - dist / MINIMAP_VISION_R;
+            Uint8 alpha = (Uint8)(fade * 230.0f);
+
+            int tx = MINIMAP_X + (int)((float)col * tw);
+            int ty = MINIMAP_Y + (int)((float)row * th);
+            /* +1 so adjacent tiles share an edge without leaving gaps. */
+            int tw_i = (int)tw + 1;
+            int th_i = (int)th + 1;
+
+            int cell = e->grid[row * cols + col];
+            if (cell == 0) {
+                /* Wall tile: medium grey */
+                render_filled_rect(r, tx, ty, tw_i, th_i, 80, 80, 80, alpha);
+            } else {
+                /* Floor / door / interactive tile: dark grey */
+                render_filled_rect(r, tx, ty, tw_i, th_i, 35, 35, 35, alpha);
+            }
+        }
+    }
+
+    /* Enemy marker: a bright-red square shown only inside the vision radius. */
+    if (e->active && e->state != ENEMY_STATE_INACTIVE) {
+        float ecx = e->x + ENEMY_W * 0.5f;
+        float ecy = e->y + ENEMY_H * 0.5f;
+        float emx = MINIMAP_X + (ecx / world_w) * (float)MINIMAP_W;
+        float emy = MINIMAP_Y + (ecy / world_h) * (float)MINIMAP_H;
+        float edx   = emx - vcx;
+        float edy   = emy - vcy;
+        float edist = sqrtf(edx * edx + edy * edy);
+        if (edist < MINIMAP_VISION_R) {
+            render_filled_rect(r, (int)emx - 4, (int)emy - 4, 8, 8,
+                               220, 30, 30, 255);
+        }
+    }
+
+    /* Panel border and tiny label. */
+    render_rect_outline(r, MINIMAP_X - 2, MINIMAP_Y - 2,
+                        MINIMAP_W + 4, MINIMAP_H + 4, 100, 100, 100, 200);
+    render_text(r, "MAP", MINIMAP_X + 3, MINIMAP_Y + 3, 1, 120, 120, 120);
+}
+
 /* ── Locker view ─────────────────────────────────────────────────────────── */
 
 void game_render_locker(Game *game)
@@ -674,6 +771,9 @@ void game_render_locker(Game *game)
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        /* Minimap: only on the base locker view, not note/monitor overlays. */
+        if (!game->show_note_locker)
+            render_locker_minimap(game);
     }
 }
 

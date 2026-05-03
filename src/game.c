@@ -1924,6 +1924,14 @@ void game_update(Game *game)
             }
         }
 
+    } else if (game->state == GAME_STATE_LOCKER && game->player) {
+        /* While hiding in the locker the enemy keeps patrolling.
+         * Pass player_in_room=0 so the enemy can't see the hidden player
+         * and will transition from chase back to patrol if needed. */
+        Player *p = game->player;
+        if (game->enemy.active)
+            enemy_update(&game->enemy, p->x, p->y, 0, dt);
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
     } else if (game->state == GAME_STATE_CUTSCENE) {

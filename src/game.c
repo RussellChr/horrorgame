@@ -138,8 +138,8 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
 #define DODGE_HEART_SIZE     18.0f
 #define DODGE_HEART_SPEED   260.0f
 #define DODGE_MAX_HP          7
-#define DODGE_ROUNDS          9
-#define DODGE_ROUND_DURATION 15.0f
+#define DODGE_ROUNDS          5
+#define DODGE_ROUND_DURATION 18.0f
 #define DODGE_SPAWN_EVERY     0.28f
 #define DODGE_BULLET_SIZE    14.0f
 #define DODGE_HIT_INVULN      0.9f

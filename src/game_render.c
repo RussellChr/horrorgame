@@ -33,8 +33,8 @@
 #define DODGE_HEART_SIZE      18
 #define DODGE_BULLET_SIZE     14
 #define DODGE_MAX_HP           7
-#define DODGE_ROUNDS           9
-#define DODGE_ROUND_DURATION  15.0f
+#define DODGE_ROUNDS           5
+#define DODGE_ROUND_DURATION  18.0f
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 

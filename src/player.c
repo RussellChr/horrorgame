@@ -70,7 +70,7 @@ void player_destroy(Player *player)
         if (player->walk_frames_west[i])  render_texture_destroy(player->walk_frames_west[i]);
     }
 
-    /* Destroy flashlight movement animation textures */
+    /* Destroy flashlight animation textures (idle and movement frames) */
     if (player->fl_front_idle) render_texture_destroy(player->fl_front_idle);
     for (int i = 0; i < player->fl_front_count; i++)
         if (player->fl_front_frames[i]) render_texture_destroy(player->fl_front_frames[i]);

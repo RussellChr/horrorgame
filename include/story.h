@@ -47,6 +47,8 @@
 #define FLAG_HIBERN_PODS_INTERACTED        (1u << 24) /* hibern. pods flavor-text read once        */
 #define FLAG_HALLWAY_NOTHING_INTERACTED    (1u << 25) /* hallway "nothing here" spot visited once  */
 #define FLAG_ARCHIVE_KEYCARD2_COLLECTED    (1u << 26) /* level-2 keycard picked up in Archive      */
+#define FLAG_ARCHIVE_FINGERPRINT2_COLLECTED (1u << 27) /* fingerprint 2 picked up in Archive        */
+#define FLAG_ARCHIVE_FINGERPRINT3_COLLECTED (1u << 28) /* fingerprint 3 picked up in Archive        */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

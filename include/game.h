@@ -140,7 +140,9 @@ typedef struct {
     SDL_Texture *item_flashlight_texture;  /* icon shown in inventory for flashlight */
     SDL_Texture *item_gasmask_texture;     /* icon shown in inventory for gas mask   */
     SDL_Texture *item_keycard_texture;     /* icon shown in inventory for keycard    */
-    SDL_Texture *item_fingerprint_texture; /* icon shown in inventory for fingerprint */
+    SDL_Texture *item_fingerprint_texture; /* icon shown in inventory for fingerprint 1 */
+    SDL_Texture *item_fingerprint2_texture; /* icon shown in inventory for fingerprint 2 */
+    SDL_Texture *item_fingerprint3_texture; /* icon shown in inventory for fingerprint 3 */
     SDL_Texture *item_thermalfuse_texture; /* icon shown in inventory for thermal fuse */
 
     /* Flashlight */

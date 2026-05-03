@@ -43,6 +43,8 @@ static int is_trigger_consumed(const Game *game, int trigger_id)
         case 53: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
         case 54: return player_check_flag(p, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
         case 57: return player_check_flag(p, FLAG_ARCHIVE_KEYCARD2_COLLECTED);
+        case 58: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED);
+        case 59: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
         /* Lab */
         case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
         /* Hallway */
@@ -531,7 +533,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
-    g->item_fingerprint_texture = render_load_texture(renderer, "assets/fingerprint.png");
+    g->item_fingerprint_texture = render_load_texture(renderer, "assets/fingerprint1.png");
+    g->item_fingerprint2_texture = render_load_texture(renderer, "assets/fingerprint2.png");
+    g->item_fingerprint3_texture = render_load_texture(renderer, "assets/fingerprint3.png");
     g->item_thermalfuse_texture = render_load_texture(renderer, "assets/thermalfuse.png");
 
     /* Load archive glass overlay */
@@ -589,6 +593,8 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
     render_texture_destroy(game->item_fingerprint_texture);
+    render_texture_destroy(game->item_fingerprint2_texture);
+    render_texture_destroy(game->item_fingerprint3_texture);
     render_texture_destroy(game->item_thermalfuse_texture);
     render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
@@ -1804,6 +1810,8 @@ void game_update(Game *game)
                                      tz->trigger_id == 53 ||
                                      tz->trigger_id == 54 ||
                                      tz->trigger_id == 57 ||
+                                     tz->trigger_id == 58 ||
+                                     tz->trigger_id == 59 ||
                                      tz->trigger_id == 96)
                                 label = "Press [E] to interact";
                             else

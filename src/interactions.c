@@ -97,9 +97,13 @@ void game_handle_interaction(Game *game)
                 game_open_archive_inner_door(game);
                 game_set_simple_dialogue(game, "Richard",
                                          "Door is now opened", NULL);
+            } else if (player_has_item(game->player, ITEM_ID_FINGERPRINT2) ||
+                       player_has_item(game->player, ITEM_ID_FINGERPRINT3)) {
+                game_set_simple_dialogue(game, "Richard",
+                                         "not the right fingerprint", NULL);
             } else {
                 game_set_simple_dialogue(game, "Richard",
-                                         "Require fringerprint...",
+                                         "Require fingerprint...",
                                          "It also seems to be malfunctioning, I need some sort of thermal fuse to fix this");
             }
         } else if (tid == 53) {
@@ -156,6 +160,42 @@ void game_handle_interaction(Game *game)
                 player_add_item(game->player, &kc2);
                 game_set_simple_dialogue(game, "Richard",
                                          "A Level-2 Keycard. Maybe it opens something in the hallway.",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 58) {
+            /* Tile 8: fingerprint 2 pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED);
+                Item fp2;
+                strncpy(fp2.name, "Fingerprint 2", ITEM_NAME_MAX - 1);
+                fp2.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp2.description, "A second lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp2.description[ITEM_DESC_MAX - 1] = '\0';
+                fp2.id     = ITEM_ID_FINGERPRINT2;
+                fp2.usable = 0;
+                player_add_item(game->player, &fp2);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Another fingerprint. This one looks different...",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 59) {
+            /* Tile 9: fingerprint 3 pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
+                Item fp3;
+                strncpy(fp3.name, "Fingerprint 3", ITEM_NAME_MAX - 1);
+                fp3.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp3.description, "A third lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp3.description[ITEM_DESC_MAX - 1] = '\0';
+                fp3.id     = ITEM_ID_FINGERPRINT3;
+                fp3.usable = 0;
+                player_add_item(game->player, &fp3);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Another fingerprint. This one looks different too...",
                                          NULL);
             } else {
                 game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);

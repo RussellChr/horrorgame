@@ -17,6 +17,9 @@
 #include <string.h>
 #include <stdio.h>
 
+/* ── Archive book constants ─────────────────────────────────────────────── */
+#define ARCHIVE_BOOK_TRANSITION_DURATION  0.3f  /* seconds for black-screen page turn */
+
 /* -- Lab poisonous-gas constants ------------------------------------------ */
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
@@ -183,6 +186,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load Title Screen*/
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
+    /* Load archive book page textures */
+    g->archive_pg1_texture = render_load_texture(renderer, "assets/archive_pg1.png");
+    g->archive_pg2_texture = render_load_texture(renderer, "assets/archive_pg2.png");
+
     /* Load locker view */
     g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
@@ -240,6 +247,8 @@ void game_cleanup(Game *game)
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
+    render_texture_destroy(game->archive_pg1_texture);
+    render_texture_destroy(game->archive_pg2_texture);
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
@@ -913,6 +922,31 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_ARCHIVE_BOOK:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            /* ESC or E closes the book viewer */
+            if (k == SDLK_ESCAPE || k == SDLK_E) {
+                game->archive_book_trans_timer = 0.0f;
+                game->state = GAME_STATE_PLAYING;
+            }
+            /* Right arrow: go to next page (pg2) */
+            else if (k == SDLK_RIGHT &&
+                     game->archive_book_page == 0 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 1;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+            /* Left arrow: go to previous page (pg1) */
+            else if (k == SDLK_LEFT &&
+                     game->archive_book_page == 1 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 0;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+        }
+        break;
+
     case GAME_STATE_CUTSCENE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             SDL_Keycode k = event->key.key;
@@ -1561,6 +1595,16 @@ void game_update(Game *game)
         }
     }
 
+    /* Tick the archive book page-turn transition */
+    if (game->state == GAME_STATE_ARCHIVE_BOOK &&
+        game->archive_book_trans_timer > 0.0f) {
+        game->archive_book_trans_timer -= dt;
+        if (game->archive_book_trans_timer <= 0.0f) {
+            game->archive_book_trans_timer = 0.0f;
+            game->archive_book_page        = game->archive_book_next_page;
+        }
+    }
+
     /* Tick the pickup notification regardless of game state */
     if (game->pickup_notify_timer > 0.0f) {
         game->pickup_notify_timer -= dt;
@@ -1584,6 +1628,7 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;

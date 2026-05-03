@@ -234,6 +234,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_interactive_triggers_for_tile(m, loc, 2, 52, 0.0f, 0.0f);
                     map_build_interactive_triggers_for_tile(m, loc, 3, 53, 0.0f, 0.0f);
                     map_build_interactive_triggers_for_tile(m, loc, 4, 54, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 6, 56, 0.0f, 0.0f);
 
                     /* Spawn in front of the door tiles (rows 10-12, cols ~271-279).
                        Hint one row below the door run so we land on floor. */

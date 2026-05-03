@@ -21,6 +21,60 @@
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
 
+/* ── Flashlight animation loader ───────────────────────────────────────── */
+/* Loads all flashlight movement frames for each direction into the player.
+ * Frame files are numbered from 1 upward; loading stops at the first missing
+ * file so each folder can have a different number of PNGs. */
+static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
+{
+    if (!player || !renderer) return;
+    char path[512];
+
+    /* ── South (front) ──────────────────────────────────────────────────── */
+    /* File #1 in the folder is the idle pose; files #2-5 are walk frames.  */
+    player->fl_front_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter1.png");
+
+    player->fl_front_count = 0;
+    for (int i = 1; i < ANIM_MAX_FRAMES+1; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter%d.png", i + 1);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_front_frames[player->fl_front_count++] = t;
+    }
+
+    /* ── West (left) ────────────────────────────────────────────────────── */
+    /* manusia kiri1 = idle; manusia kiri2-N = walk frames.                 */
+    player->fl_left_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight left/manusia kiri1.png");
+
+    player->fl_left_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_left_frames[player->fl_left_count++] = t;
+    }
+
+    /* ── East (right) ───────────────────────────────────────────────────── */
+    /* manusia kanan1 = idle; manusia kanan2-N = walk frames.               */
+    player->fl_right_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight right/manusia kanan1.png");
+
+    player->fl_right_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_right_frames[player->fl_right_count++] = t;
+    }
+
+    animation_init(&player->fl_anim, 1, 8.0f, 1); /* frame_count is set dynamically per tick based on direction */
+}
+
 /* ── Simon Says constants ──────────────────────────────────────────────── */
 #define SIMON_LIT_DURATION   0.55f  /* seconds a button stays lit        */
 #define SIMON_GAP_DURATION   0.20f  /* dark gap between lit steps         */
@@ -245,6 +299,9 @@ void game_start_new(Game *game)
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
 
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
+
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
@@ -403,6 +460,9 @@ static void game_do_load(Game *game, int slot)
     game->player->frame_index       = 0;
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
+
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
@@ -1329,6 +1389,20 @@ void game_update(Game *game)
 
         /* ── Animate player ── */
         player_update(p, dt);
+
+        /* ── Update flashlight movement animation ── */
+        if (game->flashlight_active && p->is_moving) {
+            int fl_count = 0;
+            if      (p->current_direction == DIRECTION_SOUTH) fl_count = p->fl_front_count;
+            else if (p->current_direction == DIRECTION_WEST)  fl_count = p->fl_left_count;
+            else if (p->current_direction == DIRECTION_EAST)  fl_count = p->fl_right_count;
+            if (fl_count > 0) {
+                p->fl_anim.frame_count = fl_count;
+                animation_update(&p->fl_anim, dt);
+            }
+        } else {
+            animation_reset(&p->fl_anim);
+        }
 
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);

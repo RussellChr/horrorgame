@@ -483,6 +483,7 @@ static void game_do_load(Game *game, int slot)
     game->passcode_wrong          = 0;
     game->passcode_correct        = 0;
     game->simon_death_triggered   = 0;
+    game->simon_jumpscare_played  = 0;
 }
 
 void game_change_location(Game *game, int location_id,
@@ -574,7 +575,7 @@ void game_end_dialogue(Game *game)
 void game_start_simon(Game *game)
 {
     if (!game) return;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 8; i++)
         game->simon_sequence[i] = rand() % 4;
     game->simon_length      = 1;
     game->simon_show_pos    = 0;
@@ -1100,7 +1101,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->simon_player_pos++;
                     if (game->simon_player_pos >= game->simon_length) {
                         /* Completed this round */
-                        if (game->simon_length >= 10) {
+                        if (game->simon_length >= 8) {
                             /* Player won — power the generator */
                             player_set_flag(game->player, FLAG_POWER_GENERATOR_ON);
                             game->simon_lit_button = -1;
@@ -1431,8 +1432,9 @@ void game_update(Game *game)
                     game->simon_lit_button = -1;
                     if (game->simon_show_pos + 1 >= game->simon_length) {
                         /* All steps shown for this round */
-                        if (game->simon_length == SIMON_JUMPSCARE_ROUND) {
-                            /* Round 7: wait 1 s then show the jumpscare */
+                        if (game->simon_length == SIMON_JUMPSCARE_ROUND &&
+                            !game->simon_jumpscare_played) {
+                            /* Round 7 (first time only): wait 1 s then show the jumpscare */
                             game->simon_phase      = 3;
                             game->simon_show_timer = SIMON_JUMPSCARE_DELAY;
                         } else {
@@ -1463,6 +1465,7 @@ void game_update(Game *game)
                 game->jumpscare_player =
                     video_player_open(game->renderer, "assets/jumpscare.mov");
                 if (game->jumpscare_player) {
+                    game->simon_jumpscare_played = 1;
                     game->state = GAME_STATE_JUMPSCARE;
                 } else {
                     /* File missing or unreadable — skip straight to player input */

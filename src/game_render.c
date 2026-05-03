@@ -652,7 +652,7 @@ void game_render_simon(Game *game)
 
     char buf[64];
     if (game->simon_phase == 0 || game->simon_phase == 2) {
-        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 10)",
+        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 8)",
                  game->simon_length);
         render_text_centered(r, buf, WINDOW_W / 2, py + 38, 1, 160, 160, 200);
     } else {

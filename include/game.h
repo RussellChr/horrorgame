@@ -194,15 +194,16 @@ typedef struct {
     DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
 
     /* Simon Says minigame */
-    int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
-    int   simon_length;          /* steps in the current sequence (1–10)          */
+    int   simon_sequence[8];     /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
+    int   simon_length;          /* steps in the current sequence (1–8)           */
     int   simon_show_pos;        /* which step is being shown during show phase    */
     int   simon_show_lit;        /* 1=button currently lit, 0=dark gap             */
     float simon_show_timer;      /* countdown for current show-phase step          */
     int   simon_player_pos;      /* player's progress in matching the sequence     */
     int   simon_phase;           /* 0=showing, 1=player-input, 2=round-pause       */
     int   simon_lit_button;      /* which button is lit right now (-1 = none)      */
-    int   simon_death_triggered; /* 1 if player failed the Simon game              */
+    int   simon_death_triggered;   /* 1 if player failed the Simon game            */
+    int   simon_jumpscare_played;  /* 1 after the jumpscare has been shown once    */
 
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */

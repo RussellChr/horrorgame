@@ -61,6 +61,7 @@ typedef enum {
     GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
     GAME_STATE_JUMPSCARE,
+    GAME_STATE_MONSTER_DEATH_CUTSCENE,
     GAME_STATE_GAME_OVER,
     GAME_STATE_NEW_LOAD_MENU,   /* title-screen "New / Load Game" submenu  */
     GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
@@ -233,6 +234,9 @@ typedef struct {
 
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
+
+    /* Monster death cutscene (shown before the game-over screen) */
+    VideoPlayer *monster_death_player;
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */

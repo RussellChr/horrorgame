@@ -103,6 +103,20 @@ static const char * const security_cutscene_texts[4] = {
     "Wait, isn't that in the hallway?"
 };
 
+/* ── Hibernation opening cutscene texts ─────────────────────────────────── */
+static const char * const hibernation_cutscene_texts[3] = {
+    "Where am I...? What is this???",
+    "I can't breathe, I should try to break the glass",
+    "Ugh... that tasted awful. Besides, why can't I remember anything??"
+};
+
+/* ── Power room cutscene texts ──────────────────────────────────────────── */
+static const char * const power_cutscene_texts[3] = {
+    "Hmm, what's this piece of paper? Maybe I should take a look",
+    "Surely, nothing bad's going to happen right",
+    "well.. too late now."
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static void decoded_audio_free(DecodedAudio *audio)
@@ -437,6 +451,16 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->security_cutscene_textures[3] = render_load_texture(renderer, "assets/cutscene/security_scene_4.png");
     dialogue_load_texture(&g->cutscene_dialogue_state, renderer, "assets/dialogue.png");
 
+    /* Load hibernation opening cutscene images */
+    g->hibernation_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_1.jpg");
+    g->hibernation_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_2.png");
+    g->hibernation_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_3.png");
+
+    /* Load power room cutscene images */
+    g->power_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/power_cut_1.jpg");
+    g->power_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/power_cut_2.jpg");
+    g->power_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/power_cut_3.jpg");
+
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
                     &g->am_wav_buf, &g->am_wav_len)) {
@@ -506,6 +530,10 @@ void game_cleanup(Game *game)
     render_texture_destroy(game->containment_level_texture);
     for (int i = 0; i < 4; i++)
         render_texture_destroy(game->security_cutscene_textures[i]);
+    for (int i = 0; i < 3; i++)
+        render_texture_destroy(game->hibernation_cutscene_textures[i]);
+    for (int i = 0; i < 3; i++)
+        render_texture_destroy(game->power_cutscene_textures[i]);
     dialogue_unload_texture(&game->cutscene_dialogue_state);
     if (game->cutscene_dialogue_tree) {
         dialogue_tree_destroy(game->cutscene_dialogue_tree);
@@ -619,14 +647,8 @@ void game_start_new(Game *game)
     game->am_audio_pause_timer     = 0.0f;
     ambient_ost_start(game);
 
-    /* Show the opening inner monologue if one is defined */
-    const MonologueSection *open_mono =
-        monologue_find(&game->monologue_file, "game_start");
-    if (open_mono) {
-        game->dialogue_tree = monologue_to_dialogue_tree(open_mono);
-        if (game->dialogue_tree)
-            game_start_dialogue(game, 0);
-    }
+    /* Show the hibernation opening cutscene */
+    game_start_hibernation_cutscene(game);
 }
 
 /* ── Save / Load helpers ────────────────────────────────────────────────── */
@@ -945,7 +967,58 @@ void game_start_security_cutscene(Game *game)
     /* Close the monitor overlay and transition state */
     game->show_monitor_zoom = 0;
     game->passcode_active   = 0;
+    game->cutscene_type     = CUTSCENE_SECURITY;
     game->state             = GAME_STATE_CUTSCENE;
+}
+
+/* ── Hibernation opening cutscene ───────────────────────────────────────── */
+
+void game_start_hibernation_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_HIBERNATION;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      hibernation_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
+/* ── Power room cutscene (after simon says win) ─────────────────────────── */
+
+void game_start_power_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_POWER;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      power_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
 }
 
 /* ── Per-frame event handling ──────────────────────────────────────────── */
@@ -1228,13 +1301,27 @@ void game_handle_event(Game *game, SDL_Event *event)
                                 (int)strlen(n->text);
                     }
                 } else {
+                    /* Determine scene count and text array for the active cutscene */
+                    int scene_count;
+                    const char * const *texts;
+                    if (game->cutscene_type == CUTSCENE_HIBERNATION) {
+                        scene_count = 3;
+                        texts = hibernation_cutscene_texts;
+                    } else if (game->cutscene_type == CUTSCENE_POWER) {
+                        scene_count = 3;
+                        texts = power_cutscene_texts;
+                    } else {
+                        scene_count = 4;
+                        texts = security_cutscene_texts;
+                    }
+
                     /* Advance to the next scene */
                     game->cutscene_index++;
                     if (game->cutscene_dialogue_tree) {
                         dialogue_tree_destroy(game->cutscene_dialogue_tree);
                         game->cutscene_dialogue_tree = NULL;
                     }
-                    if (game->cutscene_index >= 4) {
+                    if (game->cutscene_index >= scene_count) {
                         /* All scenes done – return to gameplay */
                         game->state = GAME_STATE_PLAYING;
                     } else {
@@ -1242,7 +1329,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                         game->cutscene_dialogue_tree = dialogue_tree_create();
                         if (game->cutscene_dialogue_tree) {
                             dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
-                                              security_cutscene_texts[game->cutscene_index],
+                                              texts[game->cutscene_index],
                                               1);
                             dialogue_state_init(&game->cutscene_dialogue_state,
                                                 game->cutscene_dialogue_tree, 0);
@@ -1461,12 +1548,10 @@ void game_handle_event(Game *game, SDL_Event *event)
                     if (game->simon_player_pos >= game->simon_length) {
                         /* Completed this round */
                         if (game->simon_length >= 8) {
-                            /* Player won — power the generator */
+                            /* Player won — power the generator, play cutscene */
                             player_set_flag(game->player, FLAG_POWER_GENERATOR_ON);
                             game->simon_lit_button = -1;
-                            game_set_dialogue_tree(game, "power_generator_win", 4);
-                            if (game->dialogue_tree)
-                                game_start_dialogue(game, 0);
+                            game_start_power_cutscene(game);
                         } else {
                             /* Start next round after a brief pause */
                             game->simon_length++;

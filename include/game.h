@@ -58,6 +58,7 @@ typedef enum {
     GAME_STATE_NEW_LOAD_MENU,   /* title-screen "New / Load Game" submenu  */
     GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
     GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
+    GAME_STATE_ARCHIVE_BOOK,    /* reading archive pages (pg1 / pg2)       */
     GAME_STATE_QUIT
 } GameState;
 
@@ -172,6 +173,12 @@ typedef struct {
     Uint32           am_wav_len;
     SDL_AudioStream *am_audio_stream;
 
+    /* Glass cracking SFX (played when player steps on an archive glass shard) */
+    SDL_AudioSpec    glass_crack_wav_spec;
+    Uint8           *glass_crack_wav_buf;
+    Uint32           glass_crack_wav_len;
+    SDL_AudioStream *glass_crack_audio_stream;
+
     /* Enemy patrol / chase system */
     Enemy         enemy;          /* hallway enemy (activated by passcode)    */
     Enemy         archive_enemy;  /* archive enemy (activated on first visit) */
@@ -192,6 +199,13 @@ typedef struct {
     int           security_cutscene_played;      /* 1 once shown       */
     DialogueState cutscene_dialogue_state;       /* typewriter/render  */
     DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
+
+    /* Archive book viewer (triggered by tile-6 in archive_close.csv) */
+    SDL_Texture *archive_pg1_texture;       /* first page image              */
+    SDL_Texture *archive_pg2_texture;       /* second page image             */
+    int          archive_book_page;         /* 0 = pg1, 1 = pg2              */
+    float        archive_book_trans_timer;  /* >0 while black-screen fading  */
+    int          archive_book_next_page;    /* page to show after transition */
 
     /* Simon Says minigame */
     int   simon_sequence[8];     /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
@@ -243,6 +257,7 @@ void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
+void game_render_archive_book(Game *game);
 void game_render_new_load_menu(Game *game);
 void game_render_save_menu(Game *game);
 void game_render_load_menu(Game *game);

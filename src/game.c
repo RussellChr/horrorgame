@@ -29,6 +29,41 @@
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
 
+/* ── is_trigger_consumed ───────────────────────────────────────────────────
+ * Returns 1 when a trigger's interaction has been permanently used up so
+ * the interact prompt should no longer appear near it.
+ * Triggers that can be re-used (locker, book, NPCs, monitor) return 0. */
+static int is_trigger_consumed(const Game *game, int trigger_id)
+{
+    const Player *p = game->player;
+    if (!p) return 0;
+    switch (trigger_id) {
+        /* Archive */
+        case 52: return player_check_flag(p, FLAG_ARCHIVE_INNER_DOOR_OPENED);
+        case 53: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+        case 54: return player_check_flag(p, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+        /* Lab */
+        case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
+        /* Hallway */
+        case 80: return player_check_flag(p, FLAG_HALLWAY_NOTHING_INTERACTED);
+        case 81: return player_check_flag(p, FLAG_HALLWAY_GASMASK_COLLECTED);
+        case 82: return player_check_flag(p, FLAG_HALLWAY_FLASHLIGHT_COLLECTED);
+        /* Hibernation */
+        case 71: return player_check_flag(p, FLAG_HIBERN_ZONK_INTERACTED);
+        case 72: return player_check_flag(p, FLAG_HIBERN_POWERCELL_COLLECTED);
+        case 73: return player_check_flag(p, FLAG_HIBERN_POWERCELL_PLACED);
+        case 74: return player_check_flag(p, FLAG_HIBERN_PODS_INTERACTED);
+        /* Power room – fuel tank needs 2 pickups; disabled only after both are done */
+        case 101: return player_check_flag(p, FLAG_POWER_FUELTANK2_COLLECTED);
+        case 102: return player_check_flag(p, FLAG_POWER_FUELTANK1_PLACED);
+        case 103: return player_check_flag(p, FLAG_POWER_VALVE1_OPENED);
+        case 104: return player_check_flag(p, FLAG_POWER_GENERATOR_ON);
+        case 106: return player_check_flag(p, FLAG_POWER_FUELTANK2_PLACED);
+        case 107: return player_check_flag(p, FLAG_POWER_VALVE2_OPENED);
+        default:  return 0;
+    }
+}
+
 /* ── Flashlight animation loader ───────────────────────────────────────── */
 /* Loads all flashlight movement frames for each direction into the player.
  * Frame files are numbered from 1 upward; loading stops at the first missing
@@ -1748,30 +1783,32 @@ void game_update(Game *game)
                         tz->bounds.w + 80.0f, tz->bounds.h + 40.0f
                     };
                     if (rect_overlaps(&pr, &near_zone)) {
-                        game->near_interactive       = 1;
-                        game->interactive_trigger_id = tz->trigger_id;
-                        const char *label;
-                        if (tz->trigger_id == 60)
-                            label = "Press [E] to enter locker";
-                        else if (tz->trigger_id == 61)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 75)
-                            label = "Press [E] to interact";
-                        else if (tz->trigger_id == 91)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 92)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 95)
-                            label = "Press [E] to interact";
-                        else if (tz->trigger_id == 52 ||
-                                 tz->trigger_id == 53 ||
-                                 tz->trigger_id == 54)
-                            label = "Press [E] to interact";
-                        else
-                            label = "Press E to talk";
-                        strncpy(game->interact_label, label,
-                                sizeof(game->interact_label) - 1);
-                        game->interact_label[sizeof(game->interact_label) - 1] = '\0';
+                        if (!is_trigger_consumed(game, tz->trigger_id)) {
+                            game->near_interactive       = 1;
+                            game->interactive_trigger_id = tz->trigger_id;
+                            const char *label;
+                            if (tz->trigger_id == 60)
+                                label = "Press [E] to enter locker";
+                            else if (tz->trigger_id == 61)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 75)
+                                label = "Press [E] to interact";
+                            else if (tz->trigger_id == 91)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 92)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 95)
+                                label = "Press [E] to interact";
+                            else if (tz->trigger_id == 52 ||
+                                     tz->trigger_id == 53 ||
+                                     tz->trigger_id == 54)
+                                label = "Press [E] to interact";
+                            else
+                                label = "Press E to talk";
+                            strncpy(game->interact_label, label,
+                                    sizeof(game->interact_label) - 1);
+                            game->interact_label[sizeof(game->interact_label) - 1] = '\0';
+                        }
                         break;
                     }
                 }

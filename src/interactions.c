@@ -181,7 +181,8 @@ void game_handle_interaction(Game *game)
     /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
     if (loc_id == 2) {
         if (tid == 80) {
-            /* Tile 8: interactable – nothing here */
+            /* Tile 8: interactable – nothing here (one-time) */
+            player_set_flag(game->player, FLAG_HALLWAY_NOTHING_INTERACTED);
             game_set_dialogue_tree(game, "hallway_nothing", 2);
         } else if (tid == 81) {
             /* Tile 9: gas mask pickup */
@@ -250,7 +251,8 @@ void game_handle_interaction(Game *game)
     /* ── Hibernation room interactions (loc 3) ─────────────────────────── */
     if (loc_id == 3) {
         if (tid == 71) {
-            /* Tile 1: zonk – nothing here */
+            /* Tile 1: zonk – nothing here (one-time) */
+            player_set_flag(game->player, FLAG_HIBERN_ZONK_INTERACTED);
             game_set_dialogue_tree(game, "hibern_zonk", 3);
         } else if (tid == 72) {
             /* Tile 2: power cell pickup */
@@ -296,7 +298,8 @@ void game_handle_interaction(Game *game)
                 game_set_dialogue_tree(game, "hibern_slot_empty", 3);
             }
         } else if (tid == 74) {
-            /* Tile 4: flavor description – accessible any time */
+            /* Tile 4: flavor description – one-time read */
+            player_set_flag(game->player, FLAG_HIBERN_PODS_INTERACTED);
             game_set_dialogue_tree(game, "hibern_pods_opened", 3);
         } else if (tid == 75) {
             /* Tile 5: door – still interactive = still locked */

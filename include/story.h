@@ -43,6 +43,9 @@
 #define FLAG_ARCHIVE_THERMALFUSE_COLLECTED (1u << 20) /* thermal fuse picked up in Archive         */
 #define FLAG_ARCHIVE_INNER_DOOR_OPENED     (1u << 21) /* tile-2 archive door opened                */
 #define FLAG_ARCHIVE_ENEMY_SPAWNED         (1u << 22) /* archive-room enemy has been activated     */
+#define FLAG_HIBERN_ZONK_INTERACTED        (1u << 23) /* hibern. "nothing here" spot visited once  */
+#define FLAG_HIBERN_PODS_INTERACTED        (1u << 24) /* hibern. pods flavor-text read once        */
+#define FLAG_HALLWAY_NOTHING_INTERACTED    (1u << 25) /* hallway "nothing here" spot visited once  */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

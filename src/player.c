@@ -33,7 +33,7 @@ Player *player_create(const char *name)
     animation_init(&p->idle_anim, 2, 1.5f, 1);
     animation_init(&p->walk_anim, 4, 8.0f, 1);
     animation_init(&p->backwards_anim, 2, 8.0f, 1);
-    animation_init(&p->fl_anim, 4, 8.0f, 1);
+    animation_init(&p->fl_anim, 1, 8.0f, 1); /* frame_count set dynamically per direction */
     p->fl_front_count = 0;
     p->fl_left_count  = 0;
     p->fl_right_count = 0;

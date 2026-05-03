@@ -57,7 +57,7 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
         player->fl_right_frames[player->fl_right_count++] = t;
     }
 
-    animation_init(&player->fl_anim, 4, 8.0f, 1); /* frame_count overridden per tick */
+    animation_init(&player->fl_anim, 1, 8.0f, 1); /* frame_count is set dynamically per tick based on direction */
 }
 
 /* ── Simon Says constants ──────────────────────────────────────────────── */

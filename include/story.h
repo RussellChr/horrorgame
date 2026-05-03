@@ -46,6 +46,7 @@
 #define FLAG_HIBERN_ZONK_INTERACTED        (1u << 23) /* hibern. "nothing here" spot visited once  */
 #define FLAG_HIBERN_PODS_INTERACTED        (1u << 24) /* hibern. pods flavor-text read once        */
 #define FLAG_HALLWAY_NOTHING_INTERACTED    (1u << 25) /* hallway "nothing here" spot visited once  */
+#define FLAG_ARCHIVE_KEYCARD2_COLLECTED    (1u << 26) /* level-2 keycard picked up in Archive      */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

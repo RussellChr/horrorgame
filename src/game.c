@@ -36,9 +36,9 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
         "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter1.png");
 
     player->fl_front_count = 0;
-    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+    for (int i = 1; i < ANIM_MAX_FRAMES+1; i++) {
         snprintf(path, sizeof(path),
-                 "assets/flashlight_movement/flashlight front/manusia depan%d.png", i + 1);
+                 "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter%d.png", i + 1);
         SDL_Texture *t = render_load_texture(renderer, path);
         if (!t) break;
         player->fl_front_frames[player->fl_front_count++] = t;

@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Archive book constants ─────────────────────────────────────────────── */
 #define ARCHIVE_BOOK_TRANSITION_DURATION  0.3f  /* seconds for black-screen page turn */
@@ -129,6 +130,20 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
+/* ── Hallway dodge minigame constants ─────────────────────────────────── */
+#define DODGE_BOX_X         440.0f
+#define DODGE_BOX_Y         170.0f
+#define DODGE_BOX_W         400.0f
+#define DODGE_BOX_H         330.0f
+#define DODGE_HEART_SIZE     18.0f
+#define DODGE_HEART_SPEED   260.0f
+#define DODGE_MAX_HP          7
+#define DODGE_ROUNDS          9
+#define DODGE_ROUND_DURATION 15.0f
+#define DODGE_SPAWN_EVERY     0.28f
+#define DODGE_BULLET_SIZE    14.0f
+#define DODGE_HIT_INVULN      0.9f
+
 /* ── Security cutscene texts ───────────────────────────────────────────── */
 static const char * const security_cutscene_texts[4] = {
     "The noise is making my head hurt... I have to find a way to silence "
@@ -169,6 +184,35 @@ static void decoded_audio_free(DecodedAudio *audio)
         audio->buf = NULL;
     }
     audio->len = 0;
+}
+
+static void game_set_simple_dialogue(Game *game,
+                                     const char *speaker,
+                                     const char *line1,
+                                     const char *line2)
+{
+    if (!game || !line1) return;
+    if (game->dialogue_tree) {
+        dialogue_tree_destroy(game->dialogue_tree);
+        game->dialogue_tree = NULL;
+    }
+
+    DialogueTree *tree = dialogue_tree_create();
+    if (!tree) return;
+
+    DialogueNode *first = dialogue_add_node(tree, 0, speaker ? speaker : "",
+                                            line1, line2 ? 0 : 1);
+    if (line2 && first) {
+        DialogueChoice next;
+        memset(&next, 0, sizeof(next));
+        next.id = 0;
+        next.next_node_id = 1;
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        dialogue_add_choice(first, &next);
+        dialogue_add_node(tree, 1, speaker ? speaker : "", line2, 1);
+    }
+
+    game->dialogue_tree = tree;
 }
 
 static int decoded_audio_append(DecodedAudio *audio,
@@ -350,11 +394,49 @@ static void ambient_ost_update(Game *game)
 
     SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
 
-    if (game->am_audio_pause_timer > 0.0f) {
+    if (game->am_audio_pause_timer > 0.0f ||
+        game->state == GAME_STATE_DODGE) {
         SDL_PauseAudioStreamDevice(audio->stream);
         return;
     }
 
+    if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
+        SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_start(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_stop(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream) return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PauseAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_update(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    if (game->state != GAME_STATE_DODGE) {
+        SDL_PauseAudioStreamDevice(audio->stream);
+        return;
+    }
+
+    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
     if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
         SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
     SDL_ResumeAudioStreamDevice(audio->stream);
@@ -384,6 +466,7 @@ static void game_start_monster_death_cutscene(Game *game)
 {
     if (!game) return;
 
+    monster_theme_stop(game);
     video_player_close(game->monster_death_player);
     game->monster_death_player =
         video_player_open(game->renderer, "assets/cutscene/deathbymonster.mov");
@@ -528,6 +611,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     if (!decoded_audio_load_mp3(&g->ambient_ost_audio,
                                 "assets/OST/OST NTE - Abandoned Hospital.mp3"))
         SDL_Log("game_init: failed to load abandoned hospital OST");
+    if (!decoded_audio_load_mp3(&g->monster_theme_audio,
+                                "assets/OST/monstertheme.mp3"))
+        SDL_Log("game_init: failed to load monster theme OST");
 
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
@@ -585,6 +671,7 @@ void game_cleanup(Game *game)
     if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
     decoded_audio_free(&game->door_open_audio);
     decoded_audio_free(&game->ambient_ost_audio);
+    decoded_audio_free(&game->monster_theme_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     video_player_close(game->monster_death_player);
@@ -981,6 +1068,216 @@ void game_start_simon(Game *game)
     game->simon_lit_button  = -1;
     game->simon_death_triggered = 0;
     game->state = GAME_STATE_SIMON;
+}
+
+static void dodge_clear_bullets(Game *game)
+{
+    if (!game) return;
+    game->dodge_bullet_count = 0;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++)
+        game->dodge_bullet_active[i] = 0;
+}
+
+static void dodge_begin_round(Game *game, int round)
+{
+    if (!game) return;
+    game->dodge_round        = round;
+    game->dodge_hp           = DODGE_MAX_HP;
+    game->dodge_elapsed      = 0.0f;
+    game->dodge_invuln_timer = 0.0f;
+    game->dodge_heart_x      = DODGE_BOX_X + DODGE_BOX_W * 0.5f;
+    game->dodge_heart_y      = DODGE_BOX_Y + DODGE_BOX_H * 0.72f;
+    game->dodge_spawn_timer  = (round == 1) ? 0.20f :
+                               (round == 2) ? 0.12f :
+                               (round == 3) ? 0.16f :
+                               (round == 4) ? 0.10f : 0.25f;
+    dodge_clear_bullets(game);
+}
+
+void game_start_dodge(Game *game)
+{
+    if (!game) return;
+    dodge_begin_round(game, 1);
+    monster_theme_start(game);
+    game->state = GAME_STATE_DODGE;
+}
+
+static void dodge_spawn_bullet_raw(Game *game,
+                                   float x, float y,
+                                   float vx, float vy)
+{
+    if (!game) return;
+
+    int slot = -1;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++) {
+        if (!game->dodge_bullet_active[i]) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return;
+
+    game->dodge_bullet_x[slot] = x;
+    game->dodge_bullet_y[slot] = y;
+    game->dodge_bullet_vx[slot] = vx;
+    game->dodge_bullet_vy[slot] = vy;
+    game->dodge_bullet_active[slot] = 1;
+    if (slot >= game->dodge_bullet_count)
+        game->dodge_bullet_count = slot + 1;
+}
+
+static void dodge_spawn_aimed_bullet(Game *game, int from_corner)
+{
+    if (!game) return;
+
+    int side = rand() % 4;
+    float speed = (from_corner ? 230.0f : 165.0f) + (float)(rand() % 110);
+    float tx = DODGE_BOX_X + 25.0f + (float)(rand() % ((int)DODGE_BOX_W - 50));
+    float ty = DODGE_BOX_Y + 25.0f + (float)(rand() % ((int)DODGE_BOX_H - 50));
+    float x = tx, y = ty;
+
+    if (from_corner) {
+        int corner = rand() % 4;
+        x = (corner == 0 || corner == 2)
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = (corner == 0 || corner == 1)
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        tx = game->dodge_heart_x + (float)((rand() % 81) - 40);
+        ty = game->dodge_heart_y + (float)((rand() % 81) - 40);
+    } else if (side == 0) {
+        x = DODGE_BOX_X - DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 1) {
+        x = DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 2) {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    } else {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+    }
+
+    float dx = tx - x;
+    float dy = ty - y;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 1.0f) len = 1.0f;
+
+    dodge_spawn_bullet_raw(game, x, y, dx / len * speed, dy / len * speed);
+}
+
+static void dodge_spawn_lane_bullet(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    float speed = 250.0f + (float)(rand() % 80);
+    if (horizontal) {
+        int lane = rand() % 5;
+        float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+        int left_to_right = rand() % 2;
+        float x = left_to_right
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               left_to_right ? speed : -speed, 0.0f);
+    } else {
+        int lane = rand() % 6;
+        float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+        int top_to_bottom = rand() % 2;
+        float y = top_to_bottom
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               0.0f, top_to_bottom ? speed : -speed);
+    }
+}
+
+static void dodge_spawn_rain_bullet(Game *game)
+{
+    if (!game) return;
+
+    float x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+    float y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    float vx = (float)((rand() % 181) - 90);
+    float vy = 270.0f + (float)(rand() % 90);
+    dodge_spawn_bullet_raw(game, x, y, vx, vy);
+
+    if ((rand() % 4) == 0) {
+        x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        vx = (float)((rand() % 141) - 70);
+        vy = -230.0f - (float)(rand() % 70);
+        dodge_spawn_bullet_raw(game, x, y, vx, vy);
+    }
+}
+
+static void dodge_spawn_wall_attack(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    int left_or_top = rand() % 2;
+    float speed = 260.0f + (float)(rand() % 80);
+
+    if (horizontal) {
+        int gap = rand() % 5;
+        for (int lane = 0; lane < 5; lane++) {
+            if (lane == gap) continue;
+            float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+            float x = left_or_top
+                ? DODGE_BOX_X - DODGE_BULLET_SIZE
+                : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   left_or_top ? speed : -speed, 0.0f);
+        }
+    } else {
+        int gap = rand() % 6;
+        for (int lane = 0; lane < 6; lane++) {
+            if (lane == gap) continue;
+            float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+            float y = left_or_top
+                ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+                : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   0.0f, left_or_top ? speed : -speed);
+        }
+    }
+}
+
+static void dodge_spawn_round_attack(Game *game)
+{
+    if (!game) return;
+    if (game->dodge_round == 1) {
+        dodge_spawn_aimed_bullet(game, 0);
+    } else if (game->dodge_round == 2) {
+        dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 3) {
+        dodge_spawn_aimed_bullet(game, 1);
+        if ((rand() % 3) == 0)
+            dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 4) {
+        dodge_spawn_rain_bullet(game);
+    } else {
+        dodge_spawn_wall_attack(game);
+        if ((rand() % 2) == 0)
+            dodge_spawn_aimed_bullet(game, 1);
+    }
+}
+
+static float dodge_round_spawn_interval(const Game *game)
+{
+    if (!game) return DODGE_SPAWN_EVERY;
+    switch (game->dodge_round) {
+    case 1: return 0.30f; /* aimed edge shots */
+    case 2: return 0.22f; /* straight lane sweeps */
+    case 3: return 0.24f; /* corner shots with lane pressure */
+    case 4: return 0.16f; /* rain with drifting bullets */
+    case 5: return 0.55f; /* wall waves with a single gap */
+    default: return DODGE_SPAWN_EVERY;
+    }
 }
 
 /* ── Security cutscene ─────────────────────────────────────────────────── */
@@ -1615,6 +1912,14 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_DODGE:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            monster_theme_stop(game);
+            game->state = GAME_STATE_PLAYING;
+        }
+        break;
+
     case GAME_STATE_JUMPSCARE:
         /* Allow the player to skip the jumpscare by pressing Escape */
         if (event->type == SDL_EVENT_KEY_DOWN &&
@@ -1706,6 +2011,7 @@ void game_update(Game *game)
             game->am_audio_pause_timer = 0.0f;
     }
     ambient_ost_update(game);
+    monster_theme_update(game);
 
     if (game->state == GAME_STATE_PLAYING &&
         game->player && game->world) {
@@ -2004,6 +2310,99 @@ void game_update(Game *game)
                 }
             }
         }
+    } else if (game->state == GAME_STATE_DODGE) {
+        float move_x = 0.0f;
+        float move_y = 0.0f;
+
+        if (game->keys[SDL_SCANCODE_A] || game->keys[SDL_SCANCODE_LEFT])
+            move_x -= 1.0f;
+        if (game->keys[SDL_SCANCODE_D] || game->keys[SDL_SCANCODE_RIGHT])
+            move_x += 1.0f;
+        if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP])
+            move_y -= 1.0f;
+        if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN])
+            move_y += 1.0f;
+
+        if (move_x != 0.0f && move_y != 0.0f) {
+            move_x *= 0.7071f;
+            move_y *= 0.7071f;
+        }
+
+        game->dodge_heart_x += move_x * DODGE_HEART_SPEED * dt;
+        game->dodge_heart_y += move_y * DODGE_HEART_SPEED * dt;
+
+        float min_x = DODGE_BOX_X + DODGE_HEART_SIZE * 0.5f;
+        float max_x = DODGE_BOX_X + DODGE_BOX_W - DODGE_HEART_SIZE * 0.5f;
+        float min_y = DODGE_BOX_Y + DODGE_HEART_SIZE * 0.5f;
+        float max_y = DODGE_BOX_Y + DODGE_BOX_H - DODGE_HEART_SIZE * 0.5f;
+        if (game->dodge_heart_x < min_x) game->dodge_heart_x = min_x;
+        if (game->dodge_heart_x > max_x) game->dodge_heart_x = max_x;
+        if (game->dodge_heart_y < min_y) game->dodge_heart_y = min_y;
+        if (game->dodge_heart_y > max_y) game->dodge_heart_y = max_y;
+
+        game->dodge_elapsed += dt;
+        game->dodge_spawn_timer -= dt;
+        game->dodge_invuln_timer -= dt;
+        if (game->dodge_invuln_timer < 0.0f)
+            game->dodge_invuln_timer = 0.0f;
+
+        while (game->dodge_spawn_timer <= 0.0f) {
+            dodge_spawn_round_attack(game);
+            game->dodge_spawn_timer += dodge_round_spawn_interval(game);
+        }
+
+        float hx = game->dodge_heart_x - DODGE_HEART_SIZE * 0.5f;
+        float hy = game->dodge_heart_y - DODGE_HEART_SIZE * 0.5f;
+        for (int i = 0; i < game->dodge_bullet_count; i++) {
+            if (!game->dodge_bullet_active[i]) continue;
+
+            game->dodge_bullet_x[i] += game->dodge_bullet_vx[i] * dt;
+            game->dodge_bullet_y[i] += game->dodge_bullet_vy[i] * dt;
+
+            float bx = game->dodge_bullet_x[i] - DODGE_BULLET_SIZE * 0.5f;
+            float by = game->dodge_bullet_y[i] - DODGE_BULLET_SIZE * 0.5f;
+            if (bx < DODGE_BOX_X - 80.0f ||
+                bx > DODGE_BOX_X + DODGE_BOX_W + 80.0f ||
+                by < DODGE_BOX_Y - 80.0f ||
+                by > DODGE_BOX_Y + DODGE_BOX_H + 80.0f) {
+                game->dodge_bullet_active[i] = 0;
+                continue;
+            }
+
+            if (game->dodge_invuln_timer <= 0.0f &&
+                hx < bx + DODGE_BULLET_SIZE &&
+                hx + DODGE_HEART_SIZE > bx &&
+                hy < by + DODGE_BULLET_SIZE &&
+                hy + DODGE_HEART_SIZE > by) {
+                game->dodge_hp--;
+                game->dodge_invuln_timer = DODGE_HIT_INVULN;
+                game->dodge_bullet_active[i] = 0;
+                if (game->dodge_hp <= 0) {
+                    dodge_clear_bullets(game);
+                    game_start_monster_death_cutscene(game);
+                    break;
+                }
+            }
+        }
+
+        if (game->state == GAME_STATE_DODGE &&
+            game->dodge_elapsed >= DODGE_ROUND_DURATION) {
+            if (game->dodge_round < DODGE_ROUNDS) {
+                dodge_begin_round(game, game->dodge_round + 1);
+            } else {
+                dodge_clear_bullets(game);
+                monster_theme_stop(game);
+                if (game->player)
+                    player_set_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON);
+                game_set_simple_dialogue(game, "Richard",
+                                         "The Level-2 lock clicks open... but something is still out there.",
+                                         NULL);
+                if (game->dialogue_tree)
+                    game_start_dialogue(game, 0);
+                else
+                    game->state = GAME_STATE_PLAYING;
+            }
+        }
     } else if (game->state == GAME_STATE_JUMPSCARE) {
         /* ── Jumpscare video update ── */
         video_player_update(game->jumpscare_player, dt);
@@ -2060,6 +2459,7 @@ void game_render(Game *game)
     case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
+    case GAME_STATE_DODGE:     game_render_dodge(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;

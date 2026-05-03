@@ -771,7 +771,10 @@ void game_render_locker(Game *game)
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
-        /* Minimap: only on the base locker view, not note/monitor overlays. */
+        /* Minimap: only on the base locker view.
+         * show_monitor_zoom=0 is already guaranteed by this else branch;
+         * show_containment_level can only be true when show_monitor_zoom is
+         * true, so we just need to also exclude the note overlay. */
         if (!game->show_note_locker)
             render_locker_minimap(game);
     }

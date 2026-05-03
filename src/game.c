@@ -17,9 +17,66 @@
 #include <string.h>
 #include <stdio.h>
 
+/* ── Archive book constants ─────────────────────────────────────────────── */
+#define ARCHIVE_BOOK_TRANSITION_DURATION  0.3f  /* seconds for black-screen page turn */
+
 /* -- Lab poisonous-gas constants ------------------------------------------ */
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
+
+/* ── Flashlight animation loader ───────────────────────────────────────── */
+/* Loads all flashlight movement frames for each direction into the player.
+ * Frame files are numbered from 1 upward; loading stops at the first missing
+ * file so each folder can have a different number of PNGs. */
+static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
+{
+    if (!player || !renderer) return;
+    char path[512];
+
+    /* ── South (front) ──────────────────────────────────────────────────── */
+    /* File #1 in the folder is the idle pose; files #2-5 are walk frames.  */
+    player->fl_front_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter1.png");
+
+    player->fl_front_count = 0;
+    for (int i = 1; i < ANIM_MAX_FRAMES+1; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter%d.png", i + 1);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_front_frames[player->fl_front_count++] = t;
+    }
+
+    /* ── West (left) ────────────────────────────────────────────────────── */
+    /* manusia kiri1 = idle; manusia kiri2-N = walk frames.                 */
+    player->fl_left_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight left/manusia kiri1.png");
+
+    player->fl_left_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_left_frames[player->fl_left_count++] = t;
+    }
+
+    /* ── East (right) ───────────────────────────────────────────────────── */
+    /* manusia kanan1 = idle; manusia kanan2-N = walk frames.               */
+    player->fl_right_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight right/manusia kanan1.png");
+
+    player->fl_right_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_right_frames[player->fl_right_count++] = t;
+    }
+
+    animation_init(&player->fl_anim, 1, 8.0f, 1); /* frame_count is set dynamically per tick based on direction */
+}
 
 /* ── Simon Says constants ──────────────────────────────────────────────── */
 #define SIMON_LIT_DURATION   0.55f  /* seconds a button stays lit        */
@@ -143,6 +200,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load Title Screen*/
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
+    /* Load archive book page textures */
+    g->archive_pg1_texture = render_load_texture(renderer, "assets/archive_pg1.png");
+    g->archive_pg2_texture = render_load_texture(renderer, "assets/archive_pg2.png");
+
     /* Load locker view */
     g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
@@ -180,6 +241,17 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to load AM.wav: %s", SDL_GetError());
     }
 
+    /* Load glass cracking SFX */
+    if (SDL_LoadWAV("assets/sfx/glass_cracking.wav", &g->glass_crack_wav_spec,
+                    &g->glass_crack_wav_buf, &g->glass_crack_wav_len)) {
+        g->glass_crack_audio_stream = SDL_OpenAudioDeviceStream(
+            SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &g->glass_crack_wav_spec, NULL, NULL);
+        if (!g->glass_crack_audio_stream)
+            SDL_Log("game_init: failed to open glass crack audio stream: %s", SDL_GetError());
+    } else {
+        SDL_Log("game_init: failed to load glass cracking.wav: %s", SDL_GetError());
+    }
+
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
@@ -211,6 +283,8 @@ void game_cleanup(Game *game)
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
+    render_texture_destroy(game->archive_pg1_texture);
+    render_texture_destroy(game->archive_pg2_texture);
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
@@ -228,6 +302,8 @@ void game_cleanup(Game *game)
     }
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
+    if (game->glass_crack_audio_stream) SDL_DestroyAudioStream(game->glass_crack_audio_stream);
+    if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
@@ -273,6 +349,9 @@ void game_start_new(Game *game)
     game->player->frame_index       = 0;
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
+
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
 
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
@@ -427,6 +506,9 @@ static void game_do_load(Game *game, int slot)
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
 
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
+
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
 
@@ -506,6 +588,7 @@ static void game_do_load(Game *game, int slot)
     game->passcode_wrong          = 0;
     game->passcode_correct        = 0;
     game->simon_death_triggered   = 0;
+    game->simon_jumpscare_played  = 0;
 }
 
 void game_change_location(Game *game, int location_id,
@@ -584,9 +667,9 @@ void game_end_dialogue(Game *game)
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
     } else if (game->simon_death_triggered) {
-        /* Player failed the Simon game — return to main menu */
+        /* Player failed the Simon game — return to world so they must interact again */
         game->simon_death_triggered = 0;
-        game->state                 = GAME_STATE_MENU;
+        game->state                 = GAME_STATE_PLAYING;
     } else if (game->player &&
                player_check_flag(game->player, FLAG_POWER_GENERATOR_ON) &&
                !player_check_flag(game->player, FLAG_POWER_CUTSCENE_PLAYED)) {
@@ -602,7 +685,7 @@ void game_end_dialogue(Game *game)
 void game_start_simon(Game *game)
 {
     if (!game) return;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 8; i++)
         game->simon_sequence[i] = rand() % 4;
     game->simon_length      = 1;
     game->simon_show_pos    = 0;
@@ -937,6 +1020,31 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_ARCHIVE_BOOK:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            /* ESC or E closes the book viewer */
+            if (k == SDLK_ESCAPE || k == SDLK_E) {
+                game->archive_book_trans_timer = 0.0f;
+                game->state = GAME_STATE_PLAYING;
+            }
+            /* Right arrow: go to next page (pg2) */
+            else if (k == SDLK_RIGHT &&
+                     game->archive_book_page == 0 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 1;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+            /* Left arrow: go to previous page (pg1) */
+            else if (k == SDLK_LEFT &&
+                     game->archive_book_page == 1 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 0;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+        }
+        break;
+
     case GAME_STATE_CUTSCENE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             SDL_Keycode k = event->key.key;
@@ -1191,7 +1299,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->simon_player_pos++;
                     if (game->simon_player_pos >= game->simon_length) {
                         /* Completed this round */
-                        if (game->simon_length >= 10) {
+                        if (game->simon_length >= 8) {
                             /* Player won — power the generator */
                             player_set_flag(game->player, FLAG_POWER_GENERATOR_ON);
                             game->simon_lit_button = -1;
@@ -1420,6 +1528,20 @@ void game_update(Game *game)
         /* ── Animate player ── */
         player_update(p, dt);
 
+        /* ── Update flashlight movement animation ── */
+        if (game->flashlight_active && p->is_moving) {
+            int fl_count = 0;
+            if      (p->current_direction == DIRECTION_SOUTH) fl_count = p->fl_front_count;
+            else if (p->current_direction == DIRECTION_WEST)  fl_count = p->fl_left_count;
+            else if (p->current_direction == DIRECTION_EAST)  fl_count = p->fl_right_count;
+            if (fl_count > 0) {
+                p->fl_anim.frame_count = fl_count;
+                animation_update(&p->fl_anim, dt);
+            }
+        } else {
+            animation_reset(&p->fl_anim);
+        }
+
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
 
@@ -1469,6 +1591,14 @@ void game_update(Game *game)
                 if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
                     py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
                     game->archive_glass_collected[i] = 1;
+                    /* Play glass cracking SFX */
+                    if (game->glass_crack_audio_stream) {
+                        SDL_ClearAudioStream(game->glass_crack_audio_stream);
+                        SDL_PutAudioStreamData(game->glass_crack_audio_stream,
+                                               game->glass_crack_wav_buf,
+                                               (int)game->glass_crack_wav_len);
+                        SDL_ResumeAudioStreamDevice(game->glass_crack_audio_stream);
+                    }
                     /* Alert the archive enemy to investigate the glass location */
                     enemy_alert_inspect(&game->archive_enemy,
                                         gx + ARCHIVE_GLASS_SIZE * 0.5f,
@@ -1522,8 +1652,9 @@ void game_update(Game *game)
                     game->simon_lit_button = -1;
                     if (game->simon_show_pos + 1 >= game->simon_length) {
                         /* All steps shown for this round */
-                        if (game->simon_length == SIMON_JUMPSCARE_ROUND) {
-                            /* Round 7: wait 1 s then show the jumpscare */
+                        if (game->simon_length == SIMON_JUMPSCARE_ROUND &&
+                            !game->simon_jumpscare_played) {
+                            /* Round 7 (first time only): wait 1 s then show the jumpscare */
                             game->simon_phase      = 3;
                             game->simon_show_timer = SIMON_JUMPSCARE_DELAY;
                         } else {
@@ -1554,6 +1685,7 @@ void game_update(Game *game)
                 game->jumpscare_player =
                     video_player_open(game->renderer, "assets/jumpscare.mov");
                 if (game->jumpscare_player) {
+                    game->simon_jumpscare_played = 1;
                     game->state = GAME_STATE_JUMPSCARE;
                 } else {
                     /* File missing or unreadable — skip straight to player input */
@@ -1572,6 +1704,16 @@ void game_update(Game *game)
             game->simon_phase      = 1; /* resume player-input phase */
             game->simon_player_pos = 0;
             game->state            = GAME_STATE_SIMON;
+        }
+    }
+
+    /* Tick the archive book page-turn transition */
+    if (game->state == GAME_STATE_ARCHIVE_BOOK &&
+        game->archive_book_trans_timer > 0.0f) {
+        game->archive_book_trans_timer -= dt;
+        if (game->archive_book_trans_timer <= 0.0f) {
+            game->archive_book_trans_timer = 0.0f;
+            game->archive_book_page        = game->archive_book_next_page;
         }
     }
 
@@ -1598,6 +1740,7 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;

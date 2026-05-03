@@ -91,6 +91,18 @@ typedef struct {
     SDL_Texture *walk_frames_east[2];
     SDL_Texture *walk_frames_west[2];
 
+    /* Flashlight movement animation (replaces player sprite when equipped) */
+    Animation     fl_anim;
+    SDL_Texture  *fl_front_idle;                     /* south idle frame        */
+    SDL_Texture  *fl_front_frames[ANIM_MAX_FRAMES];  /* south walk frames       */
+    int           fl_front_count;
+    SDL_Texture  *fl_left_idle;                      /* west idle frame         */
+    SDL_Texture  *fl_left_frames[ANIM_MAX_FRAMES];   /* west walk frames        */
+    int           fl_left_count;
+    SDL_Texture  *fl_right_idle;                     /* east idle frame         */
+    SDL_Texture  *fl_right_frames[ANIM_MAX_FRAMES];  /* east walk frames        */
+    int           fl_right_count;
+
     /* Animation state */
     int   current_direction; /* NORTH=0, SOUTH=1, EAST=2, WEST=3 */
     int   frame_index;

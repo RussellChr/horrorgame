@@ -115,12 +115,43 @@ void game_render_playing(Game *game)
         world_render_room(loc, game->renderer, &game->camera);
     }
 
-    /* Player */
+    /* Player — use flashlight movement sprite when equipped (idle or walking
+     * south/east/west); fall back to normal sprite for north or no flashlight. */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
              - PLAYER_W / 2;
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
-    player_render(game->player, game->renderer, sx, sy);
+    {
+        SDL_Texture *fl_tex = NULL;
+        if (game->flashlight_active) {
+            Player *p  = game->player;
+            if (p->is_moving) {
+                /* Walking: cycle through directional walk frames */
+                int fr = animation_get_frame(&p->fl_anim);
+                if (p->current_direction == DIRECTION_SOUTH && p->fl_front_count > 0)
+                    fl_tex = p->fl_front_frames[fr % p->fl_front_count];
+                else if (p->current_direction == DIRECTION_WEST && p->fl_left_count > 0)
+                    fl_tex = p->fl_left_frames[fr % p->fl_left_count];
+                else if (p->current_direction == DIRECTION_EAST && p->fl_right_count > 0)
+                    fl_tex = p->fl_right_frames[fr % p->fl_right_count];
+            } else {
+                /* Idle: show directional idle frame */
+                if (p->current_direction == DIRECTION_SOUTH)
+                    fl_tex = p->fl_front_idle;
+                else if (p->current_direction == DIRECTION_WEST)
+                    fl_tex = p->fl_left_idle;
+                else if (p->current_direction == DIRECTION_EAST)
+                    fl_tex = p->fl_right_idle;
+            }
+        }
+        if (fl_tex) {
+            SDL_FRect fl_dst = { (float)sx, (float)sy,
+                                 (float)PLAYER_W, (float)PLAYER_SPRITE_H };
+            SDL_RenderTexture(game->renderer, fl_tex, NULL, &fl_dst);
+        } else {
+            player_render(game->player, game->renderer, sx, sy);
+        }
+    }
 
     /* Enemy (visible only when active and player is in the hallway) */
     if (game->enemy.active &&
@@ -485,6 +516,41 @@ void game_render_settings(Game *game)
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);
 }
 
+/* ── Archive book viewer ─────────────────────────────────────────────────── */
+
+void game_render_archive_book(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* During transition show a full-screen black frame */
+    if (game->archive_book_trans_timer > 0.0f) {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+        return;
+    }
+
+    /* Show the current page */
+    SDL_Texture *tex = (game->archive_book_page == 0)
+                       ? game->archive_pg1_texture
+                       : game->archive_pg2_texture;
+
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Hint bar at top centre */
+    int hint_bar_height = 36;
+    render_filled_rect(r, 0, 0, WINDOW_W, hint_bar_height, 0, 0, 0, 200);
+    render_text_centered(r, "Use keyboard arrow keys to flip pages",
+                         WINDOW_W / 2, hint_bar_height / 2 - 6, 1, 220, 220, 220);
+
+    /* ESC / E hint at bottom */
+    render_text_centered(r, "Press E or ESC to close",
+                         WINDOW_W / 2, WINDOW_H - 20, 1, 200, 200, 200);
+}
+
 /* ── Locker view ─────────────────────────────────────────────────────────── */
 
 void game_render_locker(Game *game)
@@ -664,7 +730,7 @@ void game_render_simon(Game *game)
 
     char buf[64];
     if (game->simon_phase == 0 || game->simon_phase == 2) {
-        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 10)",
+        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 8)",
                  game->simon_length);
         render_text_centered(r, buf, WINDOW_W / 2, py + 38, 1, 160, 160, 200);
     } else {

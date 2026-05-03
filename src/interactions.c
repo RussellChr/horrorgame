@@ -142,6 +142,24 @@ void game_handle_interaction(Game *game)
             game->archive_book_next_page  = 0;
             game->state = GAME_STATE_ARCHIVE_BOOK;
             return;
+        } else if (tid == 57) {
+            /* Tile 7: level-2 keycard pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_KEYCARD2_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_KEYCARD2_COLLECTED);
+                Item kc2;
+                strncpy(kc2.name, "Level-2 Keycard", ITEM_NAME_MAX - 1);
+                kc2.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(kc2.description, "A level-2 keycard found in the archive.", ITEM_DESC_MAX - 1);
+                kc2.description[ITEM_DESC_MAX - 1] = '\0';
+                kc2.id     = ITEM_ID_KEYCARD_L2;
+                kc2.usable = 0;
+                player_add_item(game->player, &kc2);
+                game_set_simple_dialogue(game, "Richard",
+                                         "A Level-2 Keycard. Maybe it opens something in the hallway.",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
         }
         if (game->dialogue_tree)
             game_start_dialogue(game, 0);
@@ -180,7 +198,11 @@ void game_handle_interaction(Game *game)
 
     /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
     if (loc_id == 2) {
-        if (tid == 80) {
+        if (tid == 96) {
+            /* Tile 6: level-2 keycard panel – nothing happens for now */
+            game_set_simple_dialogue(game, "Richard",
+                                     "Nothing happens.", NULL);
+        } else if (tid == 80) {
             /* Tile 8: interactable – nothing here (one-time) */
             player_set_flag(game->player, FLAG_HALLWAY_NOTHING_INTERACTED);
             game_set_dialogue_tree(game, "hallway_nothing", 2);

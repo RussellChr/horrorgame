@@ -42,6 +42,7 @@ static int is_trigger_consumed(const Game *game, int trigger_id)
         case 52: return player_check_flag(p, FLAG_ARCHIVE_INNER_DOOR_OPENED);
         case 53: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
         case 54: return player_check_flag(p, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+        case 57: return player_check_flag(p, FLAG_ARCHIVE_KEYCARD2_COLLECTED);
         /* Lab */
         case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
         /* Hallway */
@@ -1801,7 +1802,9 @@ void game_update(Game *game)
                                 label = "Press [E] to interact";
                             else if (tz->trigger_id == 52 ||
                                      tz->trigger_id == 53 ||
-                                     tz->trigger_id == 54)
+                                     tz->trigger_id == 54 ||
+                                     tz->trigger_id == 57 ||
+                                     tz->trigger_id == 96)
                                 label = "Press [E] to interact";
                             else
                                 label = "Press E to talk";

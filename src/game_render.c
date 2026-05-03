@@ -25,17 +25,6 @@
 #define INV_CELL_GAP   10   /* gap between cells               */
 #define INV_ICON_PAD    8   /* padding inside cell to icon box */
 
-/* ── Hallway dodge minigame layout ─────────────────────────────────────── */
-#define DODGE_BOX_X          440
-#define DODGE_BOX_Y          170
-#define DODGE_BOX_W          400
-#define DODGE_BOX_H          330
-#define DODGE_HEART_SIZE      18
-#define DODGE_BULLET_SIZE     14
-#define DODGE_MAX_HP           7
-#define DODGE_ROUNDS           5
-#define DODGE_ROUND_DURATION  18.0f
-
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
@@ -889,85 +878,6 @@ void game_render_simon(Game *game)
 
     render_text_centered(r, "Click the correct buttons in order",
                          WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
-}
-
-static void render_dodge_heart(SDL_Renderer *r, int cx, int cy, int visible)
-{
-    if (!visible) return;
-
-    int s = DODGE_HEART_SIZE / 6;
-    if (s < 2) s = 2;
-    int x = cx - 3 * s;
-    int y = cy - 3 * s;
-
-    render_filled_rect(r, x + s,     y,         s,     s,     255, 40, 60, 255);
-    render_filled_rect(r, x + 4 * s, y,         s,     s,     255, 40, 60, 255);
-    render_filled_rect(r, x,         y + s,     3 * s, 2 * s, 255, 40, 60, 255);
-    render_filled_rect(r, x + 3 * s, y + s,     3 * s, 2 * s, 255, 40, 60, 255);
-    render_filled_rect(r, x + s,     y + 3 * s, 4 * s, s,     255, 40, 60, 255);
-    render_filled_rect(r, x + 2 * s, y + 4 * s, 2 * s, s,     255, 40, 60, 255);
-    render_filled_rect(r, x + 3 * s, y + 5 * s, s,     s,     255, 40, 60, 255);
-}
-
-/* ── Undertale-style hallway dodge minigame ─────────────────────────────── */
-
-void game_render_dodge(Game *game)
-{
-    if (!game) return;
-    SDL_Renderer *r = game->renderer;
-
-    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 5, 5, 10, 255);
-
-    render_text_centered(r, "LEVEL-2 EXIT OVERRIDE",
-                         WINDOW_W / 2, 74, 3, 220, 220, 230);
-    char round_buf[64];
-    snprintf(round_buf, sizeof(round_buf), "Round %d / %d",
-             game->dodge_round, DODGE_ROUNDS);
-    render_text_centered(r, round_buf,
-                         WINDOW_W / 2, 112, 1, 150, 150, 170);
-
-    render_filled_rect(r, DODGE_BOX_X, DODGE_BOX_Y,
-                       DODGE_BOX_W, DODGE_BOX_H, 0, 0, 0, 255);
-    render_rect_outline(r, DODGE_BOX_X, DODGE_BOX_Y,
-                        DODGE_BOX_W, DODGE_BOX_H, 235, 235, 235, 255);
-    render_rect_outline(r, DODGE_BOX_X + 3, DODGE_BOX_Y + 3,
-                        DODGE_BOX_W - 6, DODGE_BOX_H - 6,
-                        80, 80, 95, 255);
-
-    for (int i = 0; i < game->dodge_bullet_count; i++) {
-        if (!game->dodge_bullet_active[i]) continue;
-        int bx = (int)(game->dodge_bullet_x[i] - DODGE_BULLET_SIZE * 0.5f);
-        int by = (int)(game->dodge_bullet_y[i] - DODGE_BULLET_SIZE * 0.5f);
-        render_filled_rect(r, bx, by, DODGE_BULLET_SIZE, DODGE_BULLET_SIZE,
-                           245, 245, 245, 255);
-        render_rect_outline(r, bx, by, DODGE_BULLET_SIZE, DODGE_BULLET_SIZE,
-                            90, 90, 90, 255);
-    }
-
-    int heart_visible = 1;
-    if (game->dodge_invuln_timer > 0.0f)
-        heart_visible = ((int)(game->dodge_invuln_timer * 20.0f) % 2) == 0;
-    render_dodge_heart(r, (int)game->dodge_heart_x,
-                       (int)game->dodge_heart_y, heart_visible);
-
-    int ui_y = DODGE_BOX_Y + DODGE_BOX_H + 34;
-    char hp_buf[64];
-    snprintf(hp_buf, sizeof(hp_buf), "HP %d / %d",
-             game->dodge_hp, DODGE_MAX_HP);
-    render_text(r, hp_buf, DODGE_BOX_X, ui_y, 2, 255, 220, 80);
-
-    int bar_x = DODGE_BOX_X + 140;
-    int bar_y = ui_y + 5;
-    int bar_w = 260;
-    render_rect_outline(r, bar_x, bar_y, bar_w, 16, 150, 150, 160, 255);
-    float remain = DODGE_ROUND_DURATION - game->dodge_elapsed;
-    if (remain < 0.0f) remain = 0.0f;
-    int fill_w = (int)((remain / DODGE_ROUND_DURATION) * (float)(bar_w - 4));
-    render_filled_rect(r, bar_x + 2, bar_y + 2, fill_w, 12,
-                       160, 210, 255, 255);
-
-    render_text_centered(r, "WASD / ARROWS",
-                         WINDOW_W / 2, ui_y + 38, 1, 115, 115, 130);
 }
 
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */

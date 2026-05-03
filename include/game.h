@@ -195,10 +195,24 @@ typedef struct {
 
     /* Security cutscene (shown once after correct passcode) */
     SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
-    int           cutscene_index;                /* current scene 0–3  */
+    int           cutscene_index;                /* current scene 0–N  */
     int           security_cutscene_played;      /* 1 once shown       */
     DialogueState cutscene_dialogue_state;       /* typewriter/render  */
     DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
+
+    /* Generic cutscene fields (shared across all cutscene types) */
+    int                cutscene_type;        /* 0=security, 1=hibernation, 2=power */
+    int                cutscene_scene_count; /* total slides in current cutscene   */
+    const char * const *cutscene_texts;      /* pointer to active text array       */
+
+    /* Hibernation (opening) cutscene textures */
+    SDL_Texture  *hibernation_cutscene_textures[3];
+
+    /* Power room cutscene textures */
+    SDL_Texture  *power_cutscene_textures[3];
+
+    /* Power cutscene played flag */
+    int           power_cutscene_played;
 
     /* Archive book viewer (triggered by tile-6 in archive_close.csv) */
     SDL_Texture *archive_pg1_texture;       /* first page image              */
@@ -243,6 +257,8 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_security_cutscene(Game *game);
+void game_start_hibernation_cutscene(Game *game);
+void game_start_power_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 

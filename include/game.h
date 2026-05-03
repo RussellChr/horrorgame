@@ -48,6 +48,14 @@ typedef struct DecodedAudio {
 #define CONTAINMENT_LEVEL_RECT_W   125
 #define CONTAINMENT_LEVEL_RECT_H   122
 
+/* ── Cutscene types ───────────────────────────────────────────────────── */
+
+typedef enum {
+    CUTSCENE_HIBERNATION,   /* opening cutscene shown on new game    */
+    CUTSCENE_SECURITY,      /* security-room passcode cutscene       */
+    CUTSCENE_POWER          /* power-room cutscene after simon win   */
+} CutsceneType;
+
 /* ── Game states ──────────────────────────────────────────────────────── */
 
 typedef enum {
@@ -208,7 +216,10 @@ typedef struct {
 
     /* Security cutscene (shown once after correct passcode) */
     SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
-    int           cutscene_index;                /* current scene 0–3  */
+    SDL_Texture  *hibernation_cutscene_textures[3]; /* hibernation opening scenes */
+    SDL_Texture  *power_cutscene_textures[3];    /* power-room win scenes      */
+    int           cutscene_index;                /* current scene 0–N  */
+    CutsceneType  cutscene_type;                 /* which cutscene is active   */
     int           security_cutscene_played;      /* 1 once shown       */
     DialogueState cutscene_dialogue_state;       /* typewriter/render  */
     DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
@@ -259,6 +270,8 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_security_cutscene(Game *game);
+void game_start_hibernation_cutscene(Game *game);
+void game_start_power_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 

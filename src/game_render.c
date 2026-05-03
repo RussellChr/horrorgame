@@ -683,9 +683,24 @@ void game_render_cutscene(Game *game)
     if (!game) return;
     SDL_Renderer *r = game->renderer;
 
+    /* Pick the correct texture array and scene count based on cutscene type */
+    SDL_Texture **textures;
+    int scene_count;
+    if (game->cutscene_type == CUTSCENE_HIBERNATION) {
+        textures    = game->hibernation_cutscene_textures;
+        scene_count = 3;
+    } else if (game->cutscene_type == CUTSCENE_POWER) {
+        textures    = game->power_cutscene_textures;
+        scene_count = 3;
+    } else {
+        textures    = game->security_cutscene_textures;
+        scene_count = 4;
+    }
+
     /* Full-screen scene image */
-    SDL_Texture *tex = (game->cutscene_index >= 0 && game->cutscene_index < 4)
-                       ? game->security_cutscene_textures[game->cutscene_index]
+    SDL_Texture *tex = (game->cutscene_index >= 0 &&
+                        game->cutscene_index < scene_count)
+                       ? textures[game->cutscene_index]
                        : NULL;
     if (tex) {
         render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);

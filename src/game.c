@@ -328,6 +328,21 @@ static Button make_button(float x, float y, float w, float h,
     return b;
 }
 
+static void game_start_monster_death_cutscene(Game *game)
+{
+    if (!game) return;
+
+    video_player_close(game->monster_death_player);
+    game->monster_death_player =
+        video_player_open(game->renderer, "assets/cutscene/deathbymonster.mov");
+    if (game->monster_death_player) {
+        game->state = GAME_STATE_MONSTER_DEATH_CUTSCENE;
+    } else {
+        SDL_Log("game: deathbymonster.mov could not be opened; showing game over");
+        game->state = GAME_STATE_GAME_OVER;
+    }
+}
+
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
 
 Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
@@ -504,6 +519,8 @@ void game_cleanup(Game *game)
     decoded_audio_free(&game->ambient_ost_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
+    video_player_close(game->monster_death_player);
+    game->monster_death_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
@@ -1766,7 +1783,7 @@ void game_update(Game *game)
             /* Game-over: archive enemy caught the player while in the archive */
             if (in_archive &&
                 enemy_hits_player(&game->archive_enemy, p->x, p->y)) {
-                game->state = GAME_STATE_GAME_OVER;
+                game_start_monster_death_cutscene(game);
             }
         }
 
@@ -1778,7 +1795,7 @@ void game_update(Game *game)
             /* Game-over: enemy caught the player while in the hallway */
             if (in_hallway &&
                 enemy_hits_player(&game->enemy, p->x, p->y)) {
-                game->state = GAME_STATE_GAME_OVER;
+                game_start_monster_death_cutscene(game);
             }
         }
 
@@ -1856,6 +1873,14 @@ void game_update(Game *game)
             game->simon_player_pos = 0;
             game->state            = GAME_STATE_SIMON;
         }
+    } else if (game->state == GAME_STATE_MONSTER_DEATH_CUTSCENE) {
+        /* ── Monster death video update ── */
+        video_player_update(game->monster_death_player, dt);
+        if (video_player_is_done(game->monster_death_player)) {
+            video_player_close(game->monster_death_player);
+            game->monster_death_player = NULL;
+            game->state = GAME_STATE_GAME_OVER;
+        }
     }
 
     /* Tick the archive book page-turn transition */
@@ -1895,6 +1920,7 @@ void game_render(Game *game)
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
+    case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_NEW_LOAD_MENU: game_render_new_load_menu(game); break;
     case GAME_STATE_SAVE_MENU:

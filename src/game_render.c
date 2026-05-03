@@ -765,10 +765,13 @@ void game_render_jumpscare(Game *game)
 {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
+    VideoPlayer *player = (game->state == GAME_STATE_MONSTER_DEATH_CUTSCENE)
+                          ? game->monster_death_player
+                          : game->jumpscare_player;
 
     /* Black background in case the video hasn't decoded its first frame yet */
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
-    video_player_render(game->jumpscare_player, r);
+    video_player_render(player, r);
 }
 /* ── Game Over ───────────────────────────────────────────────────────────── */
 

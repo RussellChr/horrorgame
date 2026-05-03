@@ -562,9 +562,8 @@ void game_end_dialogue(Game *game)
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
     } else if (game->simon_death_triggered) {
-        /* Player failed the Simon game — return to main menu */
-        game->simon_death_triggered = 0;
-        game->state                 = GAME_STATE_MENU;
+        /* Player failed the Simon game — restart the minigame */
+        game_start_simon(game);
     } else {
         game->state = GAME_STATE_PLAYING;
     }

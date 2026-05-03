@@ -103,7 +103,7 @@ void game_handle_interaction(Game *game)
                                          "not the right fingerprint", NULL);
             } else {
                 game_set_simple_dialogue(game, "Richard",
-                                         "Require fringerprint...",
+                                         "Require fingerprint...",
                                          "It also seems to be malfunctioning, I need some sort of thermal fuse to fix this");
             }
         } else if (tid == 53) {

@@ -191,7 +191,7 @@ void enemy_init(Enemy *e, int room_width, int room_height)
     e->waypoints[3] = (EnemyPoint){712.0f,  735.0f};
     e->waypoints[4] = (EnemyPoint){321.0f,  733.0f};
     e->waypoints[5] = (EnemyPoint){321.0f,  427.0f};
-    e->waypoint_count   = ENEMY_WAYPOINT_COUNT;
+    e->waypoint_count   = 6; /* six hallway waypoints (indices 0-5) */
     e->current_waypoint = 0;
     e->patrol_dir       = 1; /* start moving forward */
 

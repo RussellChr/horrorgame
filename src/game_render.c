@@ -485,6 +485,41 @@ void game_render_settings(Game *game)
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);
 }
 
+/* ── Archive book viewer ─────────────────────────────────────────────────── */
+
+void game_render_archive_book(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* During transition show a full-screen black frame */
+    if (game->archive_book_trans_timer > 0.0f) {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+        return;
+    }
+
+    /* Show the current page */
+    SDL_Texture *tex = (game->archive_book_page == 0)
+                       ? game->archive_pg1_texture
+                       : game->archive_pg2_texture;
+
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Hint bar at top centre */
+    int hint_bar_height = 36;
+    render_filled_rect(r, 0, 0, WINDOW_W, hint_bar_height, 0, 0, 0, 200);
+    render_text_centered(r, "Use keyboard arrow keys to flip pages",
+                         WINDOW_W / 2, hint_bar_height / 2 - 6, 1, 220, 220, 220);
+
+    /* ESC / E hint at bottom */
+    render_text_centered(r, "Press E or ESC to close",
+                         WINDOW_W / 2, WINDOW_H - 20, 1, 200, 200, 200);
+}
+
 /* ── Locker view ─────────────────────────────────────────────────────────── */
 
 void game_render_locker(Game *game)

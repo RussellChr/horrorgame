@@ -30,6 +30,11 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
     if (!player || !renderer) return;
     char path[512];
 
+    /* ── South (front) ──────────────────────────────────────────────────── */
+    /* File #1 in the folder is the idle pose; files #2-5 are walk frames.  */
+    player->fl_front_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter1.png");
+
     player->fl_front_count = 0;
     for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
         snprintf(path, sizeof(path),
@@ -39,19 +44,29 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
         player->fl_front_frames[player->fl_front_count++] = t;
     }
 
+    /* ── West (left) ────────────────────────────────────────────────────── */
+    /* manusia kiri1 = idle; manusia kiri2-N = walk frames.                 */
+    player->fl_left_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight left/manusia kiri1.png");
+
     player->fl_left_count = 0;
     for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
         snprintf(path, sizeof(path),
-                 "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 1);
+                 "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 2);
         SDL_Texture *t = render_load_texture(renderer, path);
         if (!t) break;
         player->fl_left_frames[player->fl_left_count++] = t;
     }
 
+    /* ── East (right) ───────────────────────────────────────────────────── */
+    /* manusia kanan1 = idle; manusia kanan2-N = walk frames.               */
+    player->fl_right_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight right/manusia kanan1.png");
+
     player->fl_right_count = 0;
     for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
         snprintf(path, sizeof(path),
-                 "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 1);
+                 "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 2);
         SDL_Texture *t = render_load_texture(renderer, path);
         if (!t) break;
         player->fl_right_frames[player->fl_right_count++] = t;

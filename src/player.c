@@ -34,8 +34,11 @@ Player *player_create(const char *name)
     animation_init(&p->walk_anim, 4, 8.0f, 1);
     animation_init(&p->backwards_anim, 2, 8.0f, 1);
     animation_init(&p->fl_anim, 1, 8.0f, 1); /* frame_count set dynamically per direction */
+    p->fl_front_idle  = NULL;
     p->fl_front_count = 0;
+    p->fl_left_idle   = NULL;
     p->fl_left_count  = 0;
+    p->fl_right_idle  = NULL;
     p->fl_right_count = 0;
 
     p->sprite_texture    = NULL;
@@ -68,10 +71,13 @@ void player_destroy(Player *player)
     }
 
     /* Destroy flashlight movement animation textures */
+    if (player->fl_front_idle) render_texture_destroy(player->fl_front_idle);
     for (int i = 0; i < player->fl_front_count; i++)
         if (player->fl_front_frames[i]) render_texture_destroy(player->fl_front_frames[i]);
+    if (player->fl_left_idle) render_texture_destroy(player->fl_left_idle);
     for (int i = 0; i < player->fl_left_count; i++)
         if (player->fl_left_frames[i]) render_texture_destroy(player->fl_left_frames[i]);
+    if (player->fl_right_idle) render_texture_destroy(player->fl_right_idle);
     for (int i = 0; i < player->fl_right_count; i++)
         if (player->fl_right_frames[i]) render_texture_destroy(player->fl_right_frames[i]);
 

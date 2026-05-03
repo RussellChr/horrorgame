@@ -115,23 +115,34 @@ void game_render_playing(Game *game)
         world_render_room(loc, game->renderer, &game->camera);
     }
 
-    /* Player — use flashlight movement sprite when equipped and moving
-     * south/east/west; fall back to normal sprite otherwise. */
+    /* Player — use flashlight movement sprite when equipped (idle or walking
+     * south/east/west); fall back to normal sprite for north or no flashlight. */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
              - PLAYER_W / 2;
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
     {
         SDL_Texture *fl_tex = NULL;
-        if (game->flashlight_active && game->player->is_moving) {
+        if (game->flashlight_active) {
             Player *p  = game->player;
-            int     fr = animation_get_frame(&p->fl_anim);
-            if (p->current_direction == DIRECTION_SOUTH && p->fl_front_count > 0)
-                fl_tex = p->fl_front_frames[fr % p->fl_front_count];
-            else if (p->current_direction == DIRECTION_WEST && p->fl_left_count > 0)
-                fl_tex = p->fl_left_frames[fr % p->fl_left_count];
-            else if (p->current_direction == DIRECTION_EAST && p->fl_right_count > 0)
-                fl_tex = p->fl_right_frames[fr % p->fl_right_count];
+            if (p->is_moving) {
+                /* Walking: cycle through directional walk frames */
+                int fr = animation_get_frame(&p->fl_anim);
+                if (p->current_direction == DIRECTION_SOUTH && p->fl_front_count > 0)
+                    fl_tex = p->fl_front_frames[fr % p->fl_front_count];
+                else if (p->current_direction == DIRECTION_WEST && p->fl_left_count > 0)
+                    fl_tex = p->fl_left_frames[fr % p->fl_left_count];
+                else if (p->current_direction == DIRECTION_EAST && p->fl_right_count > 0)
+                    fl_tex = p->fl_right_frames[fr % p->fl_right_count];
+            } else {
+                /* Idle: show directional idle frame */
+                if (p->current_direction == DIRECTION_SOUTH)
+                    fl_tex = p->fl_front_idle;
+                else if (p->current_direction == DIRECTION_WEST)
+                    fl_tex = p->fl_left_idle;
+                else if (p->current_direction == DIRECTION_EAST)
+                    fl_tex = p->fl_right_idle;
+            }
         }
         if (fl_tex) {
             SDL_FRect fl_dst = { (float)sx, (float)sy,

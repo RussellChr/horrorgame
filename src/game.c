@@ -1114,7 +1114,7 @@ void game_start_dodge(Game *game)
 /*
  * Predefined initial puzzle state.  Each tube stores balls from bottom (index 0)
  * to top (index TUBE_CAPACITY-1).  Colour codes: 0=Red 1=Blue 2=Green 3=Yellow.
- * Tubes 4-6 start empty.  This scrambled arrangement is always solvable.
+ * Tubes 4-5 start empty.  This scrambled arrangement is always solvable.
  */
 void game_start_tube_sort(Game *game)
 {
@@ -1127,9 +1127,8 @@ void game_start_tube_sort(Game *game)
         { 3, 2, 1, 0 },   /* Yellow Green Blue  Red    */
         { -1,-1,-1,-1 },
         { -1,-1,-1,-1 },
-        { -1,-1,-1,-1 },
     };
-    static const int init_fill[TUBE_COUNT] = { 4, 4, 4, 4, 0, 0, 0 };
+    static const int init_fill[TUBE_COUNT] = { 4, 4, 4, 4, 0, 0 };
 
     for (int t = 0; t < TUBE_COUNT; t++) {
         game->tube_fill[t] = init_fill[t];

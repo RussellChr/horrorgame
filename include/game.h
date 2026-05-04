@@ -16,7 +16,7 @@
 #include "savegame.h"
 
 /* ── Tube sort minigame constants ──────────────────────────────────────── */
-#define TUBE_COUNT    7
+#define TUBE_COUNT    6
 #define TUBE_CAPACITY 4
 
 /* ── Medicine bar ──────────────────────────────────────────────────────── */

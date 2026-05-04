@@ -469,6 +469,14 @@ static Button make_button(float x, float y, float w, float h,
     return b;
 }
 
+static void toggle_fullscreen(Game *game)
+{
+    if (!game) return;
+    game->fullscreen = !game->fullscreen;
+    SDL_SetWindowFullscreen(game->window,
+        game->fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+}
+
 static void game_start_monster_death_cutscene(Game *game)
 {
     if (!game) return;
@@ -529,8 +537,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         slx, 230.0f + (float)SAVE_SLOT_COUNT * (slh + 12.0f), slw, slh, "Cancel");
 
     /* Settings defaults */
-    g->volume     = 100.0f;
-    g->brightness = 100.0f;
+    g->volume      = 100.0f;
+    g->brightness  = 100.0f;
+    g->fullscreen  = 0;
     g->settings_focus = 0;
     float sw = 400.0f, sh = 24.0f;
     float sx = (WINDOW_W - sw) / 2.0f + 60.0f;   /* offset right to leave room for label */
@@ -538,7 +547,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     slider_init(&g->settings_brightness_slider, sx, 380.0f, sw, sh, 0.0f, 100.0f, 100.0f);
     float bbw = 200.0f, bbh = 48.0f;
     g->settings_back_button = make_button(
-        (WINDOW_W - bbw) / 2.0f, 460.0f, bbw, bbh, "Back");
+        (WINDOW_W - bbw) / 2.0f, 530.0f, bbw, bbh, "Back");
 
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
@@ -1918,14 +1927,14 @@ void game_handle_event(Game *game, SDL_Event *event)
                 if (game->settings_focus > 0) game->settings_focus--;
                 break;
             case SDLK_DOWN:
-                if (game->settings_focus < 1) game->settings_focus++;
+                if (game->settings_focus < 2) game->settings_focus++;
                 break;
             case SDLK_LEFT:
                 if (game->settings_focus == 0) {
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value - 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value - 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
@@ -1936,14 +1945,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value + 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value + 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
                 }
                 break;
             case SDLK_RETURN:
-                game->state = GAME_STATE_MENU;
+            case SDLK_SPACE:
+                if (game->settings_focus == 2)
+                    toggle_fullscreen(game);
+                else
+                    game->state = GAME_STATE_MENU;
                 break;
             default: break;
             }
@@ -1962,6 +1975,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                                     game->mouse_x, game->mouse_y)) {
                 game->brightness = game->settings_brightness_slider.value;
                 game->settings_focus = 1;
+            }
+            /* Fullscreen toggle row click (y ≈ 450–475) */
+            {
+                int px = (WINDOW_W - 680) / 2;
+                SDL_FRect fs_row = { (float)px, 445.0f, 680.0f, 34.0f };
+                if (game->mouse_x >= fs_row.x &&
+                    game->mouse_x <= fs_row.x + fs_row.w &&
+                    game->mouse_y >= fs_row.y &&
+                    game->mouse_y <= fs_row.y + fs_row.h) {
+                    toggle_fullscreen(game);
+                    game->settings_focus = 2;
+                }
             }
         }
         break;
@@ -2095,6 +2120,12 @@ void game_handle_event(Game *game, SDL_Event *event)
     if (game->state == GAME_STATE_GAME_OVER &&
         event->type == SDL_EVENT_KEY_DOWN) {
         game->state = GAME_STATE_MENU;
+    }
+
+    /* ── F11: global fullscreen toggle (works in any state) ── */
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        event->key.key == SDLK_F11) {
+        toggle_fullscreen(game);
     }
 }
 

@@ -134,7 +134,8 @@ typedef struct {
     /* Settings menu */
     float  volume;                     /* 0–100 */
     float  brightness;                 /* 0–100 */
-    int    settings_focus;             /* 0=volume, 1=brightness */
+    int    fullscreen;                 /* 0=windowed, 1=fullscreen */
+    int    settings_focus;             /* 0=volume, 1=brightness, 2=fullscreen */
     Slider settings_volume_slider;
     Slider settings_brightness_slider;
     Button settings_back_button;

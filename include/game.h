@@ -29,6 +29,8 @@
 #define ARCHIVE_GLASS_SIZE  40
 extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
 
+#define DODGE_MAX_BULLETS  128
+
 typedef struct DecodedAudio {
     SDL_AudioSpec    spec;
     Uint8           *buf;
@@ -68,6 +70,7 @@ typedef enum {
     GAME_STATE_LOCKER,
     GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
+    GAME_STATE_DODGE,
     GAME_STATE_JUMPSCARE,
     GAME_STATE_MONSTER_DEATH_CUTSCENE,
     GAME_STATE_GAME_OVER,
@@ -200,6 +203,7 @@ typedef struct {
     /* Door and looping hospital atmosphere MP3s */
     DecodedAudio door_open_audio;
     DecodedAudio ambient_ost_audio;
+    DecodedAudio monster_theme_audio;
     float        am_audio_pause_timer;
 
     /* Enemy patrol / chase system */
@@ -245,6 +249,21 @@ typedef struct {
     int   simon_death_triggered;   /* 1 if player failed the Simon game            */
     int   simon_jumpscare_played;  /* 1 after the jumpscare has been shown once    */
 
+    /* Undertale-style dodge minigame for the hallway level-2 exit */
+    float dodge_heart_x;
+    float dodge_heart_y;
+    int   dodge_hp;
+    int   dodge_round;
+    float dodge_elapsed;
+    float dodge_spawn_timer;
+    float dodge_invuln_timer;
+    int   dodge_bullet_count;
+    float dodge_bullet_x[DODGE_MAX_BULLETS];
+    float dodge_bullet_y[DODGE_MAX_BULLETS];
+    float dodge_bullet_vx[DODGE_MAX_BULLETS];
+    float dodge_bullet_vy[DODGE_MAX_BULLETS];
+    int   dodge_bullet_active[DODGE_MAX_BULLETS];
+
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
 
@@ -271,6 +290,7 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_dodge(Game *game);
 void game_start_security_cutscene(Game *game);
 void game_start_hibernation_cutscene(Game *game);
 void game_start_power_cutscene(Game *game);
@@ -286,6 +306,7 @@ void game_render_settings(Game *game);
 void game_render_locker(Game *game);
 void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
+void game_render_dodge(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
 void game_render_archive_book(Game *game);

@@ -231,6 +231,11 @@ void game_handle_interaction(Game *game)
                 game_set_dialogue_tree(game, "hallway_nothing", 1);
             }
         }
+        if (tid == 64) {
+            /* Tile 4: medicine workbench – start tube-sort minigame */
+            game_start_tube_sort(game);
+            return;
+        }
         if (game->dialogue_tree)
             game_start_dialogue(game, 0);
         return;

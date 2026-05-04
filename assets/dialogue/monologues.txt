@@ -111,7 +111,8 @@ Keycard is required.
 [lab_keycard]
 Richard
 ---
-You found a keycard.
+Found a keycard.
+Why am I feeling dizzy? The gas might have entered through the mask. I should make the right medicine before the time runs out.
 ---
 
 [lab_gas_death]
@@ -119,7 +120,6 @@ Richard
 ---
 The air, it burns. I can't breathe.
 I should have worn that gas mask.
-Everything is going dark.
 ---
 
 # ── Power Room ──────────────────────────────────────────────────────────
@@ -214,5 +214,23 @@ Richard
 The panel sparks violently. A surge of electricity throws me back.
 I should have paid more attention to the sequence.
 Everything goes dark.
+---
+
+[lab_medicine_done1]
+Richard
+---
+The medicine has been made. I don't think it's safe but it's worth the shot.
+---
+
+[lab_medicine_done2]
+Richard
+---
+Oh... I'm no longer dizzy.
+---
+
+[lab_dizziness_death]
+Richard
+---
+Everything is spinning... I couldn't make the medicine in time.
 ---
 

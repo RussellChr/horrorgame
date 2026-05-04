@@ -248,8 +248,8 @@ void game_render_playing(Game *game)
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
+    /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
     if (game->pickup_notify_timer > 0.0f) {
-        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
         float t = game->pickup_notify_timer; /* remaining time */
         float alpha_f;
         if (t > 2.2f)        alpha_f = (2.5f - t) / 0.3f;   /* fade in  */
@@ -279,6 +279,29 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* ── Dizziness bar (shown after keycard obtained, before medicine made) ── */
+    if (game->player &&
+        player_check_flag(game->player, FLAG_KEYCARD_COLLECTED) &&
+        !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE)) {
+        SDL_Renderer *r = game->renderer;
+        int bar_w = 400, bar_h = 18;
+        int bar_x = (WINDOW_W - bar_w) / 2;
+        int bar_y = WINDOW_H - 60;  /* above the "I:inv ESC:pause" hint at WINDOW_H-18 */
+        /* Background */
+        render_filled_rect(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 0, 0, 0, 200);
+        render_rect_outline(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 150, 80, 80, 220);
+        /* Fill (green → red based on remaining) */
+        float frac = game->dizziness_bar;
+        if (frac < 0.0f) frac = 0.0f;
+        if (frac > 1.0f) frac = 1.0f;
+        int fill_w = (int)(frac * (float)bar_w);
+        Uint8 bar_r = (Uint8)((1.0f - frac) * 220.0f);
+        Uint8 bar_g = (Uint8)(frac * 180.0f);
+        if (fill_w > 0)
+            render_filled_rect(r, bar_x, bar_y, fill_w, bar_h, bar_r, bar_g, 30, 220);
+        render_text_centered(r, "Dizziness", bar_x + bar_w / 2, bar_y - 14, 1, 200, 160, 160);
     }
 }
 
@@ -914,6 +937,87 @@ void game_render_simon(Game *game)
                          WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
 }
 
+
+/* ── Tube-sort (medicine) minigame ────────────────────────────────────────── */
+
+/* Color palette: index 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach
+ * Colors are matched to the reference image. */
+static const Uint8 tube_color_r[5] = {  25, 160,  20, 230, 235 };
+static const Uint8 tube_color_g[5] = {  20,  50, 195, 200, 160 };
+static const Uint8 tube_color_b[5] = {  30, 210, 165,  25, 130 };
+
+/* Layout constants – tube rows are centred horizontally in the 1280×720 window.
+ *   Top row : 4 tubes, spacing 130px, starting at x=405
+ *   Bottom row: 3 tubes, spacing 130px, starting at x=470
+ *   tube_h = 260, so bottom row bottoms out at 390+260=650 (hint text at 696) */
+#define TUBE_W         80
+#define TUBE_H        260
+#define TUBE_UNIT_H    58   /* height of one colour layer; 4×58=232 fits in 260 */
+#define TUBE_PAD_X      8   /* inner horizontal padding */
+#define TUBE_CAP_H     14   /* dark cap drawn at tube opening */
+
+static const int TUBE_X[7] = { 405, 535, 665, 795,  470, 600, 730 };
+static const int TUBE_Y[7] = { 100, 100, 100, 100,  390, 390, 390 };
+
+void game_render_tube_sort(Game *game)
+
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+
+    /* Dark background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 10, 10, 20, 255);
+
+    /* Title */
+    render_text_centered(r, "MEDICINE WORKBENCH", WINDOW_W / 2, 24, 2, 200, 200, 255);
+    render_text_centered(r, "Sort each tube so it contains only one color",
+                         WINDOW_W / 2, 54, 1, 160, 160, 200);
+    render_text_centered(r, "Click a tube to select, click another to pour",
+                         WINDOW_W / 2, 68, 1, 140, 140, 180);
+
+    for (int i = 0; i < 7; i++) {
+        int tx = TUBE_X[i];
+        int ty = TUBE_Y[i];
+        int is_sel = (game->tube_selected == i);
+
+        /* Selection highlight: bright yellow outline, else subtle grey */
+        Uint8 ol_r = is_sel ? 255 : 130;
+        Uint8 ol_g = is_sel ? 230 :  90;
+        Uint8 ol_b = is_sel ?  50 :  80;
+
+        /* Tube body */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_H, 25, 20, 35, 245);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_H, ol_r, ol_g, ol_b, 255);
+
+        /* Colour layers (drawn bottom-up, slot 0 = bottom) */
+        for (int j = 0; j < game->tube_count[i]; j++) {
+            int col = game->tube_colors[i][j];
+            if (col == 0) continue;
+            int uy = ty + TUBE_H - (j + 1) * TUBE_UNIT_H;
+            int ux = tx + TUBE_PAD_X;
+            int uw = TUBE_W - TUBE_PAD_X * 2;
+            render_filled_rect(r, ux, uy, uw, TUBE_UNIT_H - 2,
+                               tube_color_r[col], tube_color_g[col],
+                               tube_color_b[col], 230);
+        }
+
+        /* Cap (dark rectangle at the tube opening / top edge) */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_CAP_H, 15, 12, 20, 255);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_CAP_H, ol_r, ol_g, ol_b, 200);
+
+        /* Selection arrow above the tube */
+        if (is_sel) {
+            render_text_centered(r, "^", tx + TUBE_W / 2, ty - 18, 2, 255, 230, 50);
+        }
+    }
+
+    render_text_centered(r, "ESC: close workbench",
+                         WINDOW_W / 2, WINDOW_H - 24, 1, 120, 120, 160);
+
+}
+
+
 static void render_dodge_heart(SDL_Renderer *r, int cx, int cy, int visible)
 {
     if (!visible) return;
@@ -935,9 +1039,11 @@ static void render_dodge_heart(SDL_Renderer *r, int cx, int cy, int visible)
 /* ── Undertale-style hallway dodge minigame ─────────────────────────────── */
 
 void game_render_dodge(Game *game)
+
 {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
+
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 5, 5, 10, 255);
 
@@ -991,6 +1097,8 @@ void game_render_dodge(Game *game)
 
     render_text_centered(r, "WASD / ARROWS",
                          WINDOW_W / 2, ui_y + 38, 1, 115, 115, 130);
+
+}
 }
 
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */

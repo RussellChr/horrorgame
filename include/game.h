@@ -84,6 +84,7 @@ typedef enum {
     GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
     GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
     GAME_STATE_ARCHIVE_BOOK,    /* reading archive pages (pg1 / pg2)       */
+    GAME_STATE_TUBE_SORT,       /* tube-sorting medicine minigame in lab   */
     GAME_STATE_QUIT
 } GameState;
 
@@ -281,6 +282,16 @@ typedef struct {
 
     /* Monster death cutscene (shown before the game-over screen) */
     VideoPlayer *monster_death_player;
+
+    /* Dizziness bar (active after keycard obtained, until medicine made) */
+    float dizziness_bar;             /* 1.0 = full, 0.0 = dead */
+    int   dizziness_death_triggered; /* 1 after bar hits zero */
+
+    /* Tube-sort minigame (GAME_STATE_TUBE_SORT) */
+    int tube_colors[7][4]; /* [tube][slot], slot 0 = bottom, slot count-1 = top */
+    int tube_count[7];     /* number of units in tube */
+    int tube_selected;     /* -1 = none, else selected tube index */
+    int tube_sort_done;    /* 1 after minigame won */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -302,6 +313,7 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_tube_sort(Game *game);
 void game_start_dodge(Game *game);
 void game_start_security_cutscene(Game *game);
 void game_start_hibernation_cutscene(Game *game);
@@ -319,6 +331,7 @@ void game_render_settings(Game *game);
 void game_render_locker(Game *game);
 void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
+void game_render_tube_sort(Game *game);
 void game_render_dodge(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);

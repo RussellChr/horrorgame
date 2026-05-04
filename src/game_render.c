@@ -921,7 +921,7 @@ void game_render_dodge(Game *game)
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 5, 5, 10, 255);
 
-    render_text_centered(r, "LEVEL-2 EXIT OVERRIDE",
+    render_text_centered(r, "DODGE THE ATTACKS",
                          WINDOW_W / 2, 74, 3, 220, 220, 230);
     char round_buf[64];
     snprintf(round_buf, sizeof(round_buf), "Round %d / %d",

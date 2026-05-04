@@ -382,34 +382,71 @@ static void decoded_audio_play_once(DecodedAudio *audio)
     SDL_ResumeAudioStreamDevice(audio->stream);
 }
 
-static void ambient_ost_start(Game *game)
+/* Returns the DecodedAudio that should be looping right now, or NULL. */
+static DecodedAudio *music_current_track(Game *game)
 {
-    DecodedAudio *audio = &game->ambient_ost_audio;
-    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
-        return;
+    if (!game) return NULL;
 
-    SDL_ClearAudioStream(audio->stream);
-    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
-    SDL_ResumeAudioStreamDevice(audio->stream);
+    /* Menu-only screens always use the menu music. */
+    GameState s = game->state;
+    if (s == GAME_STATE_MENU ||
+        s == GAME_STATE_NEW_LOAD_MENU ||
+        s == GAME_STATE_SETTINGS ||
+        s == GAME_STATE_GAME_OVER)
+        return &game->menu_music_audio;
+
+    /* In-game: select by location and story progress. */
+    if (!game->player) return &game->menu_music_audio;
+
+    int loc = game->player->current_location_id;
+    if (loc == LOCATION_ARCHIVE)
+        return &game->ambient_ost_audio;     /* archive room */
+    if (loc == LOCATION_HIBERNATION)
+        return &game->room1_music_audio;     /* chamber room */
+    if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE))
+        return &game->room3_music_audio;     /* after code puzzle solved */
+    return &game->room2_music_audio;         /* after leaving chamber room */
 }
 
-static void ambient_ost_update(Game *game)
+/* Called every frame: loops the correct background music track and silences
+ * all others.  The dodge-minigame monster theme is managed separately. */
+static void music_update(Game *game)
 {
-    DecodedAudio *audio = &game->ambient_ost_audio;
-    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
-        return;
+    if (!game) return;
 
-    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
+    DecodedAudio *tracks[] = {
+        &game->menu_music_audio,
+        &game->room1_music_audio,
+        &game->room2_music_audio,
+        &game->room3_music_audio,
+        &game->ambient_ost_audio,
+    };
+    const int n_tracks = (int)(sizeof(tracks) / sizeof(tracks[0]));
 
-    if (game->am_audio_pause_timer > 0.0f ||
-        game->state == GAME_STATE_DODGE) {
-        SDL_PauseAudioStreamDevice(audio->stream);
-        return;
+    DecodedAudio *active = music_current_track(game);
+    float gain = game->volume / 100.0f;
+
+    /* Pause music when: AM recording is playing, or dodge minigame is active */
+    int should_pause = (game->state == GAME_STATE_DODGE) ||
+                       (game->am_audio_pause_timer > 0.0f);
+
+    for (int i = 0; i < n_tracks; i++) {
+        DecodedAudio *a = tracks[i];
+        if (!a->stream || !a->buf || a->len > (Uint32)SDL_MAX_SINT32) continue;
+        if (a == active) {
+            SDL_SetAudioStreamGain(a->stream, gain);
+            if (should_pause) {
+                SDL_PauseAudioStreamDevice(a->stream);
+            } else {
+                if (SDL_GetAudioStreamAvailable(a->stream) < (int)(a->len / 2))
+                    SDL_PutAudioStreamData(a->stream, a->buf, (int)a->len);
+                SDL_ResumeAudioStreamDevice(a->stream);
+            }
+        } else {
+            SDL_ClearAudioStream(a->stream);
+            SDL_PauseAudioStreamDevice(a->stream);
+        }
     }
-
-    if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
-        SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
-    SDL_ResumeAudioStreamDevice(audio->stream);
 }
 
 static void monster_theme_start(Game *game)
@@ -634,6 +671,18 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     if (!decoded_audio_load_mp3(&g->monster_theme_audio,
                                 "assets/OST/monstertheme.mp3"))
         SDL_Log("game_init: failed to load monster theme OST");
+    if (!decoded_audio_load_mp3(&g->menu_music_audio,
+                                "assets/OST/OPPhasmophobia music box FULL.mp3"))
+        SDL_Log("game_init: failed to load menu music OST");
+    if (!decoded_audio_load_mp3(&g->room1_music_audio,
+                                "assets/OST/Room1Edge of Eternity.mp3"))
+        SDL_Log("game_init: failed to load room1 OST");
+    if (!decoded_audio_load_mp3(&g->room2_music_audio,
+                                "assets/OST/Room2Phantoms.mp3"))
+        SDL_Log("game_init: failed to load room2 OST");
+    if (!decoded_audio_load_mp3(&g->room3_music_audio,
+                                "assets/OST/Room3Locked Horrors.mp3"))
+        SDL_Log("game_init: failed to load room3 OST");
 
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
@@ -694,6 +743,10 @@ void game_cleanup(Game *game)
     decoded_audio_free(&game->door_open_audio);
     decoded_audio_free(&game->ambient_ost_audio);
     decoded_audio_free(&game->monster_theme_audio);
+    decoded_audio_free(&game->menu_music_audio);
+    decoded_audio_free(&game->room1_music_audio);
+    decoded_audio_free(&game->room2_music_audio);
+    decoded_audio_free(&game->room3_music_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     video_player_close(game->monster_death_player);
@@ -796,7 +849,6 @@ void game_start_new(Game *game)
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
     game->am_audio_pause_timer     = 0.0f;
-    ambient_ost_start(game);
 
     /* Show the hibernation opening cutscene */
     game_start_hibernation_cutscene(game);
@@ -1046,7 +1098,6 @@ static void game_do_load(Game *game, int slot)
     game->simon_death_triggered   = 0;
     game->simon_jumpscare_played  = 0;
     game->am_audio_pause_timer    = 0.0f;
-    ambient_ost_start(game);
 }
 
 void game_change_location(Game *game, int location_id,
@@ -2153,7 +2204,7 @@ void game_update(Game *game)
         if (game->am_audio_pause_timer < 0.0f)
             game->am_audio_pause_timer = 0.0f;
     }
-    ambient_ost_update(game);
+    music_update(game);
     monster_theme_update(game);
 
     if (game->state == GAME_STATE_PLAYING &&

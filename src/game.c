@@ -1474,8 +1474,13 @@ void game_handle_event(Game *game, SDL_Event *event)
     if (!game || !event) return;
 
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        game->mouse_x = event->motion.x;
-        game->mouse_y = event->motion.y;
+        /* Convert physical window coordinates to logical renderer coordinates.
+           SDL_SetRenderLogicalPresentation creates a mismatch: mouse events
+           report raw physical pixels while all rendering and hit-testing uses
+           the 1280×720 logical canvas, so we must map before storing. */
+        SDL_RenderCoordinatesFromWindow(game->renderer,
+                                        event->motion.x, event->motion.y,
+                                        &game->mouse_x, &game->mouse_y);
     }
     game->mouse_clicked = 0;
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)

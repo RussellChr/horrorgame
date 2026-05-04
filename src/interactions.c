@@ -226,10 +226,17 @@ void game_handle_interaction(Game *game)
                 kc.id     = ITEM_ID_KEYCARD;
                 kc.usable = 0;
                 player_add_item(game->player, &kc);
+                /* Activate the medicine bar now that the gas is taking effect */
+                game->medicine_bar_active = 1;
+                game->medicine_timer      = MEDICINE_MAX_TIME;
                 game_set_dialogue_tree(game, "lab_keycard", 1);
             } else {
                 game_set_dialogue_tree(game, "hallway_nothing", 1);
             }
+        } else if (tid == 62) {
+            /* Tile 4: chemistry station – start tube sort minigame */
+            game_start_tube_sort(game);
+            return;
         }
         if (game->dialogue_tree)
             game_start_dialogue(game, 0);

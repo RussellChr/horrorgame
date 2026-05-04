@@ -15,6 +15,13 @@
 #include "enemy.h"
 #include "savegame.h"
 
+/* ── Tube sort minigame constants ──────────────────────────────────────── */
+#define TUBE_COUNT    7
+#define TUBE_CAPACITY 4
+
+/* ── Medicine bar ──────────────────────────────────────────────────────── */
+#define MEDICINE_MAX_TIME 120.0f  /* seconds before player dies */
+
 /* ── Monitor passcode constants ────────────────────────────────────────── */
 #define MONITOR_PANEL_X      685
 #define MONITOR_PANEL_Y      415
@@ -78,6 +85,7 @@ typedef enum {
     GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
     GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
     GAME_STATE_ARCHIVE_BOOK,    /* reading archive pages (pg1 / pg2)       */
+    GAME_STATE_TUBE_SORT,       /* tube-sort medicine minigame in the lab   */
     GAME_STATE_QUIT
 } GameState;
 
@@ -269,6 +277,16 @@ typedef struct {
 
     /* Monster death cutscene (shown before the game-over screen) */
     VideoPlayer *monster_death_player;
+
+    /* Medicine bar (active after keycard obtained, cleared when medicine made) */
+    int   medicine_bar_active;       /* 1 = bar is visible and ticking         */
+    float medicine_timer;            /* counts down from MEDICINE_MAX_TIME      */
+    int   medicine_death_triggered;  /* 1 = timer expired, pending game over    */
+
+    /* Tube sort minigame (GAME_STATE_TUBE_SORT) */
+    int tube_balls[TUBE_COUNT][TUBE_CAPACITY]; /* -1=empty, 0=Red,1=Blue,2=Green,3=Yellow */
+    int tube_fill[TUBE_COUNT];                 /* balls currently in each tube (0..4)      */
+    int tube_selected;                         /* -1=none, 0-6 = selected tube index       */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -291,6 +309,7 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_dodge(Game *game);
+void game_start_tube_sort(Game *game);
 void game_start_security_cutscene(Game *game);
 void game_start_hibernation_cutscene(Game *game);
 void game_start_power_cutscene(Game *game);
@@ -310,6 +329,7 @@ void game_render_dodge(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
 void game_render_archive_book(Game *game);
+void game_render_tube_sort(Game *game);
 void game_render_new_load_menu(Game *game);
 void game_render_save_menu(Game *game);
 void game_render_load_menu(Game *game);

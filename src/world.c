@@ -277,6 +277,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     /* Tile 2: keycard pickup, interactive trigger 61 */
                     map_build_interactive_triggers_for_tile(m, loc, 2, 61, 0.0f, 0.0f);
 
+                    /* Tile 4: chemistry station (tube sort), trigger 62 */
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 62, 0.0f, 0.0f);
+
                     /* Hint one row above the door tiles (rows 23-25, cols 11-14)
                        so the player spawns just in front of the door. */
                     float sx = (float)(loc->room_width  / 2);

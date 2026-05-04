@@ -111,7 +111,19 @@ Keycard is required.
 [lab_keycard]
 Richard
 ---
-You found a keycard.
+You found a keycard. Why am I feeling dizzy? The gas might have entered through the mask. I should make the right medicine before the time runs out.
+---
+
+[lab_medicine_made]
+Richard
+---
+The medicine has been made. I dont think it's safe but it's worth the shot. Oh, I'm no longer dizzy.
+---
+
+[lab_medicine_death]
+Richard
+---
+The dizziness is overwhelming. I couldn't make the medicine in time.
 ---
 
 [lab_gas_death]

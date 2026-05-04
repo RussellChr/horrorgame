@@ -48,6 +48,9 @@ static int is_trigger_consumed(const Game *game, int trigger_id)
         case 59: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
         /* Lab */
         case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
+        /* Tile 4 chemistry station: hidden until keycard obtained, consumed when medicine made */
+        case 62: return !player_check_flag(p, FLAG_KEYCARD_COLLECTED) ||
+                         player_check_flag(p, FLAG_LAB_MEDICINE_MADE);
         /* Hallway */
         case 80: return player_check_flag(p, FLAG_HALLWAY_NOTHING_INTERACTED);
         case 81: return player_check_flag(p, FLAG_HALLWAY_GASMASK_COLLECTED);
@@ -1043,6 +1046,10 @@ void game_end_dialogue(Game *game)
         game->lab_death_triggered = 0;
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
+    } else if (game->medicine_death_triggered) {
+        /* Medicine timer ran out — game over */
+        game->medicine_death_triggered = 0;
+        game->state = GAME_STATE_GAME_OVER;
     } else if (game->simon_death_triggered) {
         /* Player failed the Simon game — return to world so they must interact again */
         game->simon_death_triggered = 0;
@@ -1100,6 +1107,37 @@ void game_start_dodge(Game *game)
     dodge_begin_round(game, 1);
     monster_theme_start(game);
     game->state = GAME_STATE_DODGE;
+}
+
+/* ── Tube sort minigame ─────────────────────────────────────────────────── */
+
+/*
+ * Predefined initial puzzle state.  Each tube stores balls from bottom (index 0)
+ * to top (index TUBE_CAPACITY-1).  Colour codes: 0=Red 1=Blue 2=Green 3=Yellow.
+ * Tubes 4-6 start empty.  This scrambled arrangement is always solvable.
+ */
+void game_start_tube_sort(Game *game)
+{
+    if (!game) return;
+
+    static const int init_balls[TUBE_COUNT][TUBE_CAPACITY] = {
+        { 0, 1, 2, 3 },   /* Red   Blue  Green  Yellow */
+        { 2, 0, 3, 1 },   /* Green Red   Yellow Blue   */
+        { 1, 3, 0, 2 },   /* Blue  Yellow Red   Green  */
+        { 3, 2, 1, 0 },   /* Yellow Green Blue  Red    */
+        { -1,-1,-1,-1 },
+        { -1,-1,-1,-1 },
+        { -1,-1,-1,-1 },
+    };
+    static const int init_fill[TUBE_COUNT] = { 4, 4, 4, 4, 0, 0, 0 };
+
+    for (int t = 0; t < TUBE_COUNT; t++) {
+        game->tube_fill[t] = init_fill[t];
+        for (int b = 0; b < TUBE_CAPACITY; b++)
+            game->tube_balls[t][b] = init_balls[t][b];
+    }
+    game->tube_selected = -1;
+    game->state = GAME_STATE_TUBE_SORT;
 }
 
 static void dodge_spawn_bullet_raw(Game *game,
@@ -1358,6 +1396,63 @@ void game_start_power_cutscene(Game *game)
                         game->cutscene_dialogue_tree, 0);
 
     game->state = GAME_STATE_CUTSCENE;
+}
+
+/* ── Tube sort helpers ──────────────────────────────────────────────────── */
+
+/* Returns 1 if a ball can be poured from tube s onto tube d. */
+static int tube_can_pour(const Game *game, int s, int d)
+{
+    if (s == d) return 0;
+    if (game->tube_fill[s] == 0) return 0;
+    if (game->tube_fill[d] >= TUBE_CAPACITY) return 0;
+    if (game->tube_fill[d] == 0) return 1; /* destination empty */
+    int top_src  = game->tube_balls[s][game->tube_fill[s] - 1];
+    int top_dst  = game->tube_balls[d][game->tube_fill[d] - 1];
+    return (top_src == top_dst);
+}
+
+/* Pour the top same-colour run from tube s into tube d. */
+static void tube_do_pour(Game *game, int s, int d)
+{
+    if (!tube_can_pour(game, s, d)) return;
+    int colour = game->tube_balls[s][game->tube_fill[s] - 1];
+    while (game->tube_fill[s] > 0 &&
+           game->tube_fill[d] < TUBE_CAPACITY &&
+           game->tube_balls[s][game->tube_fill[s] - 1] == colour) {
+        game->tube_balls[d][game->tube_fill[d]++] =
+            game->tube_balls[s][--(game->tube_fill[s])];
+        game->tube_balls[s][game->tube_fill[s]] = -1;
+    }
+}
+
+/* Returns 1 when every tube is either empty or full with one colour. */
+static int tube_sort_is_won(const Game *game)
+{
+    for (int t = 0; t < TUBE_COUNT; t++) {
+        int fill = game->tube_fill[t];
+        if (fill == 0) continue;
+        if (fill != TUBE_CAPACITY) return 0;
+        int col = game->tube_balls[t][0];
+        for (int b = 1; b < fill; b++)
+            if (game->tube_balls[t][b] != col) return 0;
+    }
+    return 1;
+}
+
+/* Screen-space rect for tube t (used in event handling and rendering). */
+static void tube_get_rect(int t, int *out_x, int *out_y, int *out_w, int *out_h)
+{
+    static const int TUBE_W    = 54;
+    static const int TUBE_H    = 184;
+    static const int TUBE_GAP  = 22;
+    int total_w = TUBE_COUNT * TUBE_W + (TUBE_COUNT - 1) * TUBE_GAP;
+    int start_x = (WINDOW_W - total_w) / 2;
+    int start_y = (WINDOW_H - TUBE_H) / 2 + 20;
+    *out_x = start_x + t * (TUBE_W + TUBE_GAP);
+    *out_y = start_y;
+    *out_w = TUBE_W;
+    *out_h = TUBE_H;
 }
 
 /* ── Per-frame event handling ──────────────────────────────────────────── */
@@ -1983,6 +2078,56 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_TUBE_SORT:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->tube_selected = -1;
+            game->state = GAME_STATE_PLAYING;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            float mx = game->mouse_x, my = game->mouse_y;
+            int clicked_tube = -1;
+            for (int t = 0; t < TUBE_COUNT; t++) {
+                int tx, ty, tw, th;
+                tube_get_rect(t, &tx, &ty, &tw, &th);
+                if (mx >= (float)tx && mx < (float)(tx + tw) &&
+                    my >= (float)ty && my < (float)(ty + th)) {
+                    clicked_tube = t;
+                    break;
+                }
+            }
+            if (clicked_tube >= 0) {
+                if (game->tube_selected < 0) {
+                    /* Select this tube if it has balls */
+                    if (game->tube_fill[clicked_tube] > 0)
+                        game->tube_selected = clicked_tube;
+                } else {
+                    int sel = game->tube_selected;
+                    if (sel == clicked_tube) {
+                        /* Clicking the selected tube deselects it */
+                        game->tube_selected = -1;
+                    } else if (tube_can_pour(game, sel, clicked_tube)) {
+                        tube_do_pour(game, sel, clicked_tube);
+                        game->tube_selected = -1;
+                        /* Check win condition */
+                        if (tube_sort_is_won(game) && game->player &&
+                            !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE)) {
+                            player_set_flag(game->player, FLAG_LAB_MEDICINE_MADE);
+                            game->state = GAME_STATE_PLAYING;
+                            game_set_dialogue_tree(game, "lab_medicine_made", LOCATION_LAB);
+                            if (game->dialogue_tree)
+                                game_start_dialogue(game, 0);
+                        }
+                    } else {
+                        /* Invalid move – select the new tube instead */
+                        game->tube_selected = (game->tube_fill[clicked_tube] > 0)
+                                              ? clicked_tube : -1;
+                    }
+                }
+            }
+        }
+        break;
+
     default: break;
     }
 
@@ -2012,6 +2157,31 @@ void game_update(Game *game)
     }
     ambient_ost_update(game);
     monster_theme_update(game);
+
+    /* ── Medicine bar: tick in all active gameplay states ── */
+    if (game->medicine_bar_active && game->player) {
+        /* Auto-clear when medicine already made */
+        if (player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE)) {
+            game->medicine_bar_active = 0;
+        } else if (game->state == GAME_STATE_PLAYING ||
+                   game->state == GAME_STATE_DIALOGUE ||
+                   game->state == GAME_STATE_TUBE_SORT ||
+                   game->state == GAME_STATE_INVENTORY ||
+                   game->state == GAME_STATE_LOCKER ||
+                   game->state == GAME_STATE_ARCHIVE_BOOK) {
+            game->medicine_timer -= dt;
+            if (game->medicine_timer <= 0.0f) {
+                game->medicine_timer        = 0.0f;
+                game->medicine_bar_active   = 0;
+                game->medicine_death_triggered = 1;
+                game_set_dialogue_tree(game, "lab_medicine_death", LOCATION_LAB);
+                if (game->dialogue_tree)
+                    game_start_dialogue(game, 0);
+                else
+                    game->state = GAME_STATE_GAME_OVER;
+            }
+        }
+    }
 
     if (game->state == GAME_STATE_PLAYING &&
         game->player && game->world) {
@@ -2103,6 +2273,8 @@ void game_update(Game *game)
                             if (tz->trigger_id == 60)
                                 label = "Press [E] to enter locker";
                             else if (tz->trigger_id == 61)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 62)
                                 label = "Press [E] to examine";
                             else if (tz->trigger_id == 75)
                                 label = "Press [E] to interact";
@@ -2457,6 +2629,7 @@ void game_render(Game *game)
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
     case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
+    case GAME_STATE_TUBE_SORT:    game_render_tube_sort(game);    break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
     case GAME_STATE_DODGE:     game_render_dodge(game);     break;

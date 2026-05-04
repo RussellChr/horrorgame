@@ -174,6 +174,7 @@ static const char * const power_cutscene_texts[3] = {
 static const char * const hallway_exit_cutscene_texts[2] = {
     "I need to get out of here... come on, open! ACCESS DENIED?! No no no...",
     "Wait-- what is that noise?! It's right behind me!"
+    "Well, No more running I guess."
 };
 
 /* ── Helpers ───────────────────────────────────────────────────────────── */

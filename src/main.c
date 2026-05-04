@@ -27,6 +27,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    /* Scale the 1280×720 logical canvas to fill any window/fullscreen size,
+       preserving aspect ratio with letterboxing. */
+    SDL_SetRenderLogicalPresentation(renderer, WINDOW_W, WINDOW_H,
+                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
+
     /* Enable alpha blending globally. */
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 

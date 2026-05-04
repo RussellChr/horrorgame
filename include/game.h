@@ -24,6 +24,11 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Settings panel layout constants ────────────────────────────────────── */
+#define SETTINGS_PANEL_W     680   /* total width of the settings panel     */
+#define SETTINGS_FS_ROW_Y    450   /* top-Y of the Fullscreen toggle row    */
+#define SETTINGS_FS_ROW_H     30   /* height of the Fullscreen toggle row   */
+
 /* ── Archive room glass shard constants ─────────────────────────────────── */
 #define ARCHIVE_GLASS_COUNT  6
 #define ARCHIVE_GLASS_SIZE  40

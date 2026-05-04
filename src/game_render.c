@@ -504,7 +504,7 @@ void game_render_settings(Game *game)
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 160);
 
     /* Panel */
-    int pw = 680, ph = 410;
+    int pw = SETTINGS_PANEL_W, ph = 410;
     int px = (WINDOW_W - pw) / 2, py = 170;
     render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 230);
     render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
@@ -528,11 +528,12 @@ void game_render_settings(Game *game)
         Uint8 rc = focused ? 255 : 210;
         Uint8 gc = focused ? 80  : 160;
         Uint8 bc = focused ? 80  : 160;
-        int row_y = 450;
+        int row_y = SETTINGS_FS_ROW_Y;
 
         /* Highlight background when focused */
         if (focused)
-            render_filled_rect(r, px + 8, row_y - 4, pw - 16, 28, 60, 15, 15, 180);
+            render_filled_rect(r, px + 8, row_y - 4, pw - 16,
+                               SETTINGS_FS_ROW_H, 60, 15, 15, 180);
 
         render_text(r, "Fullscreen", px + 28, row_y, 2, rc, gc, bc);
         const char *fs_val = game->fullscreen ? "ON" : "OFF";

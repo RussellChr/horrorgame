@@ -1976,10 +1976,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->brightness = game->settings_brightness_slider.value;
                 game->settings_focus = 1;
             }
-            /* Fullscreen toggle row click (y ≈ 450–475) */
+            /* Fullscreen toggle row click */
             {
-                int px = (WINDOW_W - 680) / 2;
-                SDL_FRect fs_row = { (float)px, 445.0f, 680.0f, 34.0f };
+                int px = (WINDOW_W - SETTINGS_PANEL_W) / 2;
+                SDL_FRect fs_row = { (float)px, (float)(SETTINGS_FS_ROW_Y - 4),
+                                     (float)SETTINGS_PANEL_W,
+                                     (float)SETTINGS_FS_ROW_H };
                 if (game->mouse_x >= fs_row.x &&
                     game->mouse_x <= fs_row.x + fs_row.w &&
                     game->mouse_y >= fs_row.y &&

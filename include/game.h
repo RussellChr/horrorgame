@@ -209,8 +209,12 @@ typedef struct {
 
     /* Door and looping hospital atmosphere MP3s */
     DecodedAudio door_open_audio;
-    DecodedAudio ambient_ost_audio;
-    DecodedAudio monster_theme_audio;
+    DecodedAudio ambient_ost_audio;    /* archive room: OST NTE Abandoned Hospital  */
+    DecodedAudio monster_theme_audio;  /* hallway dodge minigame theme              */
+    DecodedAudio menu_music_audio;     /* main menu: OPPhasmophobia music box       */
+    DecodedAudio room1_music_audio;    /* chamber room: Room1Edge of Eternity       */
+    DecodedAudio room2_music_audio;    /* after leaving chamber: Room2Phantoms      */
+    DecodedAudio room3_music_audio;    /* after code puzzle: Room3Locked Horrors    */
     float        am_audio_pause_timer;
 
     /* Enemy patrol / chase system */

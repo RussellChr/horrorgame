@@ -24,6 +24,11 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Settings panel layout constants ────────────────────────────────────── */
+#define SETTINGS_PANEL_W     680   /* total width of the settings panel     */
+#define SETTINGS_FS_ROW_Y    450   /* top-Y of the Fullscreen toggle row    */
+#define SETTINGS_FS_ROW_H     30   /* height of the Fullscreen toggle row   */
+
 /* ── Archive room glass shard constants ─────────────────────────────────── */
 #define ARCHIVE_GLASS_COUNT  6
 #define ARCHIVE_GLASS_SIZE  40
@@ -134,7 +139,8 @@ typedef struct {
     /* Settings menu */
     float  volume;                     /* 0–100 */
     float  brightness;                 /* 0–100 */
-    int    settings_focus;             /* 0=volume, 1=brightness */
+    int    fullscreen;                 /* 0=windowed, 1=fullscreen */
+    int    settings_focus;             /* 0=volume, 1=brightness, 2=fullscreen */
     Slider settings_volume_slider;
     Slider settings_brightness_slider;
     Button settings_back_button;

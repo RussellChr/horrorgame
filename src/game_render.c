@@ -237,7 +237,8 @@ void game_render_playing(Game *game)
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
-    if (game->pickup_notify_timer > 0.0f) {        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
+    /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
+    if (game->pickup_notify_timer > 0.0f) {
         float t = game->pickup_notify_timer; /* remaining time */
         float alpha_f;
         if (t > 2.2f)        alpha_f = (2.5f - t) / 0.3f;   /* fade in  */
@@ -276,7 +277,7 @@ void game_render_playing(Game *game)
         SDL_Renderer *r = game->renderer;
         int bar_w = 400, bar_h = 18;
         int bar_x = (WINDOW_W - bar_w) / 2;
-        int bar_y = WINDOW_H - 38;
+        int bar_y = WINDOW_H - 60;  /* above the "I:inv ESC:pause" hint at WINDOW_H-18 */
         /* Background */
         render_filled_rect(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 0, 0, 0, 200);
         render_rect_outline(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 150, 80, 80, 220);
@@ -289,7 +290,7 @@ void game_render_playing(Game *game)
         Uint8 bar_g = (Uint8)(frac * 180.0f);
         if (fill_w > 0)
             render_filled_rect(r, bar_x, bar_y, fill_w, bar_h, bar_r, bar_g, 30, 220);
-        render_text_centered(r, "Dizziness", bar_x + bar_w / 2, bar_y - 16, 1, 200, 160, 160);
+        render_text_centered(r, "Dizziness", bar_x + bar_w / 2, bar_y - 14, 1, 200, 160, 160);
     }
 }
 
@@ -904,10 +905,24 @@ void game_render_simon(Game *game)
 
 /* ── Tube-sort (medicine) minigame ────────────────────────────────────────── */
 
-/* Color palette: index 0=empty, 1=purple, 2=teal, 3=yellow, 4=pink */
-static const Uint8 tube_color_r[5] = {  40, 160,  30, 220, 220 };
-static const Uint8 tube_color_g[5] = {  40,  50, 200, 200,  50 };
-static const Uint8 tube_color_b[5] = {  40, 200, 160,  30, 180 };
+/* Color palette: index 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach
+ * Colors are matched to the reference image. */
+static const Uint8 tube_color_r[5] = {  25, 160,  20, 230, 235 };
+static const Uint8 tube_color_g[5] = {  20,  50, 195, 200, 160 };
+static const Uint8 tube_color_b[5] = {  30, 210, 165,  25, 130 };
+
+/* Layout constants – tube rows are centred horizontally in the 1280×720 window.
+ *   Top row : 4 tubes, spacing 130px, starting at x=405
+ *   Bottom row: 3 tubes, spacing 130px, starting at x=470
+ *   tube_h = 260, so bottom row bottoms out at 390+260=650 (hint text at 696) */
+#define TUBE_W         80
+#define TUBE_H        260
+#define TUBE_UNIT_H    58   /* height of one colour layer; 4×58=232 fits in 260 */
+#define TUBE_PAD_X      8   /* inner horizontal padding */
+#define TUBE_CAP_H     14   /* dark cap drawn at tube opening */
+
+static const int TUBE_X[7] = { 405, 535, 665, 795,  470, 600, 730 };
+static const int TUBE_Y[7] = { 100, 100, 100, 100,  390, 390, 390 };
 
 void game_render_tube_sort(Game *game)
 {
@@ -918,43 +933,45 @@ void game_render_tube_sort(Game *game)
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 10, 10, 20, 255);
 
     /* Title */
-    render_text_centered(r, "MEDICINE WORKBENCH", WINDOW_W / 2, 30, 2, 200, 200, 255);
-    render_text_centered(r, "Sort each tube to contain only one color",
-                         WINDOW_W / 2, 56, 1, 160, 160, 200);
+    render_text_centered(r, "MEDICINE WORKBENCH", WINDOW_W / 2, 24, 2, 200, 200, 255);
+    render_text_centered(r, "Sort each tube so it contains only one color",
+                         WINDOW_W / 2, 54, 1, 160, 160, 200);
     render_text_centered(r, "Click a tube to select, click another to pour",
-                         WINDOW_W / 2, 72, 1, 140, 140, 180);
-
-    /* Tube layout */
-    static const int tube_x[7] = {340,490,640,790, 415,565,715};
-    static const int tube_y[7] = {120,120,120,120, 430,430,430};
-    int tube_w = 80, tube_h = 280;
-    int unit_h = 60;
-    int tube_pad_x = 8;
+                         WINDOW_W / 2, 68, 1, 140, 140, 180);
 
     for (int i = 0; i < 7; i++) {
-        int tx = tube_x[i];
-        int ty = tube_y[i];
+        int tx = TUBE_X[i];
+        int ty = TUBE_Y[i];
         int is_sel = (game->tube_selected == i);
 
-        Uint8 outline_r2 = is_sel ? 255 : 120;
-        Uint8 outline_g2 = is_sel ? 255 :  80;
-        Uint8 outline_b2 = is_sel ? 100 :  80;
-        render_filled_rect(r, tx, ty, tube_w, tube_h, 25, 20, 30, 240);
-        render_rect_outline(r, tx, ty, tube_w, tube_h, outline_r2, outline_g2, outline_b2, 255);
+        /* Selection highlight: bright yellow outline, else subtle grey */
+        Uint8 ol_r = is_sel ? 255 : 130;
+        Uint8 ol_g = is_sel ? 230 :  90;
+        Uint8 ol_b = is_sel ?  50 :  80;
 
-        /* Draw color units from bottom up */
+        /* Tube body */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_H, 25, 20, 35, 245);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_H, ol_r, ol_g, ol_b, 255);
+
+        /* Colour layers (drawn bottom-up, slot 0 = bottom) */
         for (int j = 0; j < game->tube_count[i]; j++) {
             int col = game->tube_colors[i][j];
             if (col == 0) continue;
-            int uy = ty + tube_h - (j + 1) * unit_h;
-            int ux = tx + tube_pad_x;
-            int uw = tube_w - tube_pad_x * 2;
-            render_filled_rect(r, ux, uy, uw, unit_h - 2,
-                               tube_color_r[col], tube_color_g[col], tube_color_b[col], 230);
+            int uy = ty + TUBE_H - (j + 1) * TUBE_UNIT_H;
+            int ux = tx + TUBE_PAD_X;
+            int uw = TUBE_W - TUBE_PAD_X * 2;
+            render_filled_rect(r, ux, uy, uw, TUBE_UNIT_H - 2,
+                               tube_color_r[col], tube_color_g[col],
+                               tube_color_b[col], 230);
         }
 
+        /* Cap (dark rectangle at the tube opening / top edge) */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_CAP_H, 15, 12, 20, 255);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_CAP_H, ol_r, ol_g, ol_b, 200);
+
+        /* Selection arrow above the tube */
         if (is_sel) {
-            render_text_centered(r, "v", tx + tube_w / 2, ty - 16, 2, 255, 255, 100);
+            render_text_centered(r, "^", tx + TUBE_W / 2, ty - 18, 2, 255, 230, 50);
         }
     }
 

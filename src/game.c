@@ -1008,7 +1008,7 @@ void game_start_simon(Game *game)
 
 /* ── Tube-sort (medicine) minigame ──────────────────────────────────────── */
 
-/* Colors: 0=empty, 1=purple, 2=teal, 3=yellow, 4=pink */
+/* Colors: 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach */
 void game_start_tube_sort(Game *game)
 {
     if (!game) return;
@@ -1020,14 +1020,25 @@ void game_start_tube_sort(Game *game)
             game->tube_colors[i][j] = 0;
     }
 
-    /* Tube 0: bottom=purple,purple,purple, top=pink */
-    game->tube_colors[0][0]=1; game->tube_colors[0][1]=1; game->tube_colors[0][2]=1; game->tube_colors[0][3]=4; game->tube_count[0]=4;
-    /* Tube 1: bottom=purple, teal, yellow, top=teal */
-    game->tube_colors[1][0]=1; game->tube_colors[1][1]=2; game->tube_colors[1][2]=3; game->tube_colors[1][3]=2; game->tube_count[1]=4;
-    /* Tube 2: bottom=teal, pink, pink, top=yellow */
-    game->tube_colors[2][0]=2; game->tube_colors[2][1]=4; game->tube_colors[2][2]=4; game->tube_colors[2][3]=3; game->tube_count[2]=4;
-    /* Tube 3: bottom=pink, yellow, yellow, top=teal */
-    game->tube_colors[3][0]=4; game->tube_colors[3][1]=3; game->tube_colors[3][2]=3; game->tube_colors[3][3]=2; game->tube_count[3]=4;
+    /* Starting layout – 4 colours × 4 units = 16 units across 4 mixed tubes.
+     * Slot 0 = bottom, slot 3 = top.  Tubes 4-6 are empty buffer tubes. */
+
+    /* Tube 0: purple, purple, purple, salmon */
+    game->tube_colors[0][0]=1; game->tube_colors[0][1]=1;
+    game->tube_colors[0][2]=1; game->tube_colors[0][3]=4; game->tube_count[0]=4;
+
+    /* Tube 1: purple, teal, yellow, teal */
+    game->tube_colors[1][0]=1; game->tube_colors[1][1]=2;
+    game->tube_colors[1][2]=3; game->tube_colors[1][3]=2; game->tube_count[1]=4;
+
+    /* Tube 2: teal, salmon, salmon, yellow */
+    game->tube_colors[2][0]=2; game->tube_colors[2][1]=4;
+    game->tube_colors[2][2]=4; game->tube_colors[2][3]=3; game->tube_count[2]=4;
+
+    /* Tube 3: salmon, yellow, yellow, teal */
+    game->tube_colors[3][0]=4; game->tube_colors[3][1]=3;
+    game->tube_colors[3][2]=3; game->tube_colors[3][3]=2; game->tube_count[3]=4;
+
     /* Tubes 4, 5, 6: empty (already zeroed) */
 
     game->tube_selected = -1;
@@ -1675,9 +1686,10 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             float mx = game->mouse_x, my = game->mouse_y;
-            static const int tube_x[7] = {340,490,640,790, 415,565,715};
-            static const int tube_y[7] = {120,120,120,120, 430,430,430};
-            int tube_w = 80, tube_h = 280;
+            /* Layout must match game_render_tube_sort (TUBE_X/TUBE_Y/TUBE_W/TUBE_H) */
+            static const int tube_x[7] = { 405, 535, 665, 795,  470, 600, 730 };
+            static const int tube_y[7] = { 100, 100, 100, 100,  390, 390, 390 };
+            int tube_w = 80, tube_h = 260;
             int clicked_tube = -1;
             for (int i = 0; i < 7; i++) {
                 if (mx >= tube_x[i] && mx <= tube_x[i] + tube_w &&

@@ -239,13 +239,13 @@ void game_handle_interaction(Game *game)
     /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
     if (loc_id == 2) {
         if (tid == 96) {
-            /* Tile 6: level-2 keycard exit panel – starts the dodge attack */
+            /* Tile 6: level-2 keycard exit panel – cutscene then dodge attack */
             if (player_check_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON)) {
                 game_set_simple_dialogue(game, "Richard",
                                          "The Level-2 exit lock is already open.",
                                          NULL);
             } else if (player_has_item(game->player, ITEM_ID_KEYCARD_L2)) {
-                game_start_dodge(game);
+                game_start_hallway_exit_cutscene(game);
                 return;
             } else {
                 game_set_simple_dialogue(game, "Richard",

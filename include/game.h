@@ -55,7 +55,8 @@ typedef struct DecodedAudio {
 typedef enum {
     CUTSCENE_HIBERNATION,   /* opening cutscene shown on new game    */
     CUTSCENE_SECURITY,      /* security-room passcode cutscene       */
-    CUTSCENE_POWER          /* power-room cutscene after simon win   */
+    CUTSCENE_POWER,         /* power-room cutscene after simon win   */
+    CUTSCENE_HALLWAY_EXIT   /* hallway level-2 door: access denied, then monster attack */
 } CutsceneType;
 
 /* ── Game states ──────────────────────────────────────────────────────── */
@@ -224,6 +225,7 @@ typedef struct {
     SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
     SDL_Texture  *hibernation_cutscene_textures[3]; /* hibernation opening scenes */
     SDL_Texture  *power_cutscene_textures[3];    /* power-room win scenes      */
+    SDL_Texture  *hallway_exit_cutscene_textures[2]; /* end0.png / end1.png    */
     int           cutscene_index;                /* current scene 0–N  */
     CutsceneType  cutscene_type;                 /* which cutscene is active   */
     int           security_cutscene_played;      /* 1 once shown       */
@@ -294,6 +296,7 @@ void game_start_dodge(Game *game);
 void game_start_security_cutscene(Game *game);
 void game_start_hibernation_cutscene(Game *game);
 void game_start_power_cutscene(Game *game);
+void game_start_hallway_exit_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 

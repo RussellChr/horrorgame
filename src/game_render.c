@@ -809,6 +809,9 @@ void game_render_cutscene(Game *game)
     } else if (game->cutscene_type == CUTSCENE_POWER) {
         textures    = game->power_cutscene_textures;
         scene_count = 3;
+    } else if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+        textures    = game->hallway_exit_cutscene_textures;
+        scene_count = 2;
     } else {
         textures    = game->security_cutscene_textures;
         scene_count = 4;

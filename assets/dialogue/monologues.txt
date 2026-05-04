@@ -117,7 +117,7 @@ You found a keycard. Why am I feeling dizzy? The gas might have entered through 
 [lab_medicine_made]
 Richard
 ---
-The medicine has been made. I dont think it's safe but it's worth the shot. Oh, I'm no longer dizzy.
+The medicine has been made. I don't think it's safe but it's worth the shot. Oh, I'm no longer dizzy.
 ---
 
 [lab_medicine_death]

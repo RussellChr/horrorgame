@@ -57,17 +57,49 @@ const char *story_get_objective(const Player *player)
 {
     if (!player) return "Find a way to open the door";
 
+    /* Step 9 – escape */
+    if (player_check_flag(player, FLAG_ARCHIVE_KEYCARD2_COLLECTED))
+        return "Use the Level-2 Keycard to reach the exit";
+
+    /* Step 8 – inner archive door open, find the lvl-2 keycard */
+    if (player_check_flag(player, FLAG_ARCHIVE_INNER_DOOR_OPENED))
+        return "Find the Level-2 Keycard in the archive";
+
+    /* Step 7 – inside archive, open the inner door */
+    if (player_check_flag(player, FLAG_ARCHIVE_UNLOCKED))
+        return "Find a way to open the inner archive door";
+
+    /* Step 6 – have keycard, go unlock the archive */
     if (player_check_flag(player, FLAG_KEYCARD_COLLECTED))
         return "Use the keycard to unlock the archive";
 
+    /* Step 5 – passcode done, go find keycard in lab */
     if (player_check_flag(player, FLAG_SECURITY_PASSCODE_DONE))
         return "Find the keycard in the lab";
 
+    /* Step 4 – power on, go to security room to find the access code */
     if (player_check_flag(player, FLAG_POWER_GENERATOR_ON))
         return "Find the security access code";
 
-    if (player_check_flag(player, FLAG_HIBERN_POWERCELL_PLACED))
-        return "Restore power to the facility";
+    /* Step 3b – both fuel tanks placed, open valves and start generator */
+    if (player_check_flag(player, FLAG_POWER_FUELTANK2_PLACED))
+        return "Open both valves and start the generator";
 
-    return "Find a way to open the door";
+    /* Step 3a – first fuel placed, collect and place second tank */
+    if (player_check_flag(player, FLAG_POWER_FUELTANK1_PLACED))
+        return "Place the second fuel tank and open the valves";
+
+    /* Step 2 – fuel collected, place it in the power room */
+    if (player_check_flag(player, FLAG_POWER_FUELTANK1_COLLECTED))
+        return "Place the fuel tanks in the power room slots";
+
+    /* Step 1 – door unlocked, head to the power room */
+    if (player_check_flag(player, FLAG_HIBERN_POWERCELL_PLACED))
+        return "Go to the power room and restore power to the facility";
+
+    /* Step 0 – starting state, find the power cell in Hibernation */
+    if (player_check_flag(player, FLAG_HIBERN_POWERCELL_COLLECTED))
+        return "Insert the power cell into the slot to open the door";
+
+    return "Find something to power the door";
 }

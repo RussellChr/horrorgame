@@ -288,6 +288,66 @@ void game_handle_interaction(Game *game)
             } else {
                 game_set_dialogue_tree(game, "hallway_nothing", 2);
             }
+        } else if (tid == 93) {
+            /* Security room door: locked until the generator is powered on */
+            if (player_check_flag(game->player, FLAG_POWER_GENERATOR_ON)) {
+                /* Unlock: remove door3 colliders and convert to exit trigger */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc && hwloc->door3_collider_count > 0)
+                    hwloc->collider_count = hwloc->door3_collider_start;
+                Location *secloc = world_get_location(game->world, LOCATION_SECURITY);
+                if (hwloc) {
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 93) {
+                            hwloc->triggers[i].target_location_id = LOCATION_SECURITY;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (secloc) {
+                                hwloc->triggers[i].spawn_x = secloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = secloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (secloc)
+                    game_change_location(game, LOCATION_SECURITY,
+                                         secloc->spawn_x, secloc->spawn_y);
+                return;
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "The security room is locked.",
+                                         "I need to restore power to the facility first.");
+            }
+        } else if (tid == 94) {
+            /* Lab door: locked until the security passcode is entered */
+            if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE)) {
+                /* Unlock: remove door2 colliders and convert to exit trigger */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc && hwloc->door2_collider_count > 0)
+                    hwloc->collider_count = hwloc->door2_collider_start;
+                Location *labloc = world_get_location(game->world, LOCATION_LAB);
+                if (hwloc) {
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 94) {
+                            hwloc->triggers[i].target_location_id = LOCATION_LAB;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (labloc) {
+                                hwloc->triggers[i].spawn_x = labloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = labloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (labloc)
+                    game_change_location(game, LOCATION_LAB,
+                                         labloc->spawn_x, labloc->spawn_y);
+                return;
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "The lab is sealed.",
+                                         "I need the security access code first.");
+            }
         } else if (tid == 95) {
             /* Tile 5: archive door – locked until player has keycard */
             if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
@@ -311,7 +371,35 @@ void game_handle_interaction(Game *game)
                 if (aloc)
                     game_change_location(game, 0, aloc->spawn_x, aloc->spawn_y);
                 return;
-            } else if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
+            } else if (player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
+                /* Door was already unlocked (e.g. loaded save): re-apply the
+                   open state and teleport (trigger should have been converted
+                   to an exit trigger by game_do_load, but handle it here as a
+                   fallback in case the trigger was not yet converted). */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc) {
+                    if (hwloc->door_collider_count > 0 &&
+                        hwloc->collider_count > hwloc->door_collider_start)
+                        hwloc->collider_count = hwloc->door_collider_start;
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 95) {
+                            Location *aloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                            hwloc->triggers[i].target_location_id = LOCATION_ARCHIVE;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (aloc) {
+                                hwloc->triggers[i].spawn_x = aloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = aloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                Location *aloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                if (aloc)
+                    game_change_location(game, LOCATION_ARCHIVE,
+                                         aloc->spawn_x, aloc->spawn_y);
+                return;
+            } else {
                 game_set_dialogue_tree(game, "archive_door_locked", 2);
             }
         }

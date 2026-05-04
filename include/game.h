@@ -24,10 +24,17 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Settings panel layout constants ────────────────────────────────────── */
+#define SETTINGS_PANEL_W     680   /* total width of the settings panel     */
+#define SETTINGS_FS_ROW_Y    450   /* top-Y of the Fullscreen toggle row    */
+#define SETTINGS_FS_ROW_H     30   /* height of the Fullscreen toggle row   */
+
 /* ── Archive room glass shard constants ─────────────────────────────────── */
 #define ARCHIVE_GLASS_COUNT  6
 #define ARCHIVE_GLASS_SIZE  40
 extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
+
+#define DODGE_MAX_BULLETS  128
 
 typedef struct DecodedAudio {
     SDL_AudioSpec    spec;
@@ -53,7 +60,8 @@ typedef struct DecodedAudio {
 typedef enum {
     CUTSCENE_HIBERNATION,   /* opening cutscene shown on new game    */
     CUTSCENE_SECURITY,      /* security-room passcode cutscene       */
-    CUTSCENE_POWER          /* power-room cutscene after simon win   */
+    CUTSCENE_POWER,         /* power-room cutscene after simon win   */
+    CUTSCENE_HALLWAY_EXIT   /* hallway level-2 door: access denied, then monster attack */
 } CutsceneType;
 
 /* ── Game states ──────────────────────────────────────────────────────── */
@@ -68,6 +76,7 @@ typedef enum {
     GAME_STATE_LOCKER,
     GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
+    GAME_STATE_DODGE,
     GAME_STATE_JUMPSCARE,
     GAME_STATE_MONSTER_DEATH_CUTSCENE,
     GAME_STATE_GAME_OVER,
@@ -131,7 +140,8 @@ typedef struct {
     /* Settings menu */
     float  volume;                     /* 0–100 */
     float  brightness;                 /* 0–100 */
-    int    settings_focus;             /* 0=volume, 1=brightness */
+    int    fullscreen;                 /* 0=windowed, 1=fullscreen */
+    int    settings_focus;             /* 0=volume, 1=brightness, 2=fullscreen */
     Slider settings_volume_slider;
     Slider settings_brightness_slider;
     Button settings_back_button;
@@ -200,7 +210,12 @@ typedef struct {
 
     /* Door and looping hospital atmosphere MP3s */
     DecodedAudio door_open_audio;
-    DecodedAudio ambient_ost_audio;
+    DecodedAudio ambient_ost_audio;    /* archive room: OST NTE Abandoned Hospital  */
+    DecodedAudio monster_theme_audio;  /* hallway dodge minigame theme              */
+    DecodedAudio menu_music_audio;     /* main menu: OPPhasmophobia music box       */
+    DecodedAudio room1_music_audio;    /* chamber room: Room1Edge of Eternity       */
+    DecodedAudio room2_music_audio;    /* after leaving chamber: Room2Phantoms      */
+    DecodedAudio room3_music_audio;    /* after code puzzle: Room3Locked Horrors    */
     float        am_audio_pause_timer;
 
     /* Enemy patrol / chase system */
@@ -221,6 +236,7 @@ typedef struct {
     SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
     SDL_Texture  *hibernation_cutscene_textures[3]; /* hibernation opening scenes */
     SDL_Texture  *power_cutscene_textures[3];    /* power-room win scenes      */
+    SDL_Texture  *hallway_exit_cutscene_textures[2]; /* end0.png / end1.png    */
     int           cutscene_index;                /* current scene 0–N  */
     CutsceneType  cutscene_type;                 /* which cutscene is active   */
     int           security_cutscene_played;      /* 1 once shown       */
@@ -245,6 +261,21 @@ typedef struct {
     int   simon_lit_button;      /* which button is lit right now (-1 = none)      */
     int   simon_death_triggered;   /* 1 if player failed the Simon game            */
     int   simon_jumpscare_played;  /* 1 after the jumpscare has been shown once    */
+
+    /* Undertale-style dodge minigame for the hallway level-2 exit */
+    float dodge_heart_x;
+    float dodge_heart_y;
+    int   dodge_hp;
+    int   dodge_round;
+    float dodge_elapsed;
+    float dodge_spawn_timer;
+    float dodge_invuln_timer;
+    int   dodge_bullet_count;
+    float dodge_bullet_x[DODGE_MAX_BULLETS];
+    float dodge_bullet_y[DODGE_MAX_BULLETS];
+    float dodge_bullet_vx[DODGE_MAX_BULLETS];
+    float dodge_bullet_vy[DODGE_MAX_BULLETS];
+    int   dodge_bullet_active[DODGE_MAX_BULLETS];
 
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
@@ -283,9 +314,11 @@ void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
 void game_start_tube_sort(Game *game);
+void game_start_dodge(Game *game);
 void game_start_security_cutscene(Game *game);
 void game_start_hibernation_cutscene(Game *game);
 void game_start_power_cutscene(Game *game);
+void game_start_hallway_exit_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -299,6 +332,7 @@ void game_render_locker(Game *game);
 void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
 void game_render_tube_sort(Game *game);
+void game_render_dodge(Game *game);
 void game_render_jumpscare(Game *game);
 void game_render_game_over(Game *game);
 void game_render_archive_book(Game *game);

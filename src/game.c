@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Archive book constants ─────────────────────────────────────────────── */
 #define ARCHIVE_BOOK_TRANSITION_DURATION  0.3f  /* seconds for black-screen page turn */
@@ -134,6 +135,20 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
+/* ── Hallway dodge minigame constants ─────────────────────────────────── */
+#define DODGE_BOX_X         440.0f
+#define DODGE_BOX_Y         170.0f
+#define DODGE_BOX_W         400.0f
+#define DODGE_BOX_H         330.0f
+#define DODGE_HEART_SIZE     18.0f
+#define DODGE_HEART_SPEED   260.0f
+#define DODGE_MAX_HP          7
+#define DODGE_ROUNDS          5
+#define DODGE_ROUND_DURATION 18.0f
+#define DODGE_SPAWN_EVERY     0.28f
+#define DODGE_BULLET_SIZE    14.0f
+#define DODGE_HIT_INVULN      0.9f
+
 /* ── Security cutscene texts ───────────────────────────────────────────── */
 static const char * const security_cutscene_texts[4] = {
     "The noise is making my head hurt... I have to find a way to silence "
@@ -160,6 +175,13 @@ static const char * const power_cutscene_texts[3] = {
     "well.. too late now."
 };
 
+/* ── Hallway exit cutscene texts ─────────────────────────────────────────── */
+static const char * const hallway_exit_cutscene_texts[2] = {
+    "I need to get out of here... come on, open! ACCESS DENIED?! No no no...",
+    "Wait-- what is that noise?! It's right behind me!"
+    "Well, No more running I guess."
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static void decoded_audio_free(DecodedAudio *audio)
@@ -174,6 +196,35 @@ static void decoded_audio_free(DecodedAudio *audio)
         audio->buf = NULL;
     }
     audio->len = 0;
+}
+
+static void game_set_simple_dialogue(Game *game,
+                                     const char *speaker,
+                                     const char *line1,
+                                     const char *line2)
+{
+    if (!game || !line1) return;
+    if (game->dialogue_tree) {
+        dialogue_tree_destroy(game->dialogue_tree);
+        game->dialogue_tree = NULL;
+    }
+
+    DialogueTree *tree = dialogue_tree_create();
+    if (!tree) return;
+
+    DialogueNode *first = dialogue_add_node(tree, 0, speaker ? speaker : "",
+                                            line1, line2 ? 0 : 1);
+    if (line2 && first) {
+        DialogueChoice next;
+        memset(&next, 0, sizeof(next));
+        next.id = 0;
+        next.next_node_id = 1;
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        dialogue_add_choice(first, &next);
+        dialogue_add_node(tree, 1, speaker ? speaker : "", line2, 1);
+    }
+
+    game->dialogue_tree = tree;
 }
 
 static int decoded_audio_append(DecodedAudio *audio,
@@ -336,9 +387,76 @@ static void decoded_audio_play_once(DecodedAudio *audio)
     SDL_ResumeAudioStreamDevice(audio->stream);
 }
 
-static void ambient_ost_start(Game *game)
+/* Returns the DecodedAudio that should be looping right now, or NULL. */
+static DecodedAudio *music_current_track(Game *game)
 {
-    DecodedAudio *audio = &game->ambient_ost_audio;
+    if (!game) return NULL;
+
+    /* Menu-only screens always use the menu music. */
+    GameState s = game->state;
+    if (s == GAME_STATE_MENU ||
+        s == GAME_STATE_NEW_LOAD_MENU ||
+        s == GAME_STATE_SETTINGS ||
+        s == GAME_STATE_GAME_OVER)
+        return &game->menu_music_audio;
+
+    /* In-game: select by location and story progress. */
+    if (!game->player) return &game->menu_music_audio;
+
+    int loc = game->player->current_location_id;
+    if (loc == LOCATION_ARCHIVE)
+        return &game->ambient_ost_audio;     /* archive room */
+    if (loc == LOCATION_HIBERNATION)
+        return &game->room1_music_audio;     /* chamber room */
+    if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE))
+        return &game->room3_music_audio;     /* after code puzzle solved */
+    return &game->room2_music_audio;         /* after leaving chamber room */
+}
+
+/* Called every frame: loops the correct background music track and silences
+ * all others.  The dodge-minigame monster theme is managed separately. */
+static void music_update(Game *game)
+{
+    if (!game) return;
+
+    DecodedAudio *tracks[] = {
+        &game->menu_music_audio,
+        &game->room1_music_audio,
+        &game->room2_music_audio,
+        &game->room3_music_audio,
+        &game->ambient_ost_audio,
+    };
+    const int n_tracks = (int)(sizeof(tracks) / sizeof(tracks[0]));
+
+    DecodedAudio *active = music_current_track(game);
+    float gain = game->volume / 100.0f;
+
+    /* Pause music when: AM recording is playing, or dodge minigame is active */
+    int should_pause = (game->state == GAME_STATE_DODGE) ||
+                       (game->am_audio_pause_timer > 0.0f);
+
+    for (int i = 0; i < n_tracks; i++) {
+        DecodedAudio *a = tracks[i];
+        if (!a->stream || !a->buf || a->len > (Uint32)SDL_MAX_SINT32) continue;
+        if (a == active) {
+            SDL_SetAudioStreamGain(a->stream, gain);
+            if (should_pause) {
+                SDL_PauseAudioStreamDevice(a->stream);
+            } else {
+                if (SDL_GetAudioStreamAvailable(a->stream) < (int)(a->len / 2))
+                    SDL_PutAudioStreamData(a->stream, a->buf, (int)a->len);
+                SDL_ResumeAudioStreamDevice(a->stream);
+            }
+        } else {
+            SDL_ClearAudioStream(a->stream);
+            SDL_PauseAudioStreamDevice(a->stream);
+        }
+    }
+}
+
+static void monster_theme_start(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
     if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
         return;
 
@@ -347,19 +465,27 @@ static void ambient_ost_start(Game *game)
     SDL_ResumeAudioStreamDevice(audio->stream);
 }
 
-static void ambient_ost_update(Game *game)
+static void monster_theme_stop(Game *game)
 {
-    DecodedAudio *audio = &game->ambient_ost_audio;
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream) return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PauseAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_update(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
     if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
         return;
 
-    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
-
-    if (game->am_audio_pause_timer > 0.0f) {
+    if (game->state != GAME_STATE_DODGE) {
         SDL_PauseAudioStreamDevice(audio->stream);
         return;
     }
 
+    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
     if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
         SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
     SDL_ResumeAudioStreamDevice(audio->stream);
@@ -385,10 +511,19 @@ static Button make_button(float x, float y, float w, float h,
     return b;
 }
 
+static void toggle_fullscreen(Game *game)
+{
+    if (!game) return;
+    game->fullscreen = !game->fullscreen;
+    SDL_SetWindowFullscreen(game->window,
+        game->fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+}
+
 static void game_start_monster_death_cutscene(Game *game)
 {
     if (!game) return;
 
+    monster_theme_stop(game);
     video_player_close(game->monster_death_player);
     game->monster_death_player =
         video_player_open(game->renderer, "assets/cutscene/deathbymonster.mov");
@@ -444,8 +579,9 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         slx, 230.0f + (float)SAVE_SLOT_COUNT * (slh + 12.0f), slw, slh, "Cancel");
 
     /* Settings defaults */
-    g->volume     = 100.0f;
-    g->brightness = 100.0f;
+    g->volume      = 100.0f;
+    g->brightness  = 100.0f;
+    g->fullscreen  = 0;
     g->settings_focus = 0;
     float sw = 400.0f, sh = 24.0f;
     float sx = (WINDOW_W - sw) / 2.0f + 60.0f;   /* offset right to leave room for label */
@@ -453,7 +589,7 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     slider_init(&g->settings_brightness_slider, sx, 380.0f, sw, sh, 0.0f, 100.0f, 100.0f);
     float bbw = 200.0f, bbh = 48.0f;
     g->settings_back_button = make_button(
-        (WINDOW_W - bbw) / 2.0f, 460.0f, bbw, bbh, "Back");
+        (WINDOW_W - bbw) / 2.0f, 530.0f, bbw, bbh, "Back");
 
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
@@ -504,6 +640,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->power_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/power_cut_2.jpg");
     g->power_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/power_cut_3.jpg");
 
+    /* Load hallway exit cutscene images (access-denied + monster attack) */
+    g->hallway_exit_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/end0.png");
+    g->hallway_exit_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/end1.png");
+
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
                     &g->am_wav_buf, &g->am_wav_len)) {
@@ -533,6 +673,21 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     if (!decoded_audio_load_mp3(&g->ambient_ost_audio,
                                 "assets/OST/OST NTE - Abandoned Hospital.mp3"))
         SDL_Log("game_init: failed to load abandoned hospital OST");
+    if (!decoded_audio_load_mp3(&g->monster_theme_audio,
+                                "assets/OST/monstertheme.mp3"))
+        SDL_Log("game_init: failed to load monster theme OST");
+    if (!decoded_audio_load_mp3(&g->menu_music_audio,
+                                "assets/OST/OPPhasmophobia music box FULL.mp3"))
+        SDL_Log("game_init: failed to load menu music OST");
+    if (!decoded_audio_load_mp3(&g->room1_music_audio,
+                                "assets/OST/Room1Edge of Eternity.mp3"))
+        SDL_Log("game_init: failed to load room1 OST");
+    if (!decoded_audio_load_mp3(&g->room2_music_audio,
+                                "assets/OST/Room2Phantoms.mp3"))
+        SDL_Log("game_init: failed to load room2 OST");
+    if (!decoded_audio_load_mp3(&g->room3_music_audio,
+                                "assets/OST/Room3Locked Horrors.mp3"))
+        SDL_Log("game_init: failed to load room3 OST");
 
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
@@ -579,6 +734,8 @@ void game_cleanup(Game *game)
         render_texture_destroy(game->hibernation_cutscene_textures[i]);
     for (int i = 0; i < 3; i++)
         render_texture_destroy(game->power_cutscene_textures[i]);
+    for (int i = 0; i < 2; i++)
+        render_texture_destroy(game->hallway_exit_cutscene_textures[i]);
     dialogue_unload_texture(&game->cutscene_dialogue_state);
     if (game->cutscene_dialogue_tree) {
         dialogue_tree_destroy(game->cutscene_dialogue_tree);
@@ -590,6 +747,11 @@ void game_cleanup(Game *game)
     if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
     decoded_audio_free(&game->door_open_audio);
     decoded_audio_free(&game->ambient_ost_audio);
+    decoded_audio_free(&game->monster_theme_audio);
+    decoded_audio_free(&game->menu_music_audio);
+    decoded_audio_free(&game->room1_music_audio);
+    decoded_audio_free(&game->room2_music_audio);
+    decoded_audio_free(&game->room3_music_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
     video_player_close(game->monster_death_player);
@@ -696,7 +858,6 @@ void game_start_new(Game *game)
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
     game->am_audio_pause_timer     = 0.0f;
-    ambient_ost_start(game);
 
     /* Show the hibernation opening cutscene */
     game_start_hibernation_cutscene(game);
@@ -830,6 +991,66 @@ static void game_do_load(Game *game, int slot)
             archive->collider_count = archive->door_collider_start;
     }
 
+    /* Restore hallway door states based on saved story flags.
+     * Doors are stacked in the collider array (archive < lab < security),
+     * so they must be removed in reverse unlock order (security first). */
+    {
+        Location *hallway = world_get_location(game->world, LOCATION_HALLWAY);
+        if (hallway) {
+            /* Security door (tile 3, trigger 93): open once generator is on */
+            if (player_check_flag(game->player, FLAG_POWER_GENERATOR_ON) &&
+                hallway->door3_collider_count > 0) {
+                hallway->collider_count = hallway->door3_collider_start;
+                Location *secloc = world_get_location(game->world, LOCATION_SECURITY);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 93) {
+                        hallway->triggers[i].target_location_id = LOCATION_SECURITY;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (secloc) {
+                            hallway->triggers[i].spawn_x = secloc->spawn_x;
+                            hallway->triggers[i].spawn_y = secloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Lab door (tile 4, trigger 94): open once passcode is done */
+            if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE) &&
+                hallway->door2_collider_count > 0) {
+                hallway->collider_count = hallway->door2_collider_start;
+                Location *labloc = world_get_location(game->world, LOCATION_LAB);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 94) {
+                        hallway->triggers[i].target_location_id = LOCATION_LAB;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (labloc) {
+                            hallway->triggers[i].spawn_x = labloc->spawn_x;
+                            hallway->triggers[i].spawn_y = labloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Archive door (tile 5, trigger 95): open once keycard is used */
+            if (player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
+                hallway->door_collider_count > 0) {
+                hallway->collider_count = hallway->door_collider_start;
+                Location *arcloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 95) {
+                        hallway->triggers[i].target_location_id = LOCATION_ARCHIVE;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (arcloc) {
+                            hallway->triggers[i].spawn_x = arcloc->spawn_x;
+                            hallway->triggers[i].spawn_y = arcloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     /* Re-init enemy */
     enemy_free(&game->enemy);
     {
@@ -890,7 +1111,6 @@ static void game_do_load(Game *game, int slot)
     game->simon_death_triggered   = 0;
     game->simon_jumpscare_played  = 0;
     game->am_audio_pause_timer    = 0.0f;
-    ambient_ost_start(game);
 }
 
 void game_change_location(Game *game, int location_id,
@@ -1006,6 +1226,7 @@ void game_start_simon(Game *game)
     game->state = GAME_STATE_SIMON;
 }
 
+
 /* ── Tube-sort (medicine) minigame ──────────────────────────────────────── */
 
 /* Colors: 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach */
@@ -1044,6 +1265,216 @@ void game_start_tube_sort(Game *game)
     game->tube_selected = -1;
     game->tube_sort_done = 0;
     game->state = GAME_STATE_TUBE_SORT;
+
+static void dodge_clear_bullets(Game *game)
+{
+    if (!game) return;
+    game->dodge_bullet_count = 0;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++)
+        game->dodge_bullet_active[i] = 0;
+}
+
+static void dodge_begin_round(Game *game, int round)
+{
+    if (!game) return;
+    game->dodge_round        = round;
+    game->dodge_hp           = DODGE_MAX_HP;
+    game->dodge_elapsed      = 0.0f;
+    game->dodge_invuln_timer = 0.0f;
+    game->dodge_heart_x      = DODGE_BOX_X + DODGE_BOX_W * 0.5f;
+    game->dodge_heart_y      = DODGE_BOX_Y + DODGE_BOX_H * 0.72f;
+    game->dodge_spawn_timer  = (round == 1) ? 0.20f :
+                               (round == 2) ? 0.12f :
+                               (round == 3) ? 0.16f :
+                               (round == 4) ? 0.10f : 0.25f;
+    dodge_clear_bullets(game);
+}
+
+void game_start_dodge(Game *game)
+{
+    if (!game) return;
+    dodge_begin_round(game, 1);
+    monster_theme_start(game);
+    game->state = GAME_STATE_DODGE;
+}
+
+static void dodge_spawn_bullet_raw(Game *game,
+                                   float x, float y,
+                                   float vx, float vy)
+{
+    if (!game) return;
+
+    int slot = -1;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++) {
+        if (!game->dodge_bullet_active[i]) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return;
+
+    game->dodge_bullet_x[slot] = x;
+    game->dodge_bullet_y[slot] = y;
+    game->dodge_bullet_vx[slot] = vx;
+    game->dodge_bullet_vy[slot] = vy;
+    game->dodge_bullet_active[slot] = 1;
+    if (slot >= game->dodge_bullet_count)
+        game->dodge_bullet_count = slot + 1;
+}
+
+static void dodge_spawn_aimed_bullet(Game *game, int from_corner)
+{
+    if (!game) return;
+
+    int side = rand() % 4;
+    float speed = (from_corner ? 230.0f : 165.0f) + (float)(rand() % 110);
+    float tx = DODGE_BOX_X + 25.0f + (float)(rand() % ((int)DODGE_BOX_W - 50));
+    float ty = DODGE_BOX_Y + 25.0f + (float)(rand() % ((int)DODGE_BOX_H - 50));
+    float x = tx, y = ty;
+
+    if (from_corner) {
+        int corner = rand() % 4;
+        x = (corner == 0 || corner == 2)
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = (corner == 0 || corner == 1)
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        tx = game->dodge_heart_x + (float)((rand() % 81) - 40);
+        ty = game->dodge_heart_y + (float)((rand() % 81) - 40);
+    } else if (side == 0) {
+        x = DODGE_BOX_X - DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 1) {
+        x = DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 2) {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    } else {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+    }
+
+    float dx = tx - x;
+    float dy = ty - y;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 1.0f) len = 1.0f;
+
+    dodge_spawn_bullet_raw(game, x, y, dx / len * speed, dy / len * speed);
+}
+
+static void dodge_spawn_lane_bullet(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    float speed = 250.0f + (float)(rand() % 80);
+    if (horizontal) {
+        int lane = rand() % 5;
+        float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+        int left_to_right = rand() % 2;
+        float x = left_to_right
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               left_to_right ? speed : -speed, 0.0f);
+    } else {
+        int lane = rand() % 6;
+        float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+        int top_to_bottom = rand() % 2;
+        float y = top_to_bottom
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               0.0f, top_to_bottom ? speed : -speed);
+    }
+}
+
+static void dodge_spawn_rain_bullet(Game *game)
+{
+    if (!game) return;
+
+    float x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+    float y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    float vx = (float)((rand() % 181) - 90);
+    float vy = 270.0f + (float)(rand() % 90);
+    dodge_spawn_bullet_raw(game, x, y, vx, vy);
+
+    if ((rand() % 4) == 0) {
+        x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        vx = (float)((rand() % 141) - 70);
+        vy = -230.0f - (float)(rand() % 70);
+        dodge_spawn_bullet_raw(game, x, y, vx, vy);
+    }
+}
+
+static void dodge_spawn_wall_attack(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    int left_or_top = rand() % 2;
+    float speed = 260.0f + (float)(rand() % 80);
+
+    if (horizontal) {
+        int gap = rand() % 5;
+        for (int lane = 0; lane < 5; lane++) {
+            if (lane == gap) continue;
+            float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+            float x = left_or_top
+                ? DODGE_BOX_X - DODGE_BULLET_SIZE
+                : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   left_or_top ? speed : -speed, 0.0f);
+        }
+    } else {
+        int gap = rand() % 6;
+        for (int lane = 0; lane < 6; lane++) {
+            if (lane == gap) continue;
+            float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+            float y = left_or_top
+                ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+                : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   0.0f, left_or_top ? speed : -speed);
+        }
+    }
+}
+
+static void dodge_spawn_round_attack(Game *game)
+{
+    if (!game) return;
+    if (game->dodge_round == 1) {
+        dodge_spawn_aimed_bullet(game, 0);
+    } else if (game->dodge_round == 2) {
+        dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 3) {
+        dodge_spawn_aimed_bullet(game, 1);
+        if ((rand() % 3) == 0)
+            dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 4) {
+        dodge_spawn_rain_bullet(game);
+    } else {
+        dodge_spawn_wall_attack(game);
+        if ((rand() % 2) == 0)
+            dodge_spawn_aimed_bullet(game, 1);
+    }
+}
+
+static float dodge_round_spawn_interval(const Game *game)
+{
+    if (!game) return DODGE_SPAWN_EVERY;
+    switch (game->dodge_round) {
+    case 1: return 0.30f; /* aimed edge shots */
+    case 2: return 0.22f; /* straight lane sweeps */
+    case 3: return 0.24f; /* corner shots with lane pressure */
+    case 4: return 0.16f; /* rain with drifting bullets */
+    case 5: return 0.55f; /* wall waves with a single gap */
+    default: return DODGE_SPAWN_EVERY;
+    }
+
 }
 
 /* ── Security cutscene ─────────────────────────────────────────────────── */
@@ -1126,6 +1557,31 @@ void game_start_power_cutscene(Game *game)
     game->state = GAME_STATE_CUTSCENE;
 }
 
+/* ── Hallway exit cutscene (access denied + monster attack) ─────────────── */
+
+void game_start_hallway_exit_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_HALLWAY_EXIT;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      hallway_exit_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -1133,8 +1589,13 @@ void game_handle_event(Game *game, SDL_Event *event)
     if (!game || !event) return;
 
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        game->mouse_x = event->motion.x;
-        game->mouse_y = event->motion.y;
+        /* Convert physical window coordinates to logical renderer coordinates.
+           SDL_SetRenderLogicalPresentation creates a mismatch: mouse events
+           report raw physical pixels while all rendering and hit-testing uses
+           the 1280×720 logical canvas, so we must map before storing. */
+        SDL_RenderCoordinatesFromWindow(game->renderer,
+                                        event->motion.x, event->motion.y,
+                                        &game->mouse_x, &game->mouse_y);
     }
     game->mouse_clicked = 0;
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
@@ -1415,6 +1876,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     } else if (game->cutscene_type == CUTSCENE_POWER) {
                         scene_count = 3;
                         texts = power_cutscene_texts;
+                    } else if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                        scene_count = 2;
+                        texts = hallway_exit_cutscene_texts;
                     } else {
                         scene_count = 4;
                         texts = security_cutscene_texts;
@@ -1427,8 +1891,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                         game->cutscene_dialogue_tree = NULL;
                     }
                     if (game->cutscene_index >= scene_count) {
-                        /* All scenes done – return to gameplay */
-                        game->state = GAME_STATE_PLAYING;
+                        /* All scenes done – transition based on cutscene type */
+                        if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                            game_start_dodge(game);
+                        } else {
+                            game->state = GAME_STATE_PLAYING;
+                        }
                     } else {
                         /* Load next scene */
                         game->cutscene_dialogue_tree = dialogue_tree_create();
@@ -1579,14 +2047,14 @@ void game_handle_event(Game *game, SDL_Event *event)
                 if (game->settings_focus > 0) game->settings_focus--;
                 break;
             case SDLK_DOWN:
-                if (game->settings_focus < 1) game->settings_focus++;
+                if (game->settings_focus < 2) game->settings_focus++;
                 break;
             case SDLK_LEFT:
                 if (game->settings_focus == 0) {
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value - 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value - 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
@@ -1597,14 +2065,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value + 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value + 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
                 }
                 break;
             case SDLK_RETURN:
-                game->state = GAME_STATE_MENU;
+            case SDLK_SPACE:
+                if (game->settings_focus == 2)
+                    toggle_fullscreen(game);
+                else
+                    game->state = GAME_STATE_MENU;
                 break;
             default: break;
             }
@@ -1623,6 +2095,20 @@ void game_handle_event(Game *game, SDL_Event *event)
                                     game->mouse_x, game->mouse_y)) {
                 game->brightness = game->settings_brightness_slider.value;
                 game->settings_focus = 1;
+            }
+            /* Fullscreen toggle row click */
+            {
+                int px = (WINDOW_W - SETTINGS_PANEL_W) / 2;
+                SDL_FRect fs_row = { (float)px, (float)(SETTINGS_FS_ROW_Y - 4),
+                                     (float)SETTINGS_PANEL_W,
+                                     (float)SETTINGS_FS_ROW_H };
+                if (game->mouse_x >= fs_row.x &&
+                    game->mouse_x <= fs_row.x + fs_row.w &&
+                    game->mouse_y >= fs_row.y &&
+                    game->mouse_y <= fs_row.y + fs_row.h) {
+                    toggle_fullscreen(game);
+                    game->settings_focus = 2;
+                }
             }
         }
         break;
@@ -1677,6 +2163,7 @@ void game_handle_event(Game *game, SDL_Event *event)
             }
         }
         break;
+
 
     case GAME_STATE_TUBE_SORT:
         if (event->type == SDL_EVENT_KEY_DOWN &&
@@ -1760,6 +2247,15 @@ void game_handle_event(Game *game, SDL_Event *event)
                 }
             }
         }
+
+
+    case GAME_STATE_DODGE:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            monster_theme_stop(game);
+            game->state = GAME_STATE_PLAYING;
+        }
+
         break;
 
     case GAME_STATE_JUMPSCARE:
@@ -1833,6 +2329,12 @@ void game_handle_event(Game *game, SDL_Event *event)
         event->type == SDL_EVENT_KEY_DOWN) {
         game->state = GAME_STATE_MENU;
     }
+
+    /* ── F11: global fullscreen toggle (works in any state) ── */
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        event->key.key == SDLK_F11) {
+        toggle_fullscreen(game);
+    }
 }
 
 /* ── Per-frame update ──────────────────────────────────────────────────── */
@@ -1852,7 +2354,8 @@ void game_update(Game *game)
         if (game->am_audio_pause_timer < 0.0f)
             game->am_audio_pause_timer = 0.0f;
     }
-    ambient_ost_update(game);
+    music_update(game);
+    monster_theme_update(game);
 
     if (game->state == GAME_STATE_PLAYING &&
         game->player && game->world) {
@@ -1953,6 +2456,9 @@ void game_update(Game *game)
                                 label = "Press [E] to examine";
                             else if (tz->trigger_id == 92)
                                 label = "Press [E] to examine";
+                            else if (tz->trigger_id == 93 ||
+                                     tz->trigger_id == 94)
+                                label = "Press [E] to interact";
                             else if (tz->trigger_id == 95)
                                 label = "Press [E] to interact";
                             else if (tz->trigger_id == 52 ||
@@ -2167,6 +2673,99 @@ void game_update(Game *game)
                 }
             }
         }
+    } else if (game->state == GAME_STATE_DODGE) {
+        float move_x = 0.0f;
+        float move_y = 0.0f;
+
+        if (game->keys[SDL_SCANCODE_A] || game->keys[SDL_SCANCODE_LEFT])
+            move_x -= 1.0f;
+        if (game->keys[SDL_SCANCODE_D] || game->keys[SDL_SCANCODE_RIGHT])
+            move_x += 1.0f;
+        if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP])
+            move_y -= 1.0f;
+        if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN])
+            move_y += 1.0f;
+
+        if (move_x != 0.0f && move_y != 0.0f) {
+            move_x *= 0.7071f;
+            move_y *= 0.7071f;
+        }
+
+        game->dodge_heart_x += move_x * DODGE_HEART_SPEED * dt;
+        game->dodge_heart_y += move_y * DODGE_HEART_SPEED * dt;
+
+        float min_x = DODGE_BOX_X + DODGE_HEART_SIZE * 0.5f;
+        float max_x = DODGE_BOX_X + DODGE_BOX_W - DODGE_HEART_SIZE * 0.5f;
+        float min_y = DODGE_BOX_Y + DODGE_HEART_SIZE * 0.5f;
+        float max_y = DODGE_BOX_Y + DODGE_BOX_H - DODGE_HEART_SIZE * 0.5f;
+        if (game->dodge_heart_x < min_x) game->dodge_heart_x = min_x;
+        if (game->dodge_heart_x > max_x) game->dodge_heart_x = max_x;
+        if (game->dodge_heart_y < min_y) game->dodge_heart_y = min_y;
+        if (game->dodge_heart_y > max_y) game->dodge_heart_y = max_y;
+
+        game->dodge_elapsed += dt;
+        game->dodge_spawn_timer -= dt;
+        game->dodge_invuln_timer -= dt;
+        if (game->dodge_invuln_timer < 0.0f)
+            game->dodge_invuln_timer = 0.0f;
+
+        while (game->dodge_spawn_timer <= 0.0f) {
+            dodge_spawn_round_attack(game);
+            game->dodge_spawn_timer += dodge_round_spawn_interval(game);
+        }
+
+        float hx = game->dodge_heart_x - DODGE_HEART_SIZE * 0.5f;
+        float hy = game->dodge_heart_y - DODGE_HEART_SIZE * 0.5f;
+        for (int i = 0; i < game->dodge_bullet_count; i++) {
+            if (!game->dodge_bullet_active[i]) continue;
+
+            game->dodge_bullet_x[i] += game->dodge_bullet_vx[i] * dt;
+            game->dodge_bullet_y[i] += game->dodge_bullet_vy[i] * dt;
+
+            float bx = game->dodge_bullet_x[i] - DODGE_BULLET_SIZE * 0.5f;
+            float by = game->dodge_bullet_y[i] - DODGE_BULLET_SIZE * 0.5f;
+            if (bx < DODGE_BOX_X - 80.0f ||
+                bx > DODGE_BOX_X + DODGE_BOX_W + 80.0f ||
+                by < DODGE_BOX_Y - 80.0f ||
+                by > DODGE_BOX_Y + DODGE_BOX_H + 80.0f) {
+                game->dodge_bullet_active[i] = 0;
+                continue;
+            }
+
+            if (game->dodge_invuln_timer <= 0.0f &&
+                hx < bx + DODGE_BULLET_SIZE &&
+                hx + DODGE_HEART_SIZE > bx &&
+                hy < by + DODGE_BULLET_SIZE &&
+                hy + DODGE_HEART_SIZE > by) {
+                game->dodge_hp--;
+                game->dodge_invuln_timer = DODGE_HIT_INVULN;
+                game->dodge_bullet_active[i] = 0;
+                if (game->dodge_hp <= 0) {
+                    dodge_clear_bullets(game);
+                    game_start_monster_death_cutscene(game);
+                    break;
+                }
+            }
+        }
+
+        if (game->state == GAME_STATE_DODGE &&
+            game->dodge_elapsed >= DODGE_ROUND_DURATION) {
+            if (game->dodge_round < DODGE_ROUNDS) {
+                dodge_begin_round(game, game->dodge_round + 1);
+            } else {
+                dodge_clear_bullets(game);
+                monster_theme_stop(game);
+                if (game->player)
+                    player_set_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON);
+                game_set_simple_dialogue(game, "Richard",
+                                         "The Level-2 lock clicks open... but something is still out there.",
+                                         NULL);
+                if (game->dialogue_tree)
+                    game_start_dialogue(game, 0);
+                else
+                    game->state = GAME_STATE_PLAYING;
+            }
+        }
     } else if (game->state == GAME_STATE_JUMPSCARE) {
         /* ── Jumpscare video update ── */
         video_player_update(game->jumpscare_player, dt);
@@ -2223,7 +2822,8 @@ void game_render(Game *game)
     case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
-    case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
+case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
+    case GAME_STATE_DODGE:     game_render_dodge(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;

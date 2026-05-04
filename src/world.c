@@ -570,13 +570,20 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 map_find_spawn(mhw, 16, 29, &hw4x, &hw4y,
                                loc2->room_width, loc2->room_height);
 
-                /* Hallway → each room (all tile values in a single CSV load). */
-                /* Tile 5 → archive: locked behind keycard.
-                   Build physical door colliders so the player cannot walk
-                   through, then add interactive trigger 95 so game.c can
-                   show the "keycard required" message and, once the player
-                   presents the keycard, remove the colliders and convert
-                   the trigger into a normal exit trigger. */
+                /* Hallway → each room (all tile values in a single CSV load).
+                 *
+                 * Progression order – doors are locked by story flags and
+                 * stacked so they can be individually removed by truncation:
+                 *   door_collider_start  = archive door  (tile 5, lowest index)
+                 *   door2_collider_start = lab door      (tile 4, middle index)
+                 *   door3_collider_start = security door (tile 3, highest index)
+                 *
+                 * Removing security (first to unlock): collider_count = door3_start
+                 * Removing lab (second to unlock):     collider_count = door2_start
+                 * Removing archive (third to unlock):  collider_count = door_start
+                 */
+
+                /* Tile 5 → archive: locked behind keycard (trigger 95). */
                 if (loc0) {
                     loc2->door_collider_start = loc2->collider_count;
                     map_build_colliders_for_tile(mhw, loc2, 5);
@@ -586,14 +593,35 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                                                             loc0->spawn_x,
                                                             loc0->spawn_y);
                 }
-                if (loc1) map_build_door_triggers_for_tile(mhw, loc2, 4, 1,
-                                                           loc1->spawn_x, loc1->spawn_y);
+
+                /* Tile 4 → lab: locked until security passcode done (trigger 94). */
+                if (loc1) {
+                    loc2->door2_collider_start = loc2->collider_count;
+                    map_build_colliders_for_tile(mhw, loc2, 4);
+                    loc2->door2_collider_count =
+                        loc2->collider_count - loc2->door2_collider_start;
+                    map_build_interactive_triggers_for_tile(mhw, loc2, 4, 94,
+                                                            loc1->spawn_x,
+                                                            loc1->spawn_y);
+                }
+
+                /* Tile 3 → security: locked until generator is on (trigger 93). */
+                if (loc5) {
+                    loc2->door3_collider_start = loc2->collider_count;
+                    map_build_colliders_for_tile(mhw, loc2, 3);
+                    loc2->door3_collider_count =
+                        loc2->collider_count - loc2->door3_collider_start;
+                    map_build_interactive_triggers_for_tile(mhw, loc2, 3, 93,
+                                                            loc5->spawn_x,
+                                                            loc5->spawn_y);
+                }
+
+                /* Tile 1 → hibernation: always open exit. */
                 if (loc3) map_build_door_triggers_for_tile(mhw, loc2, 1, 3,
                                                            loc3->spawn_x, loc3->spawn_y);
+                /* Tile 2 → power: always open exit. */
                 if (loc4) map_build_door_triggers_for_tile(mhw, loc2, 2, 4,
                                                            loc4->spawn_x, loc4->spawn_y);
-                if (loc5) map_build_door_triggers_for_tile(mhw, loc2, 3, 5,
-                                                           loc5->spawn_x, loc5->spawn_y);
                 map_free(mhw);
             }
         }

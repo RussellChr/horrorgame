@@ -237,8 +237,7 @@ void game_render_playing(Game *game)
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
-    if (game->pickup_notify_timer > 0.0f) {
-        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
+    if (game->pickup_notify_timer > 0.0f) {        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
         float t = game->pickup_notify_timer; /* remaining time */
         float alpha_f;
         if (t > 2.2f)        alpha_f = (2.5f - t) / 0.3f;   /* fade in  */
@@ -268,6 +267,29 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* ── Dizziness bar (shown after keycard obtained, before medicine made) ── */
+    if (game->player &&
+        player_check_flag(game->player, FLAG_KEYCARD_COLLECTED) &&
+        !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE)) {
+        SDL_Renderer *r = game->renderer;
+        int bar_w = 400, bar_h = 18;
+        int bar_x = (WINDOW_W - bar_w) / 2;
+        int bar_y = WINDOW_H - 38;
+        /* Background */
+        render_filled_rect(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 0, 0, 0, 200);
+        render_rect_outline(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 150, 80, 80, 220);
+        /* Fill (green → red based on remaining) */
+        float frac = game->dizziness_bar;
+        if (frac < 0.0f) frac = 0.0f;
+        if (frac > 1.0f) frac = 1.0f;
+        int fill_w = (int)(frac * (float)bar_w);
+        Uint8 bar_r = (Uint8)((1.0f - frac) * 220.0f);
+        Uint8 bar_g = (Uint8)(frac * 180.0f);
+        if (fill_w > 0)
+            render_filled_rect(r, bar_x, bar_y, fill_w, bar_h, bar_r, bar_g, 30, 220);
+        render_text_centered(r, "Dizziness", bar_x + bar_w / 2, bar_y - 16, 1, 200, 160, 160);
     }
 }
 
@@ -878,6 +900,66 @@ void game_render_simon(Game *game)
 
     render_text_centered(r, "Click the correct buttons in order",
                          WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
+}
+
+/* ── Tube-sort (medicine) minigame ────────────────────────────────────────── */
+
+/* Color palette: index 0=empty, 1=purple, 2=teal, 3=yellow, 4=pink */
+static const Uint8 tube_color_r[5] = {  40, 160,  30, 220, 220 };
+static const Uint8 tube_color_g[5] = {  40,  50, 200, 200,  50 };
+static const Uint8 tube_color_b[5] = {  40, 200, 160,  30, 180 };
+
+void game_render_tube_sort(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Dark background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 10, 10, 20, 255);
+
+    /* Title */
+    render_text_centered(r, "MEDICINE WORKBENCH", WINDOW_W / 2, 30, 2, 200, 200, 255);
+    render_text_centered(r, "Sort each tube to contain only one color",
+                         WINDOW_W / 2, 56, 1, 160, 160, 200);
+    render_text_centered(r, "Click a tube to select, click another to pour",
+                         WINDOW_W / 2, 72, 1, 140, 140, 180);
+
+    /* Tube layout */
+    static const int tube_x[7] = {340,490,640,790, 415,565,715};
+    static const int tube_y[7] = {120,120,120,120, 430,430,430};
+    int tube_w = 80, tube_h = 280;
+    int unit_h = 60;
+    int tube_pad_x = 8;
+
+    for (int i = 0; i < 7; i++) {
+        int tx = tube_x[i];
+        int ty = tube_y[i];
+        int is_sel = (game->tube_selected == i);
+
+        Uint8 outline_r2 = is_sel ? 255 : 120;
+        Uint8 outline_g2 = is_sel ? 255 :  80;
+        Uint8 outline_b2 = is_sel ? 100 :  80;
+        render_filled_rect(r, tx, ty, tube_w, tube_h, 25, 20, 30, 240);
+        render_rect_outline(r, tx, ty, tube_w, tube_h, outline_r2, outline_g2, outline_b2, 255);
+
+        /* Draw color units from bottom up */
+        for (int j = 0; j < game->tube_count[i]; j++) {
+            int col = game->tube_colors[i][j];
+            if (col == 0) continue;
+            int uy = ty + tube_h - (j + 1) * unit_h;
+            int ux = tx + tube_pad_x;
+            int uw = tube_w - tube_pad_x * 2;
+            render_filled_rect(r, ux, uy, uw, unit_h - 2,
+                               tube_color_r[col], tube_color_g[col], tube_color_b[col], 230);
+        }
+
+        if (is_sel) {
+            render_text_centered(r, "v", tx + tube_w / 2, ty - 16, 2, 255, 255, 100);
+        }
+    }
+
+    render_text_centered(r, "ESC: close workbench",
+                         WINDOW_W / 2, WINDOW_H - 24, 1, 120, 120, 160);
 }
 
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */

@@ -29,6 +29,9 @@
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
 
+/* Seconds the dizziness bar takes to fully empty after keycard pickup. */
+#define LAB_DIZZINESS_DEATH_DELAY  180.0f
+
 /* ── is_trigger_consumed ───────────────────────────────────────────────────
  * Returns 1 when a trigger's interaction has been permanently used up so
  * the interact prompt should no longer appear near it.
@@ -47,6 +50,8 @@ static int is_trigger_consumed(const Game *game, int trigger_id)
         case 59: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
         /* Lab */
         case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
+        case 64: return player_check_flag(p, FLAG_LAB_MEDICINE_MADE) ||
+                        !player_check_flag(p, FLAG_KEYCARD_COLLECTED);
         /* Hallway */
         case 80: return player_check_flag(p, FLAG_HALLWAY_NOTHING_INTERACTED);
         case 81: return player_check_flag(p, FLAG_HALLWAY_GASMASK_COLLECTED);
@@ -683,6 +688,10 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->dizziness_bar           = 1.0f;
+    game->dizziness_death_triggered = 0;
+    game->tube_selected           = -1;
+    game->tube_sort_done          = 0;
     game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
@@ -862,6 +871,10 @@ static void game_do_load(Game *game, int slot)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->dizziness_bar           = 1.0f;
+    game->dizziness_death_triggered = 0;
+    game->tube_selected           = -1;
+    game->tube_sort_done          = 0;
     game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7);
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
@@ -956,6 +969,16 @@ void game_end_dialogue(Game *game)
         game->lab_death_triggered = 0;
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
+    } else if (game->dizziness_death_triggered) {
+        /* Player died from dizziness — game over */
+        game->dizziness_death_triggered = 0;
+        game->state = GAME_STATE_GAME_OVER;
+    } else if (game->tube_sort_done) {
+        /* Tube-sort minigame completed — apply medicine flag */
+        game->tube_sort_done = 0;
+        player_set_flag(game->player, FLAG_LAB_MEDICINE_MADE);
+        game->dizziness_bar = 1.0f;
+        game->state = GAME_STATE_PLAYING;
     } else if (game->simon_death_triggered) {
         /* Player failed the Simon game — return to world so they must interact again */
         game->simon_death_triggered = 0;
@@ -981,6 +1004,35 @@ void game_start_simon(Game *game)
     game->simon_lit_button  = -1;
     game->simon_death_triggered = 0;
     game->state = GAME_STATE_SIMON;
+}
+
+/* ── Tube-sort (medicine) minigame ──────────────────────────────────────── */
+
+/* Colors: 0=empty, 1=purple, 2=teal, 3=yellow, 4=pink */
+void game_start_tube_sort(Game *game)
+{
+    if (!game) return;
+
+    /* Clear all tubes */
+    for (int i = 0; i < 7; i++) {
+        game->tube_count[i] = 0;
+        for (int j = 0; j < 4; j++)
+            game->tube_colors[i][j] = 0;
+    }
+
+    /* Tube 0: bottom=purple,purple,purple, top=pink */
+    game->tube_colors[0][0]=1; game->tube_colors[0][1]=1; game->tube_colors[0][2]=1; game->tube_colors[0][3]=4; game->tube_count[0]=4;
+    /* Tube 1: bottom=purple, teal, yellow, top=teal */
+    game->tube_colors[1][0]=1; game->tube_colors[1][1]=2; game->tube_colors[1][2]=3; game->tube_colors[1][3]=2; game->tube_count[1]=4;
+    /* Tube 2: bottom=teal, pink, pink, top=yellow */
+    game->tube_colors[2][0]=2; game->tube_colors[2][1]=4; game->tube_colors[2][2]=4; game->tube_colors[2][3]=3; game->tube_count[2]=4;
+    /* Tube 3: bottom=pink, yellow, yellow, top=teal */
+    game->tube_colors[3][0]=4; game->tube_colors[3][1]=3; game->tube_colors[3][2]=3; game->tube_colors[3][3]=2; game->tube_count[3]=4;
+    /* Tubes 4, 5, 6: empty (already zeroed) */
+
+    game->tube_selected = -1;
+    game->tube_sort_done = 0;
+    game->state = GAME_STATE_TUBE_SORT;
 }
 
 /* ── Security cutscene ─────────────────────────────────────────────────── */
@@ -1615,6 +1667,89 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_TUBE_SORT:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->tube_selected = -1;
+            game->state = GAME_STATE_PLAYING;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            float mx = game->mouse_x, my = game->mouse_y;
+            static const int tube_x[7] = {340,490,640,790, 415,565,715};
+            static const int tube_y[7] = {120,120,120,120, 430,430,430};
+            int tube_w = 80, tube_h = 280;
+            int clicked_tube = -1;
+            for (int i = 0; i < 7; i++) {
+                if (mx >= tube_x[i] && mx <= tube_x[i] + tube_w &&
+                    my >= tube_y[i] && my <= tube_y[i] + tube_h) {
+                    clicked_tube = i;
+                    break;
+                }
+            }
+            if (clicked_tube >= 0) {
+                if (game->tube_selected == -1) {
+                    if (game->tube_count[clicked_tube] > 0)
+                        game->tube_selected = clicked_tube;
+                } else if (game->tube_selected == clicked_tube) {
+                    game->tube_selected = -1;
+                } else {
+                    int src = game->tube_selected;
+                    int dst = clicked_tube;
+                    if (game->tube_count[src] > 0 && game->tube_count[dst] < 4) {
+                        int src_top = game->tube_colors[src][game->tube_count[src]-1];
+                        int dst_top = game->tube_count[dst] > 0
+                                      ? game->tube_colors[dst][game->tube_count[dst]-1]
+                                      : 0;
+                        if (dst_top == 0 || dst_top == src_top) {
+                            while (game->tube_count[src] > 0 &&
+                                   game->tube_count[dst] < 4 &&
+                                   game->tube_colors[src][game->tube_count[src]-1] == src_top) {
+                                int unit = game->tube_colors[src][game->tube_count[src]-1];
+                                game->tube_colors[src][game->tube_count[src]-1] = 0;
+                                game->tube_count[src]--;
+                                game->tube_colors[dst][game->tube_count[dst]] = unit;
+                                game->tube_count[dst]++;
+                            }
+                        }
+                    }
+                    game->tube_selected = -1;
+
+                    /* Check win condition: each tube is empty or has 4 units of one color */
+                    int won = 1;
+                    for (int i = 0; i < 7 && won; i++) {
+                        if (game->tube_count[i] == 0) continue;
+                        if (game->tube_count[i] != 4) { won = 0; break; }
+                        int first_color = game->tube_colors[i][0];
+                        for (int j = 1; j < 4; j++) {
+                            if (game->tube_colors[i][j] != first_color) { won = 0; break; }
+                        }
+                    }
+                    if (won) {
+                        DialogueTree *tree = dialogue_tree_create();
+                        if (tree) {
+                            DialogueNode *n1 = dialogue_add_node(tree, 0, "Richard",
+                                "The medicine has been made. I don't think it's safe but it's worth the shot.", 0);
+                            if (n1) {
+                                DialogueChoice ch;
+                                memset(&ch, 0, sizeof(ch));
+                                ch.id = 0; ch.next_node_id = 1;
+                                strncpy(ch.text, "...", DIALOGUE_TEXT_MAX - 1);
+                                dialogue_add_choice(n1, &ch);
+                            }
+                            dialogue_add_node(tree, 1, "Richard",
+                                "Oh... I'm no longer dizzy.", 1);
+                            game->dialogue_tree = tree;
+                            game->tube_sort_done = 1;
+                            game->state = GAME_STATE_DIALOGUE;
+                            dialogue_state_init(&game->dialogue_state,
+                                               game->dialogue_tree, 0);
+                        }
+                    }
+                }
+            }
+        }
+        break;
+
     case GAME_STATE_JUMPSCARE:
         /* Allow the player to skip the jumpscare by pressing Escape */
         if (event->type == SDL_EVENT_KEY_DOWN &&
@@ -1798,6 +1933,8 @@ void game_update(Game *game)
                                 label = "Press [E] to enter locker";
                             else if (tz->trigger_id == 61)
                                 label = "Press [E] to examine";
+                            else if (tz->trigger_id == 64)
+                                label = "Press [E] to use workbench";
                             else if (tz->trigger_id == 75)
                                 label = "Press [E] to interact";
                             else if (tz->trigger_id == 91)
@@ -1880,6 +2017,20 @@ void game_update(Game *game)
         } else if (p->current_location_id != LOCATION_LAB) {
             /* Outside the lab — reset the timer for the next visit */
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
+        }
+
+        /* ── Dizziness bar: decrease when keycard obtained and medicine not made ── */
+        if (player_check_flag(game->player, FLAG_KEYCARD_COLLECTED) &&
+            !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE) &&
+            !game->dizziness_death_triggered) {
+            game->dizziness_bar -= dt / LAB_DIZZINESS_DEATH_DELAY;
+            if (game->dizziness_bar < 0.0f) game->dizziness_bar = 0.0f;
+            if (game->dizziness_bar <= 0.0f) {
+                game->dizziness_death_triggered = 1;
+                game_set_dialogue_tree(game, "lab_dizziness_death", LOCATION_LAB);
+                if (game->dialogue_tree)
+                    game_start_dialogue(game, 0);
+            }
         }
 
         /* ── Archive glass: disappear when player steps on shard ── */
@@ -2060,6 +2211,7 @@ void game_render(Game *game)
     case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
     case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
+    case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;

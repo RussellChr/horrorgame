@@ -49,6 +49,7 @@
 #define FLAG_ARCHIVE_KEYCARD2_COLLECTED    (1u << 26) /* level-2 keycard picked up in Archive      */
 #define FLAG_ARCHIVE_FINGERPRINT2_COLLECTED (1u << 27) /* fingerprint 2 picked up in Archive        */
 #define FLAG_ARCHIVE_FINGERPRINT3_COLLECTED (1u << 28) /* fingerprint 3 picked up in Archive        */
+#define FLAG_LAB_MEDICINE_MADE             (1u << 29) /* tube-sort minigame completed in lab */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

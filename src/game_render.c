@@ -244,6 +244,33 @@ void game_render_playing(Game *game)
         render_text(game->renderer, "Prologue",
                     WINDOW_W - 100, 12, 1, 110, 30, 30);
 
+    /* Medicine countdown bar — shown when the dizziness timer is active */
+    if (game->medicine_bar_active) {
+        static const int BAR_W = 240;
+        static const int BAR_H = 14;
+        int bar_x = (WINDOW_W - BAR_W) / 2;
+        int bar_y = WINDOW_H - 38;
+
+        float frac = game->medicine_timer / MEDICINE_MAX_TIME;
+        if (frac < 0.0f) frac = 0.0f;
+        if (frac > 1.0f) frac = 1.0f;
+        int fill_w = (int)(frac * (float)(BAR_W - 4));
+
+        /* Bar fill colour: green when plenty of time, red when critical */
+        Uint8 bar_r = (Uint8)(255 * (1.0f - frac));
+        Uint8 bar_g = (Uint8)(180 * frac);
+
+        render_text_centered(game->renderer, "DIZZY — make the antidote!",
+                             WINDOW_W / 2, bar_y - 14, 1, 220, 80, 80);
+        render_filled_rect(game->renderer, bar_x, bar_y, BAR_W, BAR_H,
+                           20, 5, 5, 200);
+        render_rect_outline(game->renderer, bar_x, bar_y, BAR_W, BAR_H,
+                            180, 40, 40, 220);
+        if (fill_w > 0)
+            render_filled_rect(game->renderer, bar_x + 2, bar_y + 2,
+                               fill_w, BAR_H - 4, bar_r, bar_g, 40, 230);
+    }
+
     render_text(game->renderer, "I:inv  ESC:pause",
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
@@ -1093,6 +1120,91 @@ static void render_save_load_panel(Game *game, const char *title, int is_save)
     }
     render_text_centered(r, "[ESC] cancel",
                          WINDOW_W / 2, py + ph - 18, 1, 78, 22, 22);
+}
+
+/* ── Tube sort minigame ──────────────────────────────────────────────────── */
+
+void game_render_tube_sort(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Dark background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 5, 10, 20, 255);
+
+    /* Panel */
+    static const int PANEL_W = 700;
+    static const int PANEL_H = 370;
+    int panel_x = (WINDOW_W - PANEL_W) / 2;
+    int panel_y = (WINDOW_H - PANEL_H) / 2;
+    render_filled_rect(r, panel_x, panel_y, PANEL_W, PANEL_H, 15, 20, 35, 255);
+    render_rect_outline(r, panel_x, panel_y, PANEL_W, PANEL_H, 50, 90, 130, 255);
+    render_rect_outline(r, panel_x + 2, panel_y + 2, PANEL_W - 4, PANEL_H - 4,
+                        25, 50, 75, 160);
+
+    /* Title and instruction */
+    render_text_centered(r, "CHEMISTRY STATION",
+                         WINDOW_W / 2, panel_y + 14, 2, 140, 190, 230);
+    render_filled_rect(r, panel_x + 18, panel_y + 40, PANEL_W - 36, 2, 40, 70, 100, 180);
+    render_text_centered(r, "Sort each colour into its own tube",
+                         WINDOW_W / 2, panel_y + 50, 1, 100, 140, 170);
+
+    /* Tube geometry — must match the values in game.c tube_get_rect() */
+    static const int TUBE_W   = 54;
+    static const int TUBE_H   = 184;
+    static const int TUBE_GAP = 22;
+    int total_w = TUBE_COUNT * TUBE_W + (TUBE_COUNT - 1) * TUBE_GAP;
+    int start_x = (WINDOW_W - total_w) / 2;
+    int start_y = (WINDOW_H - TUBE_H) / 2 + 20;
+    int ball_h  = TUBE_H / TUBE_CAPACITY;
+
+    /* Ball colours: 0=Red  1=Blue  2=Green  3=Yellow */
+    static const Uint8 ball_r[4] = { 210,  50,  40, 230 };
+    static const Uint8 ball_g[4] = {  40,  90, 185, 190 };
+    static const Uint8 ball_b[4] = {  40, 210,  50,  40 };
+    static const char *ball_label[4] = { "R", "B", "G", "Y" };
+
+    for (int t = 0; t < TUBE_COUNT; t++) {
+        int tx = start_x + t * (TUBE_W + TUBE_GAP);
+        int ty = start_y;
+        int selected = (game->tube_selected == t);
+
+        /* Glow behind selected tube */
+        if (selected)
+            render_filled_rect(r, tx - 4, ty - 6, TUBE_W + 8, TUBE_H + 12,
+                               80, 160, 255, 40);
+
+        /* Tube background */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_H, 8, 14, 26, 200);
+
+        /* Tube border */
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_H,
+                            selected ? 160 : 55,
+                            selected ? 210 : 85,
+                            selected ? 255 : 120,
+                            255);
+
+        /* Balls — drawn bottom to top */
+        for (int b = 0; b < game->tube_fill[t]; b++) {
+            int col = game->tube_balls[t][b];
+            if (col < 0) continue;
+            int by = ty + TUBE_H - (b + 1) * ball_h;
+            /* Ball body */
+            render_filled_rect(r, tx + 3, by + 3, TUBE_W - 6, ball_h - 6,
+                               ball_r[col], ball_g[col], ball_b[col], 255);
+            /* Highlight rim */
+            render_rect_outline(r, tx + 3, by + 3, TUBE_W - 6, ball_h - 6,
+                                255, 255, 255, 60);
+            /* Centre colour letter */
+            render_text_centered(r, ball_label[col],
+                                 tx + TUBE_W / 2,
+                                 by + (ball_h - 8) / 2,
+                                 1, 255, 255, 255);
+        }
+    }
+
+    render_text_centered(r, "Click a tube to select, click again to pour   |   ESC: cancel",
+                         WINDOW_W / 2, start_y + TUBE_H + 22, 1, 70, 100, 130);
 }
 
 /* ── Save menu ───────────────────────────────────────────────────────────── */

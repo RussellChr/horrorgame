@@ -2274,7 +2274,7 @@ void game_update(Game *game)
                             else if (tz->trigger_id == 61)
                                 label = "Press [E] to examine";
                             else if (tz->trigger_id == 62)
-                                label = "Press [E] to examine";
+                                label = "Press [E] to use chemistry station";
                             else if (tz->trigger_id == 75)
                                 label = "Press [E] to interact";
                             else if (tz->trigger_id == 91)

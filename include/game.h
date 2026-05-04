@@ -286,7 +286,7 @@ typedef struct {
     /* Tube sort minigame (GAME_STATE_TUBE_SORT) */
     int tube_balls[TUBE_COUNT][TUBE_CAPACITY]; /* -1=empty, 0=Red,1=Blue,2=Green,3=Yellow */
     int tube_fill[TUBE_COUNT];                 /* balls currently in each tube (0..4)      */
-    int tube_selected;                         /* -1=none, 0-6 = selected tube index       */
+    int tube_selected;                         /* -1=none, 0-5 = selected tube index       */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */

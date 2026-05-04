@@ -921,6 +921,66 @@ static void game_do_load(Game *game, int slot)
             archive->collider_count = archive->door_collider_start;
     }
 
+    /* Restore hallway door states based on saved story flags.
+     * Doors are stacked in the collider array (archive < lab < security),
+     * so they must be removed in reverse unlock order (security first). */
+    {
+        Location *hallway = world_get_location(game->world, LOCATION_HALLWAY);
+        if (hallway) {
+            /* Security door (tile 3, trigger 93): open once generator is on */
+            if (player_check_flag(game->player, FLAG_POWER_GENERATOR_ON) &&
+                hallway->door3_collider_count > 0) {
+                hallway->collider_count = hallway->door3_collider_start;
+                Location *secloc = world_get_location(game->world, LOCATION_SECURITY);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 93) {
+                        hallway->triggers[i].target_location_id = LOCATION_SECURITY;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (secloc) {
+                            hallway->triggers[i].spawn_x = secloc->spawn_x;
+                            hallway->triggers[i].spawn_y = secloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Lab door (tile 4, trigger 94): open once passcode is done */
+            if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE) &&
+                hallway->door2_collider_count > 0) {
+                hallway->collider_count = hallway->door2_collider_start;
+                Location *labloc = world_get_location(game->world, LOCATION_LAB);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 94) {
+                        hallway->triggers[i].target_location_id = LOCATION_LAB;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (labloc) {
+                            hallway->triggers[i].spawn_x = labloc->spawn_x;
+                            hallway->triggers[i].spawn_y = labloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Archive door (tile 5, trigger 95): open once keycard is used */
+            if (player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
+                hallway->door_collider_count > 0) {
+                hallway->collider_count = hallway->door_collider_start;
+                Location *arcloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 95) {
+                        hallway->triggers[i].target_location_id = LOCATION_ARCHIVE;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (arcloc) {
+                            hallway->triggers[i].spawn_x = arcloc->spawn_x;
+                            hallway->triggers[i].spawn_y = arcloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     /* Re-init enemy */
     enemy_free(&game->enemy);
     {
@@ -2155,6 +2215,9 @@ void game_update(Game *game)
                                 label = "Press [E] to examine";
                             else if (tz->trigger_id == 92)
                                 label = "Press [E] to examine";
+                            else if (tz->trigger_id == 93 ||
+                                     tz->trigger_id == 94)
+                                label = "Press [E] to interact";
                             else if (tz->trigger_id == 95)
                                 label = "Press [E] to interact";
                             else if (tz->trigger_id == 52 ||

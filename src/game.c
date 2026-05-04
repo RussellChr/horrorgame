@@ -170,6 +170,12 @@ static const char * const power_cutscene_texts[3] = {
     "well.. too late now."
 };
 
+/* ── Hallway exit cutscene texts ─────────────────────────────────────────── */
+static const char * const hallway_exit_cutscene_texts[2] = {
+    "I need to get out of here... come on, open! ACCESS DENIED?! No no no...",
+    "Wait-- what is that noise?! It's right behind me!"
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
 
 static void decoded_audio_free(DecodedAudio *audio)
@@ -582,6 +588,10 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     g->power_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/power_cut_2.jpg");
     g->power_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/power_cut_3.jpg");
 
+    /* Load hallway exit cutscene images (access-denied + monster attack) */
+    g->hallway_exit_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/end0.png");
+    g->hallway_exit_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/end1.png");
+
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
                     &g->am_wav_buf, &g->am_wav_len)) {
@@ -660,6 +670,8 @@ void game_cleanup(Game *game)
         render_texture_destroy(game->hibernation_cutscene_textures[i]);
     for (int i = 0; i < 3; i++)
         render_texture_destroy(game->power_cutscene_textures[i]);
+    for (int i = 0; i < 2; i++)
+        render_texture_destroy(game->hallway_exit_cutscene_textures[i]);
     dialogue_unload_texture(&game->cutscene_dialogue_state);
     if (game->cutscene_dialogue_tree) {
         dialogue_tree_destroy(game->cutscene_dialogue_tree);
@@ -1360,6 +1372,31 @@ void game_start_power_cutscene(Game *game)
     game->state = GAME_STATE_CUTSCENE;
 }
 
+/* ── Hallway exit cutscene (access denied + monster attack) ─────────────── */
+
+void game_start_hallway_exit_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_HALLWAY_EXIT;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      hallway_exit_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -1649,6 +1686,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     } else if (game->cutscene_type == CUTSCENE_POWER) {
                         scene_count = 3;
                         texts = power_cutscene_texts;
+                    } else if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                        scene_count = 2;
+                        texts = hallway_exit_cutscene_texts;
                     } else {
                         scene_count = 4;
                         texts = security_cutscene_texts;
@@ -1661,8 +1701,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                         game->cutscene_dialogue_tree = NULL;
                     }
                     if (game->cutscene_index >= scene_count) {
-                        /* All scenes done – return to gameplay */
-                        game->state = GAME_STATE_PLAYING;
+                        /* All scenes done – transition based on cutscene type */
+                        if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                            game_start_dodge(game);
+                        } else {
+                            game->state = GAME_STATE_PLAYING;
+                        }
                     } else {
                         /* Load next scene */
                         game->cutscene_dialogue_tree = dialogue_tree_create();

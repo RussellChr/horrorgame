@@ -85,6 +85,7 @@ typedef enum {
     GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
     GAME_STATE_ARCHIVE_BOOK,    /* reading archive pages (pg1 / pg2)       */
     GAME_STATE_TUBE_SORT,       /* tube-sorting medicine minigame in lab   */
+    GAME_STATE_END_CREDITS,     /* end-credits video shown after final battle */
     GAME_STATE_QUIT
 } GameState;
 
@@ -282,6 +283,9 @@ typedef struct {
 
     /* Monster death cutscene (shown before the game-over screen) */
     VideoPlayer *monster_death_player;
+
+    /* End-credits video (shown immediately after the final battle is won) */
+    VideoPlayer *end_credits_player;
 
     /* Dizziness bar (active after keycard obtained, until medicine made) */
     float dizziness_bar;             /* 1.0 = full, 0.0 = dead */

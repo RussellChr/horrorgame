@@ -34,7 +34,7 @@
 #define DODGE_BULLET_SIZE     14
 #define DODGE_MAX_HP           7
 #define DODGE_ROUNDS           5
-#define DODGE_ROUND_DURATION  18.0f
+#define DODGE_ROUND_DURATION  1.0f
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 

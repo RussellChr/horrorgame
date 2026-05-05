@@ -66,17 +66,27 @@ add_executable(horrorgame
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
 
 # FFmpeg libraries for video/audio decoding (jumpscare.mov playback).
+# On Windows with MSVC + vcpkg: install ffmpeg:x64-windows via vcpkg; CMake's
+#   find_package(FFMPEG) is provided by the vcpkg toolchain.
 # On macOS install with: brew install ffmpeg
 # On Linux install with: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
-find_package(PkgConfig REQUIRED)
-# Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
-set(ENV{PKG_CONFIG_PATH}
-    "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-pkg_check_modules(FFMPEG REQUIRED
-    libavformat libavcodec libavutil libswscale libswresample)
-target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
-target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
+if(WIN32 AND NOT MINGW)
+    # vcpkg ships a FindFFMPEG.cmake that sets FFMPEG_INCLUDE_DIRS / FFMPEG_LIBRARIES
+    find_package(FFMPEG REQUIRED COMPONENTS avformat avcodec avutil swscale swresample)
+    target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
+else()
+    # macOS / Linux / MinGW cross-build: use pkg-config
+    find_package(PkgConfig REQUIRED)
+    # Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
+    set(ENV{PKG_CONFIG_PATH}
+        "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    pkg_check_modules(FFMPEG REQUIRED
+        libavformat libavcodec libavutil libswscale libswresample)
+    target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
+    target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
+endif()
 
 # If SDL3_image was found, enable PNG loading for the dialogue background
 if(SDL3_IMAGE_LINK_TARGET)

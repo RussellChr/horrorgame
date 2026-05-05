@@ -287,7 +287,22 @@ void video_player_update(VideoPlayer *vp, float dt)
 void video_player_render(VideoPlayer *vp, SDL_Renderer *renderer)
 {
     if (!vp || !vp->frame_tex) return;
-    SDL_FRect dst = { 0.0f, 0.0f, (float)WINDOW_W, (float)WINDOW_H };
+
+    /* Black background for the letterbox / pillarbox bars. */
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+
+    /* Scale to fit the window while preserving the video's aspect ratio. */
+    float scale = ((float)WINDOW_W / (float)vp->width < (float)WINDOW_H / (float)vp->height)
+                  ? (float)WINDOW_W / (float)vp->width
+                  : (float)WINDOW_H / (float)vp->height;
+    float dw = (float)vp->width  * scale;
+    float dh = (float)vp->height * scale;
+    SDL_FRect dst = {
+        ((float)WINDOW_W - dw) * 0.5f,
+        ((float)WINDOW_H - dh) * 0.5f,
+        dw, dh
+    };
     SDL_RenderTexture(renderer, vp->frame_tex, NULL, &dst);
 }
 

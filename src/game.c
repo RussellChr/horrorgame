@@ -431,8 +431,10 @@ static void music_update(Game *game)
     DecodedAudio *active = music_current_track(game);
     float gain = game->volume / 100.0f;
 
-    /* Pause music when: AM recording is playing, or dodge minigame is active */
+    /* Pause music when: AM recording is playing, or dodge minigame is active,
+     * or end-credits video is playing */
     int should_pause = (game->state == GAME_STATE_DODGE) ||
+                       (game->state == GAME_STATE_END_CREDITS) ||
                        (game->am_audio_pause_timer > 0.0f);
 
     for (int i = 0; i < n_tracks; i++) {
@@ -532,6 +534,21 @@ static void game_start_monster_death_cutscene(Game *game)
     } else {
         SDL_Log("game: deathbymonster.mov could not be opened; showing game over");
         game->state = GAME_STATE_GAME_OVER;
+    }
+}
+
+static void game_start_end_credits(Game *game)
+{
+    if (!game) return;
+
+    video_player_close(game->end_credits_player);
+    game->end_credits_player =
+        video_player_open(game->renderer, "assets/cutscene/end cred.mov");
+    if (game->end_credits_player) {
+        game->state = GAME_STATE_END_CREDITS;
+    } else {
+        SDL_Log("game: end cred.mov could not be opened; quitting");
+        game->state = GAME_STATE_QUIT;
     }
 }
 
@@ -756,6 +773,8 @@ void game_cleanup(Game *game)
     game->jumpscare_player = NULL;
     video_player_close(game->monster_death_player);
     game->monster_death_player = NULL;
+    video_player_close(game->end_credits_player);
+    game->end_credits_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
@@ -1265,6 +1284,7 @@ void game_start_tube_sort(Game *game)
     game->tube_selected = -1;
     game->tube_sort_done = 0;
     game->state = GAME_STATE_TUBE_SORT;
+}
 
 static void dodge_clear_bullets(Game *game)
 {
@@ -2247,7 +2267,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 }
             }
         }
-
+        break;
 
     case GAME_STATE_DODGE:
         if (event->type == SDL_EVENT_KEY_DOWN &&
@@ -2757,13 +2777,7 @@ void game_update(Game *game)
                 monster_theme_stop(game);
                 if (game->player)
                     player_set_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON);
-                game_set_simple_dialogue(game, "Richard",
-                                         "The Level-2 lock clicks open... but something is still out there.",
-                                         NULL);
-                if (game->dialogue_tree)
-                    game_start_dialogue(game, 0);
-                else
-                    game->state = GAME_STATE_PLAYING;
+                game_start_end_credits(game);
             }
         }
     } else if (game->state == GAME_STATE_JUMPSCARE) {
@@ -2783,6 +2797,14 @@ void game_update(Game *game)
             video_player_close(game->monster_death_player);
             game->monster_death_player = NULL;
             game->state = GAME_STATE_GAME_OVER;
+        }
+    } else if (game->state == GAME_STATE_END_CREDITS) {
+        /* ── End-credits video update ── */
+        video_player_update(game->end_credits_player, dt);
+        if (video_player_is_done(game->end_credits_player)) {
+            video_player_close(game->end_credits_player);
+            game->end_credits_player = NULL;
+            game->state = GAME_STATE_QUIT;
         }
     }
 
@@ -2826,6 +2848,7 @@ case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
     case GAME_STATE_DODGE:     game_render_dodge(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
     case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
+    case GAME_STATE_END_CREDITS: game_render_jumpscare(game); break;
     case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
     case GAME_STATE_NEW_LOAD_MENU: game_render_new_load_menu(game); break;
     case GAME_STATE_SAVE_MENU:

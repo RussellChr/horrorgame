@@ -1099,7 +1099,6 @@ void game_render_dodge(Game *game)
                          WINDOW_W / 2, ui_y + 38, 1, 115, 115, 130);
 
 }
-}
 
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */
 
@@ -1109,6 +1108,8 @@ void game_render_jumpscare(Game *game)
     SDL_Renderer *r = game->renderer;
     VideoPlayer *player = (game->state == GAME_STATE_MONSTER_DEATH_CUTSCENE)
                           ? game->monster_death_player
+                          : (game->state == GAME_STATE_END_CREDITS)
+                          ? game->end_credits_player
                           : game->jumpscare_player;
 
     /* Black background in case the video hasn't decoded its first frame yet */

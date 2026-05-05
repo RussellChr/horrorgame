@@ -2266,7 +2266,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 }
             }
         }
-
+        break;
 
     case GAME_STATE_DODGE:
         if (event->type == SDL_EVENT_KEY_DOWN &&

@@ -873,6 +873,39 @@ void game_render_cutscene(Game *game)
 
     /* Dialogue box with inner-monologue text */
     dialogue_render(&game->cutscene_dialogue_state, r, WINDOW_W, WINDOW_H);
+
+    /* Save reminder banner shown at the start of the final fight cutscene */
+    if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT &&
+        game->save_reminder_timer > 0.0f) {
+        float t = game->save_reminder_timer;
+        float alpha_f;
+        if (t > 6.5f)      alpha_f = (7.0f - t) / 0.5f;  /* fade in  */
+        else if (t > 0.7f) alpha_f = 1.0f;                /* full     */
+        else               alpha_f = t / 0.7f;            /* fade out */
+        if (alpha_f > 1.0f) alpha_f = 1.0f;
+        Uint8 a = (Uint8)(alpha_f * 255.0f);
+
+        const char *line1 = "!! Final fight ahead !!";
+        const char *line2 = "Save your game now!  (ESC -> Pause -> Save)";
+        int w1 = (int)(strlen(line1) * 8 * 2);
+        int w2 = (int)(strlen(line2) * 8 * 1);
+        int bw = (w1 > w2 ? w1 : w2) + 28;
+        int bh = 16 + 12 + 18;  /* line1(16) + gap(12) + line2(8*scale) */
+        int bx = (WINDOW_W - bw) / 2;
+        int by = 12;
+
+        render_filled_rect(r, bx, by, bw, bh + 4, 60, 10, 10,
+                           (Uint8)(a * 0.88f));
+        render_rect_outline(r, bx, by, bw, bh + 4, 220, 60, 60, a);
+        render_text_centered(r, line1, WINDOW_W / 2, by + 6, 2,
+                             (Uint8)(255 * alpha_f),
+                             (Uint8)(80  * alpha_f),
+                             (Uint8)(80  * alpha_f));
+        render_text_centered(r, line2, WINDOW_W / 2, by + 6 + 18, 1,
+                             (Uint8)(220 * alpha_f),
+                             (Uint8)(200 * alpha_f),
+                             (Uint8)(200 * alpha_f));
+    }
 }
 
 /* ── Simon Says minigame ─────────────────────────────────────────────────── */

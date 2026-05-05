@@ -181,6 +181,12 @@ typedef struct {
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
+    /* Save-reminder notification (shown when the final fight is about to start) */
+    float save_reminder_timer;   /* counts down from > 0; shown while > 0 */
+
+    /* State to return to after leaving the pause menu */
+    GameState pause_return_state;
+
     /* Locker view */
     SDL_Texture *locker_texture;
     SDL_Texture *note_locker_texture;   /* shown when reading the security note */

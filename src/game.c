@@ -1119,6 +1119,8 @@ static void game_do_load(Game *game, int slot)
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
     game->pickup_notify_timer      = 0.0f;
+    game->save_reminder_timer      = 0.0f;
+    game->pause_return_state       = GAME_STATE_PLAYING;
     game->show_note_locker        = 0;
     game->show_monitor_zoom       = 0;
     game->show_containment_level  = 0;
@@ -1590,6 +1592,7 @@ void game_start_hallway_exit_cutscene(Game *game)
 
     game->cutscene_index = 0;
     game->cutscene_type  = CUTSCENE_HALLWAY_EXIT;
+    game->save_reminder_timer = 7.0f;
 
     game->cutscene_dialogue_tree = dialogue_tree_create();
     if (!game->cutscene_dialogue_tree) return;
@@ -1712,6 +1715,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->state = GAME_STATE_INVENTORY;
                 break;
             case SDLK_ESCAPE:
+                game->pause_return_state = GAME_STATE_PLAYING;
                 game->state = GAME_STATE_PAUSE;
                 break;
             case SDLK_E:
@@ -1874,6 +1878,13 @@ void game_handle_event(Game *game, SDL_Event *event)
     case GAME_STATE_CUTSCENE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             SDL_Keycode k = event->key.key;
+            /* Allow the player to pause (and save) just before the final fight */
+            if (k == SDLK_ESCAPE &&
+                game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                game->pause_return_state = GAME_STATE_CUTSCENE;
+                game->state = GAME_STATE_PAUSE;
+                break;
+            }
             if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) {
                 if (!game->cutscene_dialogue_state.text_complete) {
                     /* Skip typewriter – show full text immediately */
@@ -2028,12 +2039,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                                 game->mouse_x, game->mouse_y);
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE)
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (button_is_clicked(&game->pause_buttons[0],
                                   game->mouse_x, game->mouse_y))
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
             if (button_is_clicked(&game->pause_buttons[1],
                                   game->mouse_x, game->mouse_y)) {
                 /* Save Game */
@@ -2824,6 +2835,13 @@ void game_update(Game *game)
         if (game->pickup_notify_timer < 0.0f)
             game->pickup_notify_timer = 0.0f;
     }
+
+    /* Tick the save-reminder notification regardless of game state */
+    if (game->save_reminder_timer > 0.0f) {
+        game->save_reminder_timer -= dt;
+        if (game->save_reminder_timer < 0.0f)
+            game->save_reminder_timer = 0.0f;
+    }
 }
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
@@ -2870,7 +2888,10 @@ case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
         game_render_load_menu(game);
         break;
     case GAME_STATE_PAUSE:
-        game_render_playing(game);
+        if (game->pause_return_state == GAME_STATE_CUTSCENE)
+            game_render_cutscene(game);
+        else
+            game_render_playing(game);
         game_render_pause(game);
         break;
     default: break;

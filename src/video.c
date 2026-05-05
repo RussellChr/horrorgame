@@ -181,9 +181,14 @@ VideoPlayer *video_player_open(SDL_Renderer *renderer, const char *path)
     vp->rgba_buf    = (uint8_t *)malloc((size_t)(vp->rgba_stride * vp->height));
     if (!vp->rgba_buf) goto fail;
 
-    /* SDL texture for the current video frame */
+    /* SDL texture for the current video frame.
+     * SDL_PIXELFORMAT_RGBA32 is an endian-neutral alias that always maps to
+     * R at byte 0, G at byte 1, B at byte 2, A at byte 3 in memory, which
+     * matches the layout produced by sws_scale with AV_PIX_FMT_RGBA.
+     * (SDL_PIXELFORMAT_RGBA8888 is a packed 32-bit format that differs on
+     * little-endian machines, causing a channel swap that turns the image red.) */
     vp->frame_tex = SDL_CreateTexture(renderer,
-                                      SDL_PIXELFORMAT_RGBA8888,
+                                      SDL_PIXELFORMAT_RGBA32,
                                       SDL_TEXTUREACCESS_STREAMING,
                                       vp->width, vp->height);
     if (!vp->frame_tex) {

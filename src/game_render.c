@@ -1099,7 +1099,6 @@ void game_render_dodge(Game *game)
                          WINDOW_W / 2, ui_y + 38, 1, 115, 115, 130);
 
 }
-}
 
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */
 

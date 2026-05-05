@@ -1099,6 +1099,10 @@ static void game_do_load(Game *game, int slot)
     }
     game->enemy.active = data.enemy_active;
     if (data.enemy_active) game->enemy.state = ENEMY_STATE_PATROL;
+    /* If the player already has the level-2 keycard the hallway encounter is
+     * over, so keep the hallway enemy deactivated regardless of the saved flag. */
+    if (player_has_item(game->player, ITEM_ID_KEYCARD_L2))
+        game->enemy.active = 0;
 
     /* Re-init archive enemy */
     enemy_free(&game->archive_enemy);

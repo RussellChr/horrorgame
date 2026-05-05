@@ -1010,6 +1010,24 @@ static void game_do_load(Game *game, int slot)
             archive->collider_count = archive->door_collider_start;
     }
 
+    /* Restore Hibernation room exit-door state.
+     * When FLAG_HIBERN_POWERCELL_PLACED is set the tile-5 door was already
+     * opened at play-time (colliders removed, trigger 75 converted to an exit).
+     * world_setup_rooms() always recreates the door colliders from scratch, so
+     * we must re-apply the same open-door transformation here to prevent the
+     * player from being locked in when they re-enter the room after loading. */
+    if (player_check_flag(game->player, FLAG_HIBERN_POWERCELL_PLACED)) {
+        Location *hibern = world_get_location(game->world, LOCATION_HIBERNATION);
+        if (hibern) {
+            if (hibern->door_collider_count > 0)
+                hibern->collider_count = hibern->door_collider_start;
+            for (int i = 0; i < hibern->trigger_count; i++) {
+                if (hibern->triggers[i].trigger_id == 75)
+                    hibern->triggers[i].target_location_id = LOCATION_HALLWAY;
+            }
+        }
+    }
+
     /* Restore hallway door states based on saved story flags.
      * Doors are stacked in the collider array (archive < lab < security),
      * so they must be removed in reverse unlock order (security first). */

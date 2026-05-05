@@ -1284,6 +1284,7 @@ void game_start_tube_sort(Game *game)
     game->tube_selected = -1;
     game->tube_sort_done = 0;
     game->state = GAME_STATE_TUBE_SORT;
+}
 
 static void dodge_clear_bullets(Game *game)
 {

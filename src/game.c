@@ -142,9 +142,9 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
 #define DODGE_BOX_H         330.0f
 #define DODGE_HEART_SIZE     18.0f
 #define DODGE_HEART_SPEED   260.0f
-#define DODGE_MAX_HP          7
+#define DODGE_MAX_HP          6
 #define DODGE_ROUNDS          5
-#define DODGE_ROUND_DURATION 18.0f
+#define DODGE_ROUND_DURATION 12.0f
 #define DODGE_SPAWN_EVERY     0.28f
 #define DODGE_BULLET_SIZE    14.0f
 #define DODGE_HIT_INVULN      0.9f
@@ -1010,6 +1010,24 @@ static void game_do_load(Game *game, int slot)
             archive->collider_count = archive->door_collider_start;
     }
 
+    /* Restore Hibernation room exit-door state.
+     * When FLAG_HIBERN_POWERCELL_PLACED is set the tile-5 door was already
+     * opened at play-time (colliders removed, trigger 75 converted to an exit).
+     * world_setup_rooms() always recreates the door colliders from scratch, so
+     * we must re-apply the same open-door transformation here to prevent the
+     * player from being locked in when they re-enter the room after loading. */
+    if (player_check_flag(game->player, FLAG_HIBERN_POWERCELL_PLACED)) {
+        Location *hibern = world_get_location(game->world, LOCATION_HIBERNATION);
+        if (hibern) {
+            if (hibern->door_collider_count > 0)
+                hibern->collider_count = hibern->door_collider_start;
+            for (int i = 0; i < hibern->trigger_count; i++) {
+                if (hibern->triggers[i].trigger_id == 75)
+                    hibern->triggers[i].target_location_id = LOCATION_HALLWAY;
+            }
+        }
+    }
+
     /* Restore hallway door states based on saved story flags.
      * Doors are stacked in the collider array (archive < lab < security),
      * so they must be removed in reverse unlock order (security first). */
@@ -1081,6 +1099,10 @@ static void game_do_load(Game *game, int slot)
     }
     game->enemy.active = data.enemy_active;
     if (data.enemy_active) game->enemy.state = ENEMY_STATE_PATROL;
+    /* If the player already has the level-2 keycard the hallway encounter is
+     * over, so keep the hallway enemy deactivated regardless of the saved flag. */
+    if (player_has_item(game->player, ITEM_ID_KEYCARD_L2))
+        game->enemy.active = 0;
 
     /* Re-init archive enemy */
     enemy_free(&game->archive_enemy);
@@ -1119,6 +1141,8 @@ static void game_do_load(Game *game, int slot)
     game->ambient_flicker_duration = 0.0f;
     game->ambient_flicker_alpha    = 0;
     game->pickup_notify_timer      = 0.0f;
+    game->save_reminder_timer      = 0.0f;
+    game->pause_return_state       = GAME_STATE_PLAYING;
     game->show_note_locker        = 0;
     game->show_monitor_zoom       = 0;
     game->show_containment_level  = 0;
@@ -1590,6 +1614,7 @@ void game_start_hallway_exit_cutscene(Game *game)
 
     game->cutscene_index = 0;
     game->cutscene_type  = CUTSCENE_HALLWAY_EXIT;
+    game->save_reminder_timer = 7.0f;
 
     game->cutscene_dialogue_tree = dialogue_tree_create();
     if (!game->cutscene_dialogue_tree) return;
@@ -1712,6 +1737,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->state = GAME_STATE_INVENTORY;
                 break;
             case SDLK_ESCAPE:
+                game->pause_return_state = GAME_STATE_PLAYING;
                 game->state = GAME_STATE_PAUSE;
                 break;
             case SDLK_E:
@@ -1874,6 +1900,13 @@ void game_handle_event(Game *game, SDL_Event *event)
     case GAME_STATE_CUTSCENE:
         if (event->type == SDL_EVENT_KEY_DOWN) {
             SDL_Keycode k = event->key.key;
+            /* Allow the player to pause (and save) just before the final fight */
+            if (k == SDLK_ESCAPE &&
+                game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                game->pause_return_state = GAME_STATE_CUTSCENE;
+                game->state = GAME_STATE_PAUSE;
+                break;
+            }
             if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) {
                 if (!game->cutscene_dialogue_state.text_complete) {
                     /* Skip typewriter – show full text immediately */
@@ -2028,12 +2061,12 @@ void game_handle_event(Game *game, SDL_Event *event)
                                 game->mouse_x, game->mouse_y);
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE)
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (button_is_clicked(&game->pause_buttons[0],
                                   game->mouse_x, game->mouse_y))
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
             if (button_is_clicked(&game->pause_buttons[1],
                                   game->mouse_x, game->mouse_y)) {
                 /* Save Game */
@@ -2824,6 +2857,13 @@ void game_update(Game *game)
         if (game->pickup_notify_timer < 0.0f)
             game->pickup_notify_timer = 0.0f;
     }
+
+    /* Tick the save-reminder notification regardless of game state */
+    if (game->save_reminder_timer > 0.0f) {
+        game->save_reminder_timer -= dt;
+        if (game->save_reminder_timer < 0.0f)
+            game->save_reminder_timer = 0.0f;
+    }
 }
 
 /* ── Rendering ──────────────────────────────────────────────────────────── */
@@ -2870,7 +2910,10 @@ case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
         game_render_load_menu(game);
         break;
     case GAME_STATE_PAUSE:
-        game_render_playing(game);
+        if (game->pause_return_state == GAME_STATE_CUTSCENE)
+            game_render_cutscene(game);
+        else
+            game_render_playing(game);
         game_render_pause(game);
         break;
     default: break;

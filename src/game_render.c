@@ -890,18 +890,21 @@ void game_render_cutscene(Game *game)
         int w1 = (int)(strlen(line1) * 8 * 2);
         int w2 = (int)(strlen(line2) * 8 * 1);
         int bw = (w1 > w2 ? w1 : w2) + 28;
-        int bh = 16 + 12 + 18;  /* line1(16) + gap(12) + line2(8*scale) */
+        int line1_h = 16;  /* 8px glyph × scale 2 */
+        int line2_h =  8;  /* 8px glyph × scale 1 */
+        int gap     = 10;  /* vertical gap between lines */
+        int bh = line1_h + gap + line2_h;
         int bx = (WINDOW_W - bw) / 2;
         int by = 12;
 
-        render_filled_rect(r, bx, by, bw, bh + 4, 60, 10, 10,
+        render_filled_rect(r, bx, by, bw, bh + 12, 60, 10, 10,
                            (Uint8)(a * 0.88f));
-        render_rect_outline(r, bx, by, bw, bh + 4, 220, 60, 60, a);
+        render_rect_outline(r, bx, by, bw, bh + 12, 220, 60, 60, a);
         render_text_centered(r, line1, WINDOW_W / 2, by + 6, 2,
                              (Uint8)(255 * alpha_f),
                              (Uint8)(80  * alpha_f),
                              (Uint8)(80  * alpha_f));
-        render_text_centered(r, line2, WINDOW_W / 2, by + 6 + 18, 1,
+        render_text_centered(r, line2, WINDOW_W / 2, by + 6 + line1_h + gap, 1,
                              (Uint8)(220 * alpha_f),
                              (Uint8)(200 * alpha_f),
                              (Uint8)(200 * alpha_f));

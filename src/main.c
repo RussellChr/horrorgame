@@ -1,9 +1,27 @@
 #include <SDL3/SDL.h>
 #include "game.h"
 
+#ifdef _WIN32
+#include <direct.h>
+#define chdir _chdir
+#else
+#include <unistd.h>
+#endif
+
 int main(int argc, char *argv[])
 {
     (void)argc; (void)argv;
+
+    /* Change the working directory to where the exe lives so that relative
+     * asset paths ("assets/…", "maps/…") work regardless of how or from
+     * where the executable was launched (double-click, shortcut, CLI, etc.). */
+    char *base = SDL_GetBasePath();
+    if (base) {
+        if (chdir(base) != 0)
+            SDL_Log("Warning: could not change working directory to '%s' – "
+                    "asset loading may fail", base);
+        SDL_free(base);
+    }
 
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());

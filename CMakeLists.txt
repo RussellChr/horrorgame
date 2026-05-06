@@ -18,8 +18,11 @@ endif()
 
 find_package(SDL3 REQUIRED CONFIG)
 
-# SDL3_image is optional; enables PNG loading for the dialogue background
-find_package(SDL3_image CONFIG)
+# SDL3_image is required: every game texture (PNG/JPG) is loaded via IMG_LoadTexture.
+# Windows: install with vcpkg (sdl3-image:x64-windows)
+# macOS:   brew install sdl3_image
+# Linux:   sudo apt install libsdl3-image-dev
+find_package(SDL3_image REQUIRED CONFIG)
 
 # Prefer static SDL3 target to avoid missing DLL at runtime
 if(TARGET SDL3::SDL3-static)
@@ -88,11 +91,10 @@ else()
     target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 endif()
 
-# If SDL3_image was found, enable PNG loading for the dialogue background
-if(SDL3_IMAGE_LINK_TARGET)
-    target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_IMAGE=1)
-    target_link_libraries(horrorgame ${SDL3_IMAGE_LINK_TARGET})
-endif()
+# SDL3_image is now REQUIRED above; always enable PNG/JPG loading.
+# SDL3_IMAGE_LINK_TARGET prefers the static variant to avoid extra DLLs.
+target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_IMAGE=1)
+target_link_libraries(horrorgame ${SDL3_IMAGE_LINK_TARGET})
 
 # Link math library on Linux
 if(UNIX AND NOT APPLE)

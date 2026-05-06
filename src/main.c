@@ -1,4 +1,5 @@
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 #include "game.h"
 
 #ifdef _WIN32
@@ -28,11 +29,23 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    /* Initialise SDL3_image with PNG and JPG support.
+     * IMG_Init MUST be called before any IMG_LoadTexture / IMG_Load call,
+     * otherwise every load fails with "file format not supported". */
+    int img_flags = IMG_INIT_PNG | IMG_INIT_JPG;
+    if ((IMG_Init(img_flags) & img_flags) != img_flags) {
+        SDL_Log("IMG_Init failed to enable PNG/JPG support: %s",
+                IMG_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
     SDL_Window *window = SDL_CreateWindow(
         "Project Yozora – A Horror Story",
         WINDOW_W, WINDOW_H, 0);
     if (!window) {
         SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
+        IMG_Quit();
         SDL_Quit();
         return 1;
     }
@@ -41,6 +54,7 @@ int main(int argc, char *argv[])
     if (!renderer) {
         SDL_Log("SDL_CreateRenderer failed: %s", SDL_GetError());
         SDL_DestroyWindow(window);
+        IMG_Quit();
         SDL_Quit();
         return 1;
     }
@@ -58,6 +72,7 @@ int main(int argc, char *argv[])
         SDL_Log("game_init failed");
         SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
+        IMG_Quit();
         SDL_Quit();
         return 1;
     }
@@ -86,6 +101,7 @@ int main(int argc, char *argv[])
     game_cleanup(game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+    IMG_Quit();
     SDL_Quit();
     return 0;
 }

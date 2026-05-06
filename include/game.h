@@ -12,6 +12,8 @@
 #include "npc.h"
 #include "monologue.h"
 #include "video.h"
+#include "enemy.h"
+#include "savegame.h"
 
 /* ── Monitor passcode constants ────────────────────────────────────────── */
 #define MONITOR_PANEL_X      685
@@ -22,11 +24,45 @@
 /* Display buffer: 4 digits alternating with spaces + null  ("_ _ _ _\0") */
 #define PASSCODE_DISPLAY_SIZE  8
 
+/* ── Settings panel layout constants ────────────────────────────────────── */
+#define SETTINGS_PANEL_W     680   /* total width of the settings panel     */
+#define SETTINGS_FS_ROW_Y    450   /* top-Y of the Fullscreen toggle row    */
+#define SETTINGS_FS_ROW_H     30   /* height of the Fullscreen toggle row   */
+
+/* ── Archive room glass shard constants ─────────────────────────────────── */
+#define ARCHIVE_GLASS_COUNT  6
+#define ARCHIVE_GLASS_SIZE  40
+extern const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT];
+
+#define DODGE_MAX_BULLETS  128
+
+typedef struct DecodedAudio {
+    SDL_AudioSpec    spec;
+    Uint8           *buf;
+    Uint32           len;
+    SDL_AudioStream *stream;
+} DecodedAudio;
+
 /* ── AM recording interactable (monitor_zoom screen) ──────────────────── */
 #define AM_RECORD_X   377
 #define AM_RECORD_Y   274
 #define AM_RECORD_W    66   /* 443 - 377 */
 #define AM_RECORD_H   109   /* 383 - 274 */
+
+/* ── Containment level interactable (monitor_zoom screen) ─────────────── */
+#define CONTAINMENT_LEVEL_RECT_X   990
+#define CONTAINMENT_LEVEL_RECT_Y   168
+#define CONTAINMENT_LEVEL_RECT_W   125
+#define CONTAINMENT_LEVEL_RECT_H   122
+
+/* ── Cutscene types ───────────────────────────────────────────────────── */
+
+typedef enum {
+    CUTSCENE_HIBERNATION,   /* opening cutscene shown on new game    */
+    CUTSCENE_SECURITY,      /* security-room passcode cutscene       */
+    CUTSCENE_POWER,         /* power-room cutscene after simon win   */
+    CUTSCENE_HALLWAY_EXIT   /* hallway level-2 door: access denied, then monster attack */
+} CutsceneType;
 
 /* ── Game states ──────────────────────────────────────────────────────── */
 
@@ -38,8 +74,18 @@ typedef enum {
     GAME_STATE_PAUSE,
     GAME_STATE_SETTINGS,
     GAME_STATE_LOCKER,
+    GAME_STATE_CUTSCENE,
     GAME_STATE_SIMON,
+    GAME_STATE_DODGE,
     GAME_STATE_JUMPSCARE,
+    GAME_STATE_MONSTER_DEATH_CUTSCENE,
+    GAME_STATE_GAME_OVER,
+    GAME_STATE_NEW_LOAD_MENU,   /* title-screen "New / Load Game" submenu  */
+    GAME_STATE_SAVE_MENU,       /* in-game save-slot selection             */
+    GAME_STATE_LOAD_MENU,       /* save-slot selection for loading         */
+    GAME_STATE_ARCHIVE_BOOK,    /* reading archive pages (pg1 / pg2)       */
+    GAME_STATE_TUBE_SORT,       /* tube-sorting medicine minigame in lab   */
+    GAME_STATE_END_CREDITS,     /* end-credits video shown after final battle */
     GAME_STATE_QUIT
 } GameState;
 
@@ -79,14 +125,24 @@ typedef struct {
     int    mouse_clicked;
     SDL_Texture *title_screen_texture;
 
+    /* New / Load submenu (title screen) */
+    Button new_load_buttons[3];        /* New Game, Load Game, Back */
+    int    new_load_menu_choice;
+
     /* Pause menu */
-    Button pause_buttons[2];
+    Button pause_buttons[4];           /* Resume, Save, Load, Quit to Menu */
     int    pause_choice;
+
+    /* Save / Load slot selection menus */
+    Button    save_load_buttons[4];              /* Slot 1–3 + Cancel         */
+    char      save_slot_labels[SAVE_SLOT_COUNT][64]; /* dynamic slot text     */
+    GameState save_load_prev_state;              /* state to return to on Cancel */
 
     /* Settings menu */
     float  volume;                     /* 0–100 */
     float  brightness;                 /* 0–100 */
-    int    settings_focus;             /* 0=volume, 1=brightness */
+    int    fullscreen;                 /* 0=windowed, 1=fullscreen */
+    int    settings_focus;             /* 0=volume, 1=brightness, 2=fullscreen */
     Slider settings_volume_slider;
     Slider settings_brightness_slider;
     Button settings_back_button;
@@ -96,6 +152,10 @@ typedef struct {
     SDL_Texture *item_flashlight_texture;  /* icon shown in inventory for flashlight */
     SDL_Texture *item_gasmask_texture;     /* icon shown in inventory for gas mask   */
     SDL_Texture *item_keycard_texture;     /* icon shown in inventory for keycard    */
+    SDL_Texture *item_fingerprint_texture; /* icon shown in inventory for fingerprint 1 */
+    SDL_Texture *item_fingerprint2_texture; /* icon shown in inventory for fingerprint 2 */
+    SDL_Texture *item_fingerprint3_texture; /* icon shown in inventory for fingerprint 3 */
+    SDL_Texture *item_thermalfuse_texture; /* icon shown in inventory for thermal fuse */
 
     /* Flashlight */
     int flashlight_active;    /* 1 if the flashlight beam is on */
@@ -109,17 +169,32 @@ typedef struct {
 
     /* Archive room darkness: full-screen light-mask render target */
     SDL_Texture *dark_overlay;
+    float ambient_flicker_timer;      /* seconds until next rare flicker pulse */
+    float ambient_flicker_duration;   /* remaining seconds of active flicker pulse */
+    Uint8 ambient_flicker_alpha;      /* extra darkness alpha applied during pulse */
+
+    /* Archive room glass overlay */
+    SDL_Texture *glass_texture;
+    int          archive_glass_collected[6]; /* 1 = this shard was stepped on */
 
     /* Item pickup notification */
     char  pickup_item_name[64];  /* name of the last picked-up item */
     float pickup_notify_timer;   /* counts down from > 0; shown while > 0 */
 
+    /* Save-reminder notification (shown when the final fight is about to start) */
+    float save_reminder_timer;   /* counts down from > 0; shown while > 0 */
+
+    /* State to return to after leaving the pause menu */
+    GameState pause_return_state;
+
     /* Locker view */
     SDL_Texture *locker_texture;
     SDL_Texture *note_locker_texture;   /* shown when reading the security note */
     int          show_note_locker;      /* 1 = show note_locker_texture instead of locker_texture */
-    SDL_Texture *monitor_zoom_texture;  /* shown when examining the security monitor */
-    int          show_monitor_zoom;     /* 1 = show monitor_zoom_texture             */
+    SDL_Texture *monitor_zoom_texture;        /* shown when examining the security monitor  */
+    int          show_monitor_zoom;           /* 1 = show monitor_zoom_texture              */
+    SDL_Texture *containment_level_texture;   /* shown when clicking the containment rect   */
+    int          show_containment_level;      /* 1 = show containment_level_texture overlay */
 
     /* Passcode system (triggered by clicking the monitor panel rect) */
     int  passcode_active;          /* 1 = passcode input overlay is shown */
@@ -134,6 +209,26 @@ typedef struct {
     Uint32           am_wav_len;
     SDL_AudioStream *am_audio_stream;
 
+    /* Glass cracking SFX (played when player steps on an archive glass shard) */
+    SDL_AudioSpec    glass_crack_wav_spec;
+    Uint8           *glass_crack_wav_buf;
+    Uint32           glass_crack_wav_len;
+    SDL_AudioStream *glass_crack_audio_stream;
+
+    /* Door and looping hospital atmosphere MP3s */
+    DecodedAudio door_open_audio;
+    DecodedAudio ambient_ost_audio;    /* archive room: OST NTE Abandoned Hospital  */
+    DecodedAudio monster_theme_audio;  /* hallway dodge minigame theme              */
+    DecodedAudio menu_music_audio;     /* main menu: OPPhasmophobia music box       */
+    DecodedAudio room1_music_audio;    /* chamber room: Room1Edge of Eternity       */
+    DecodedAudio room2_music_audio;    /* after leaving chamber: Room2Phantoms      */
+    DecodedAudio room3_music_audio;    /* after code puzzle: Room3Locked Horrors    */
+    float        am_audio_pause_timer;
+
+    /* Enemy patrol / chase system */
+    Enemy         enemy;          /* hallway enemy (activated by passcode)    */
+    Enemy         archive_enemy;  /* archive enemy (activated on first visit) */
+
     /* Timing */
     Uint64 last_ticks;
     float  delta_time;
@@ -144,19 +239,69 @@ typedef struct {
     /* Running flag */
     int running;
 
+    /* Security cutscene (shown once after correct passcode) */
+    SDL_Texture  *security_cutscene_textures[4]; /* scene images 1–4   */
+    SDL_Texture  *hibernation_cutscene_textures[3]; /* hibernation opening scenes */
+    SDL_Texture  *power_cutscene_textures[3];    /* power-room win scenes      */
+    SDL_Texture  *hallway_exit_cutscene_textures[2]; /* end0.png / end1.png    */
+    int           cutscene_index;                /* current scene 0–N  */
+    CutsceneType  cutscene_type;                 /* which cutscene is active   */
+    int           security_cutscene_played;      /* 1 once shown       */
+    DialogueState cutscene_dialogue_state;       /* typewriter/render  */
+    DialogueTree *cutscene_dialogue_tree;        /* text for the scene */
+
+    /* Archive book viewer (triggered by tile-6 in archive_close.csv) */
+    SDL_Texture *archive_pg1_texture;       /* first page image              */
+    SDL_Texture *archive_pg2_texture;       /* second page image             */
+    int          archive_book_page;         /* 0 = pg1, 1 = pg2              */
+    float        archive_book_trans_timer;  /* >0 while black-screen fading  */
+    int          archive_book_next_page;    /* page to show after transition */
+
     /* Simon Says minigame */
-    int   simon_sequence[10];    /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
-    int   simon_length;          /* steps in the current sequence (1–10)          */
+    int   simon_sequence[8];     /* button indices: 0=Red,1=Blue,2=Green,3=Yellow */
+    int   simon_length;          /* steps in the current sequence (1–8)           */
     int   simon_show_pos;        /* which step is being shown during show phase    */
     int   simon_show_lit;        /* 1=button currently lit, 0=dark gap             */
     float simon_show_timer;      /* countdown for current show-phase step          */
     int   simon_player_pos;      /* player's progress in matching the sequence     */
     int   simon_phase;           /* 0=showing, 1=player-input, 2=round-pause       */
     int   simon_lit_button;      /* which button is lit right now (-1 = none)      */
-    int   simon_death_triggered; /* 1 if player failed the Simon game              */
+    int   simon_death_triggered;   /* 1 if player failed the Simon game            */
+    int   simon_jumpscare_played;  /* 1 after the jumpscare has been shown once    */
+
+    /* Undertale-style dodge minigame for the hallway level-2 exit */
+    float dodge_heart_x;
+    float dodge_heart_y;
+    int   dodge_hp;
+    int   dodge_round;
+    float dodge_elapsed;
+    float dodge_spawn_timer;
+    float dodge_invuln_timer;
+    int   dodge_bullet_count;
+    float dodge_bullet_x[DODGE_MAX_BULLETS];
+    float dodge_bullet_y[DODGE_MAX_BULLETS];
+    float dodge_bullet_vx[DODGE_MAX_BULLETS];
+    float dodge_bullet_vy[DODGE_MAX_BULLETS];
+    int   dodge_bullet_active[DODGE_MAX_BULLETS];
 
     /* Jumpscare (shown 1 s after round-7 pattern display finishes) */
     VideoPlayer *jumpscare_player;  /* active during GAME_STATE_JUMPSCARE    */
+
+    /* Monster death cutscene (shown before the game-over screen) */
+    VideoPlayer *monster_death_player;
+
+    /* End-credits video (shown immediately after the final battle is won) */
+    VideoPlayer *end_credits_player;
+
+    /* Dizziness bar (active after keycard obtained, until medicine made) */
+    float dizziness_bar;             /* 1.0 = full, 0.0 = dead */
+    int   dizziness_death_triggered; /* 1 after bar hits zero */
+
+    /* Tube-sort minigame (GAME_STATE_TUBE_SORT) */
+    int tube_colors[7][4]; /* [tube][slot], slot 0 = bottom, slot count-1 = top */
+    int tube_count[7];     /* number of units in tube */
+    int tube_selected;     /* -1 = none, else selected tube index */
+    int tube_sort_done;    /* 1 after minigame won */
 } Game;
 
 /* ── Lifecycle ────────────────────────────────────────────────────────── */
@@ -178,6 +323,12 @@ void game_change_location(Game *game, int location_id,
 void game_start_dialogue(Game *game, int node_id);
 void game_end_dialogue(Game *game);
 void game_start_simon(Game *game);
+void game_start_tube_sort(Game *game);
+void game_start_dodge(Game *game);
+void game_start_security_cutscene(Game *game);
+void game_start_hibernation_cutscene(Game *game);
+void game_start_power_cutscene(Game *game);
+void game_start_hallway_exit_cutscene(Game *game);
 
 /* ── Per-state render helpers ────────────────────────────────────────── */
 
@@ -188,7 +339,15 @@ void game_render_inventory(Game *game);
 void game_render_pause(Game *game);
 void game_render_settings(Game *game);
 void game_render_locker(Game *game);
+void game_render_cutscene(Game *game);
 void game_render_simon(Game *game);
+void game_render_tube_sort(Game *game);
+void game_render_dodge(Game *game);
 void game_render_jumpscare(Game *game);
+void game_render_game_over(Game *game);
+void game_render_archive_book(Game *game);
+void game_render_new_load_menu(Game *game);
+void game_render_save_menu(Game *game);
+void game_render_load_menu(Game *game);
 
 #endif /* GAME_H */

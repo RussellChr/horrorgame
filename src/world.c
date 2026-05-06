@@ -225,6 +225,19 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/archive_close.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
+                    loc->door_collider_start = loc->collider_count;
+                    map_build_colliders_for_tile(m, loc, 2);
+                    loc->door_collider_count =
+                        loc->collider_count - loc->door_collider_start;
+                    map_build_interactive_triggers_for_tile(m, loc, 2, 52, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 3, 53, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 54, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 6, 56, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 7, 57, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 8, 58, 0.0f, 0.0f);
+                    map_build_interactive_triggers_for_tile(m, loc, 9, 59, 0.0f, 0.0f);
 
                     /* Spawn in front of the door tiles (rows 10-12, cols ~271-279).
                        Hint one row below the door run so we land on floor. */
@@ -261,8 +274,15 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 if (m) {
                     map_build_colliders(m, loc);
 
-                    /* Tile 2: keycard pickup, interactive trigger 61 */
+                    /* Tile 2: keycard pickup – solid so the player cannot walk
+                     * on top of it, but still exposes an interactive trigger. */
+                    map_build_colliders_for_tile(m, loc, 2);
                     map_build_interactive_triggers_for_tile(m, loc, 2, 61, 0.0f, 0.0f);
+
+                    /* Tile 4: medicine workbench (tube-sort minigame) – solid so
+                     * the player cannot walk on top of it, but still interactive. */
+                    map_build_colliders_for_tile(m, loc, 4);
+                    map_build_interactive_triggers_for_tile(m, loc, 4, 64, 0.0f, 0.0f);
 
                     /* Hint one row above the door tiles (rows 23-25, cols 11-14)
                        so the player spawns just in front of the door. */
@@ -301,6 +321,8 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 Map *m = map_load_csv("maps/hallway.csv");
                 if (m) {
                     map_build_colliders(m, loc);
+                    map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
 
                     float sx = (float)(loc->room_width  / 2);
                     float sy = (float)(loc->room_height / 2);
@@ -315,6 +337,9 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                      * Group 2: rows 18-20, cols 35-39  → world (1120,576) 160×96 */
                     ADD_TRIGGER(loc, 1312, 448, 128, 64, 60, 0, 0);
                     ADD_TRIGGER(loc, 1120, 576, 160, 96, 60, 0, 0);
+
+                    /* Tile 6: level-2 keycard door/panel (nothing for now), trigger 96. */
+                    map_build_interactive_triggers_for_tile(m, loc, 6, 96, 0.0f, 0.0f);
 
                     /* Tile 8: interactable (nothing here), trigger 80.
                      * Tile 9: gas mask pickup, trigger 81.
@@ -406,6 +431,7 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                     map_build_colliders_for_tile(m, loc, 1);
                     map_build_colliders_for_tile(m, loc, 2);
                     map_build_colliders_for_tile(m, loc, 6);
+                    map_build_colliders_for_tile(m, loc, 7);
 
                     /* Spawn to the left of the tile-5 connector (rows 19-25, cols 53-55).
                        Hint into the floor area adjacent to the connector so the player
@@ -544,13 +570,20 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                 map_find_spawn(mhw, 16, 29, &hw4x, &hw4y,
                                loc2->room_width, loc2->room_height);
 
-                /* Hallway → each room (all tile values in a single CSV load). */
-                /* Tile 5 → archive: locked behind keycard.
-                   Build physical door colliders so the player cannot walk
-                   through, then add interactive trigger 95 so game.c can
-                   show the "keycard required" message and, once the player
-                   presents the keycard, remove the colliders and convert
-                   the trigger into a normal exit trigger. */
+                /* Hallway → each room (all tile values in a single CSV load).
+                 *
+                 * Progression order – doors are locked by story flags and
+                 * stacked so they can be individually removed by truncation:
+                 *   door_collider_start  = archive door  (tile 5, lowest index)
+                 *   door2_collider_start = lab door      (tile 4, middle index)
+                 *   door3_collider_start = security door (tile 3, highest index)
+                 *
+                 * Removing security (first to unlock): collider_count = door3_start
+                 * Removing lab (second to unlock):     collider_count = door2_start
+                 * Removing archive (third to unlock):  collider_count = door_start
+                 */
+
+                /* Tile 5 → archive: locked behind keycard (trigger 95). */
                 if (loc0) {
                     loc2->door_collider_start = loc2->collider_count;
                     map_build_colliders_for_tile(mhw, loc2, 5);
@@ -560,14 +593,35 @@ void world_setup_rooms(World *world, SDL_Renderer *renderer)
                                                             loc0->spawn_x,
                                                             loc0->spawn_y);
                 }
-                if (loc1) map_build_door_triggers_for_tile(mhw, loc2, 4, 1,
-                                                           loc1->spawn_x, loc1->spawn_y);
+
+                /* Tile 4 → lab: locked until security passcode done (trigger 94). */
+                if (loc1) {
+                    loc2->door2_collider_start = loc2->collider_count;
+                    map_build_colliders_for_tile(mhw, loc2, 4);
+                    loc2->door2_collider_count =
+                        loc2->collider_count - loc2->door2_collider_start;
+                    map_build_interactive_triggers_for_tile(mhw, loc2, 4, 94,
+                                                            loc1->spawn_x,
+                                                            loc1->spawn_y);
+                }
+
+                /* Tile 3 → security: locked until generator is on (trigger 93). */
+                if (loc5) {
+                    loc2->door3_collider_start = loc2->collider_count;
+                    map_build_colliders_for_tile(mhw, loc2, 3);
+                    loc2->door3_collider_count =
+                        loc2->collider_count - loc2->door3_collider_start;
+                    map_build_interactive_triggers_for_tile(mhw, loc2, 3, 93,
+                                                            loc5->spawn_x,
+                                                            loc5->spawn_y);
+                }
+
+                /* Tile 1 → hibernation: always open exit. */
                 if (loc3) map_build_door_triggers_for_tile(mhw, loc2, 1, 3,
                                                            loc3->spawn_x, loc3->spawn_y);
+                /* Tile 2 → power: always open exit. */
                 if (loc4) map_build_door_triggers_for_tile(mhw, loc2, 2, 4,
                                                            loc4->spawn_x, loc4->spawn_y);
-                if (loc5) map_build_door_triggers_for_tile(mhw, loc2, 3, 5,
-                                                           loc5->spawn_x, loc5->spawn_y);
                 map_free(mhw);
             }
         }

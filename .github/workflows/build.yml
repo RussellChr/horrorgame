@@ -2,11 +2,10 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
+    branches: ["**"]
   pull_request:
-    branches:
-      - main
+    branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   build-windows:

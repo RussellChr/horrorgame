@@ -1,14 +1,46 @@
 #include <SDL3/SDL.h>
+#include <SDL3_image/SDL_image.h>
 #include "game.h"
+
+#ifdef _WIN32
+#include <direct.h>
+#define chdir _chdir
+#else
+#include <unistd.h>
+#endif
 
 int main(int argc, char *argv[])
 {
     (void)argc; (void)argv;
 
+    /* Change the working directory to where the exe lives so that relative
+     * asset paths ("assets/…", "maps/…") work regardless of how or from
+     * where the executable was launched (double-click, shortcut, CLI, etc.). */
+    const char *base = SDL_GetBasePath();
+    if (base) {
+        if (chdir(base) != 0)
+            SDL_Log("Warning: could not change working directory to '%s' – "
+                    "asset loading may fail", base);
+        SDL_free((void *)base);
+    }
+
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
         SDL_Log("SDL_Init failed: %s", SDL_GetError());
         return 1;
     }
+
+    /* Initialise SDL3_image PNG/JPEG backends where the API exists.
+     * SDL3_image 3.x removed IMG_Init in some builds (backends are always
+     * available); in builds that still have it we call it to register the
+     * dynamic-load backends, otherwise we skip it gracefully. */
+#ifdef IMG_INIT_PNG
+    {
+        int img_flags = IMG_INIT_PNG | IMG_INIT_JPG;
+        if ((IMG_Init(img_flags) & img_flags) != img_flags)
+            SDL_Log("IMG_Init: PNG/JPEG backend not fully loaded: %s",
+                    SDL_GetError());
+    }
+#endif
 
     SDL_Window *window = SDL_CreateWindow(
         "Project Yozora – A Horror Story",
@@ -68,6 +100,9 @@ int main(int argc, char *argv[])
     game_cleanup(game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+#ifdef IMG_INIT_PNG
+    IMG_Quit();
+#endif
     SDL_Quit();
     return 0;
 }

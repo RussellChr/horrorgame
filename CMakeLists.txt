@@ -18,8 +18,11 @@ endif()
 
 find_package(SDL3 REQUIRED CONFIG)
 
-# SDL3_image is optional; enables PNG loading for the dialogue background
-find_package(SDL3_image CONFIG)
+# SDL3_image is required: every game texture (PNG/JPG) is loaded via IMG_LoadTexture.
+# Windows: install with vcpkg (sdl3-image:x64-windows)
+# macOS:   brew install sdl3_image
+# Linux:   sudo apt install libsdl3-image-dev
+find_package(SDL3_image REQUIRED CONFIG)
 
 # Prefer static SDL3 target to avoid missing DLL at runtime
 if(TARGET SDL3::SDL3-static)
@@ -66,23 +69,32 @@ add_executable(horrorgame
 target_link_libraries(horrorgame ${SDL3_LINK_TARGET})
 
 # FFmpeg libraries for video/audio decoding (jumpscare.mov playback).
+# On Windows with MSVC + vcpkg: install ffmpeg:x64-windows via vcpkg; CMake's
+#   find_package(FFMPEG) is provided by the vcpkg toolchain.
 # On macOS install with: brew install ffmpeg
 # On Linux install with: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
-find_package(PkgConfig REQUIRED)
-# Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
-set(ENV{PKG_CONFIG_PATH}
-    "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
-pkg_check_modules(FFMPEG REQUIRED
-    libavformat libavcodec libavutil libswscale libswresample)
-target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
-target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
-target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
-
-# If SDL3_image was found, enable PNG loading for the dialogue background
-if(SDL3_IMAGE_LINK_TARGET)
-    target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_IMAGE=1)
-    target_link_libraries(horrorgame ${SDL3_IMAGE_LINK_TARGET})
+if(WIN32 AND NOT MINGW)
+    # vcpkg ships a FindFFMPEG.cmake that sets FFMPEG_INCLUDE_DIRS / FFMPEG_LIBRARIES
+    find_package(FFMPEG REQUIRED COMPONENTS avformat avcodec avutil swscale swresample)
+    target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
+else()
+    # macOS / Linux / MinGW cross-build: use pkg-config
+    find_package(PkgConfig REQUIRED)
+    # Add Homebrew FFmpeg pkg-config paths for macOS (Intel + Apple Silicon)
+    set(ENV{PKG_CONFIG_PATH}
+        "/usr/local/opt/ffmpeg/lib/pkgconfig:/opt/homebrew/opt/ffmpeg/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    pkg_check_modules(FFMPEG REQUIRED
+        libavformat libavcodec libavutil libswscale libswresample)
+    target_include_directories(horrorgame PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_directories(horrorgame PRIVATE ${FFMPEG_LIBRARY_DIRS})
+    target_link_libraries(horrorgame ${FFMPEG_LIBRARIES})
 endif()
+
+# SDL3_image is now REQUIRED above; always enable PNG/JPG loading.
+# SDL3_IMAGE_LINK_TARGET prefers the static variant to avoid extra DLLs.
+target_compile_definitions(horrorgame PRIVATE HAVE_SDL3_IMAGE=1)
+target_link_libraries(horrorgame ${SDL3_IMAGE_LINK_TARGET})
 
 # Link math library on Linux
 if(UNIX AND NOT APPLE)

@@ -2,11 +2,10 @@ name: Build and Release
 
 on:
   push:
-    branches:
-      - main
+    branches: ["**"]
   pull_request:
-    branches:
-      - main
+    branches: ["**"]
+  workflow_dispatch:
 
 jobs:
   build-windows:
@@ -16,13 +15,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install SDL3 with vcpkg
+      - name: Checkout vcpkg
+        run: git clone https://github.com/Microsoft/vcpkg.git
+
+      - name: Bootstrap vcpkg
         run: |
-          git clone https://github.com/Microsoft/vcpkg.git
           cd vcpkg
           .\bootstrap-vcpkg.bat
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        id: cache-vcpkg
+        with:
+          path: |
+            vcpkg/installed
+            vcpkg/downloads
+          key: vcpkg-${{ runner.os }}-sdl3-sdl3image-ffmpeg-v3
+
+      - name: Install SDL3, SDL3_image and FFmpeg with vcpkg
+        if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+        run: |
+          cd vcpkg
           .\vcpkg integrate install
-          .\vcpkg install sdl3:x64-windows sdl3-image:x64-windows
+          .\vcpkg install sdl3:x64-windows "sdl3-image[png,jpeg,webp]:x64-windows" ffmpeg:x64-windows
 
       - name: Create build directory
         run: mkdir build
@@ -44,12 +59,12 @@ jobs:
         run: |
           mkdir -p horrorgame-windows
           cp build/Release/horrorgame.exe horrorgame-windows/ || cp build/horrorgame.exe horrorgame-windows/
-          cp -r assets horrorgame-windows/ || echo "Assets not found, continuing..."
-          
-          # Try to find and copy SDL3 DLLs
-          find vcpkg/installed -name "SDL3.dll" -exec cp {} horrorgame-windows/ \; 2>/dev/null || true
-          find vcpkg/installed -name "SDL3_image.dll" -exec cp {} horrorgame-windows/ \; 2>/dev/null || true
-          
+          cp -r assets horrorgame-windows/
+          cp -r maps horrorgame-windows/
+
+          # Copy all runtime DLLs installed by vcpkg (SDL3, SDL3_image, FFmpeg, etc.)
+          cp vcpkg/installed/x64-windows/bin/*.dll horrorgame-windows/ 2>/dev/null || true
+
           # List what we copied
           ls -la horrorgame-windows/
 
@@ -73,7 +88,7 @@ jobs:
 
       - name: Install SDL3 (macOS)
         run: |
-          brew install sdl3 sdl3_image cmake
+          brew install sdl3 sdl3_image ffmpeg cmake
 
       - name: Create build directory
         run: mkdir build

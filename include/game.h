@@ -40,6 +40,7 @@ typedef struct DecodedAudio {
     SDL_AudioSpec    spec;
     Uint8           *buf;
     Uint32           len;
+    Uint32           cap;   /* allocated capacity of buf; len <= cap */
     SDL_AudioStream *stream;
 } DecodedAudio;
 

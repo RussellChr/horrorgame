@@ -196,6 +196,7 @@ static void decoded_audio_free(DecodedAudio *audio)
         audio->buf = NULL;
     }
     audio->len = 0;
+    audio->cap = 0;
 }
 
 static void game_set_simple_dialogue(Game *game,
@@ -233,11 +234,17 @@ static int decoded_audio_append(DecodedAudio *audio,
     if (!audio || !data || bytes <= 0) return 1;
     if (audio->len > (Uint32)SDL_MAX_UINT32 - (Uint32)bytes) return 0;
 
-    Uint8 *new_buf = (Uint8 *)SDL_realloc(audio->buf,
-                                          (size_t)audio->len + (size_t)bytes);
-    if (!new_buf) return 0;
+    Uint32 needed = audio->len + (Uint32)bytes;
+    if (needed > audio->cap) {
+        /* Grow by doubling to amortise realloc cost to O(n) total. */
+        Uint32 new_cap = audio->cap ? audio->cap * 2 : (Uint32)bytes;
+        if (new_cap < needed) new_cap = needed;
+        Uint8 *new_buf = (Uint8 *)SDL_realloc(audio->buf, (size_t)new_cap);
+        if (!new_buf) return 0;
+        audio->buf = new_buf;
+        audio->cap = new_cap;
+    }
 
-    audio->buf = new_buf;
     SDL_memcpy(audio->buf + audio->len, data, (size_t)bytes);
     audio->len += (Uint32)bytes;
     return 1;
@@ -302,6 +309,22 @@ static int decoded_audio_load_mp3(DecodedAudio *audio, const char *path)
     packet = av_packet_alloc();
     if (!frame || !packet) goto done;
 
+    /* Pre-allocate output buffer from the estimated duration so the
+     * decode loop only needs one allocation instead of one per frame.
+     * Output format: float32 stereo 44100 Hz = 8 bytes per sample pair. */
+    if (fmt_ctx->duration != AV_NOPTS_VALUE && fmt_ctx->duration > 0) {
+        double secs = (double)fmt_ctx->duration / (double)AV_TIME_BASE;
+        double estimated = secs * 44100.0 * 2.0 * (double)sizeof(float) * 1.1;
+        if (estimated > 0.0 && estimated < (double)SDL_MAX_UINT32) {
+            Uint32 pre = (Uint32)estimated;
+            Uint8 *pre_buf = (Uint8 *)SDL_malloc((size_t)pre);
+            if (pre_buf) {
+                audio->buf = pre_buf;
+                audio->cap = pre;
+            }
+        }
+    }
+
     while (av_read_frame(fmt_ctx, packet) >= 0) {
         if (packet->stream_index == audio_stream &&
             avcodec_send_packet(codec_ctx, packet) >= 0) {
@@ -354,6 +377,13 @@ static int decoded_audio_load_mp3(DecodedAudio *audio, const char *path)
         }
         SDL_free(out_buf);
         av_frame_unref(frame);
+    }
+
+    /* Trim the buffer to the exact decoded size, releasing any over-allocated
+     * capacity from the pre-allocation or exponential growth above. */
+    if (audio->buf && audio->len > 0 && audio->len < audio->cap) {
+        Uint8 *trimmed = (Uint8 *)SDL_realloc(audio->buf, (size_t)audio->len);
+        if (trimmed) { audio->buf = trimmed; audio->cap = audio->len; }
     }
 
     audio->spec = (SDL_AudioSpec){ SDL_AUDIO_F32, 2, 44100 };

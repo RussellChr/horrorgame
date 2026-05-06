@@ -91,7 +91,7 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
     for (int i = 1; i < ANIM_MAX_FRAMES+1; i++) {
         snprintf(path, sizeof(path),
                  "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter%d.png", i + 1);
-        SDL_Texture *t = render_load_texture(renderer, path);
+        SDL_Texture *t = render_probe_texture(renderer, path);
         if (!t) break;
         player->fl_front_frames[player->fl_front_count++] = t;
     }
@@ -105,7 +105,7 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
     for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
         snprintf(path, sizeof(path),
                  "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 2);
-        SDL_Texture *t = render_load_texture(renderer, path);
+        SDL_Texture *t = render_probe_texture(renderer, path);
         if (!t) break;
         player->fl_left_frames[player->fl_left_count++] = t;
     }
@@ -119,7 +119,7 @@ static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
     for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
         snprintf(path, sizeof(path),
                  "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 2);
-        SDL_Texture *t = render_load_texture(renderer, path);
+        SDL_Texture *t = render_probe_texture(renderer, path);
         if (!t) break;
         player->fl_right_frames[player->fl_right_count++] = t;
     }

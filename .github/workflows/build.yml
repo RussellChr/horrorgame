@@ -30,14 +30,14 @@ jobs:
           path: |
             vcpkg/installed
             vcpkg/downloads
-          key: vcpkg-${{ runner.os }}-sdl3-sdl3image-ffmpeg-v2
+          key: vcpkg-${{ runner.os }}-sdl3-sdl3image-ffmpeg-v3
 
       - name: Install SDL3, SDL3_image and FFmpeg with vcpkg
         if: steps.cache-vcpkg.outputs.cache-hit != 'true'
         run: |
           cd vcpkg
           .\vcpkg integrate install
-          .\vcpkg install sdl3:x64-windows "sdl3-image[png,jpeg]:x64-windows" ffmpeg:x64-windows
+          .\vcpkg install sdl3:x64-windows "sdl3-image[png,jpeg,webp]:x64-windows" ffmpeg:x64-windows
 
       - name: Create build directory
         run: mkdir build

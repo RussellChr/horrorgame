@@ -314,7 +314,7 @@ static int decoded_audio_load_mp3(DecodedAudio *audio, const char *path)
      * Output format: float32 stereo 44100 Hz = 8 bytes per sample pair. */
     if (fmt_ctx->duration != AV_NOPTS_VALUE && fmt_ctx->duration > 0) {
         double secs = (double)fmt_ctx->duration / (double)AV_TIME_BASE;
-        double estimated = secs * 44100.0 * 2.0 * (double)sizeof(float) * 1.1;
+        double estimated = secs * 44100.0 * 2.0 * (double)sizeof(float) * 1.1; /* +10% headroom for VBR variance */
         if (estimated > 0.0 && estimated < (double)SDL_MAX_UINT32) {
             Uint32 pre = (Uint32)estimated;
             Uint8 *pre_buf = (Uint8 *)SDL_malloc((size_t)pre);

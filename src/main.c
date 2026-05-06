@@ -34,8 +34,8 @@ int main(int argc, char *argv[])
      * otherwise every load fails with "file format not supported". */
     int img_flags = IMG_INIT_PNG | IMG_INIT_JPG;
     if ((IMG_Init(img_flags) & img_flags) != img_flags) {
-        SDL_Log("IMG_Init failed to enable PNG/JPG support: %s",
-                IMG_GetError());
+        SDL_Log("IMG_Init failed to enable PNG/JPEG support: %s",
+                SDL_GetError());
         SDL_Quit();
         return 1;
     }

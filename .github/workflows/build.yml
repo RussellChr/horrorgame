@@ -88,7 +88,7 @@ jobs:
 
       - name: Install SDL3 (macOS)
         run: |
-          brew install sdl3 sdl3_image cmake
+          brew install sdl3 sdl3_image ffmpeg cmake
 
       - name: Create build directory
         run: mkdir build

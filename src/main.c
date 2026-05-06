@@ -29,6 +29,19 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    /* Initialise SDL3_image PNG/JPEG backends where the API exists.
+     * SDL3_image 3.x removed IMG_Init in some builds (backends are always
+     * available); in builds that still have it we call it to register the
+     * dynamic-load backends, otherwise we skip it gracefully. */
+#ifdef IMG_INIT_PNG
+    {
+        int img_flags = IMG_INIT_PNG | IMG_INIT_JPG;
+        if ((IMG_Init(img_flags) & img_flags) != img_flags)
+            SDL_Log("IMG_Init: PNG/JPEG backend not fully loaded: %s",
+                    SDL_GetError());
+    }
+#endif
+
     SDL_Window *window = SDL_CreateWindow(
         "Project Yozora – A Horror Story",
         WINDOW_W, WINDOW_H, 0);
@@ -87,6 +100,9 @@ int main(int argc, char *argv[])
     game_cleanup(game);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
+#ifdef IMG_INIT_PNG
+    IMG_Quit();
+#endif
     SDL_Quit();
     return 0;
 }

@@ -1,5 +1,28 @@
 #include <SDL3/SDL.h>
+#include <errno.h>
+#include <string.h>
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <unistd.h>
+#endif
 #include "game.h"
+
+static void set_working_directory_to_executable(void)
+{
+    char *base_path = SDL_GetBasePath();
+    if (!base_path) return;
+
+#ifdef _WIN32
+    if (_chdir(base_path) != 0) {
+#else
+    if (chdir(base_path) != 0) {
+#endif
+        SDL_Log("Failed to set working directory to '%s': %s",
+                base_path, strerror(errno));
+    }
+    SDL_free(base_path);
+}
 
 int main(int argc, char *argv[])
 {
@@ -34,6 +57,9 @@ int main(int argc, char *argv[])
 
     /* Enable alpha blending globally. */
     SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    /* Keep relative asset paths working when launched from app bundles. */
+    set_working_directory_to_executable();
 
     Game *game = game_init(window, renderer);
     if (!game) {
@@ -71,4 +97,3 @@ int main(int argc, char *argv[])
     SDL_Quit();
     return 0;
 }
-

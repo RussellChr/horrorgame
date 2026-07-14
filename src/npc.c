@@ -150,7 +150,6 @@ void npc_render(NPC *npc, SDL_Renderer *renderer)
     if (!npc || !renderer) return;
 
     /* Simple colored rectangle for NPC sprite */
-    int color;
     if (npc->npc_type == NPC_TYPE_FRIENDLY)
         render_filled_rect(renderer, (int)npc->x, (int)npc->y, NPC_W, NPC_SPRITE_H,
                           100, 200, 100, 255);  /* Green */

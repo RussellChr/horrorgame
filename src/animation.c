@@ -17,7 +17,7 @@ void animation_update(Animation *anim, float dt)
     if (!anim || anim->finished) return;
 
     anim->frame_timer += dt;
-    if (anim->frame_timer >= anim->frame_duration) {
+    while (anim->frame_timer >= anim->frame_duration) {
         anim->frame_timer -= anim->frame_duration;
         anim->current_frame++;
 

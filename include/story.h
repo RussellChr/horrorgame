@@ -14,6 +14,9 @@
 #define LOCATION_ARCHIVE    0   /* starting room – archive / entrance hall */
 #define LOCATION_LAB        1   /* chemistry laboratory                    */
 #define LOCATION_HALLWAY    2   /* corridor / hallway                      */
+#define LOCATION_HIBERNATION 3  /* hibernation / chamber room              */
+#define LOCATION_POWER      4   /* power generation room                   */
+#define LOCATION_SECURITY   5   /* security monitoring room                */
 
 /* ── Story flags (bitmask values for player->flags) ───────────────────── */
 
@@ -33,6 +36,21 @@
 #define FLAG_POWER_VALVE1_OPENED          (1u << 13) /* valve at tile 3 turned                   */
 #define FLAG_POWER_VALVE2_OPENED          (1u << 14) /* valve at tile 7 turned                   */
 #define FLAG_POWER_GENERATOR_ON           (1u << 15) /* generator started (Simon game won)       */
+#define FLAG_SECURITY_PASSCODE_DONE       (1u << 16) /* correct passcode entered in security room */
+#define FLAG_ENTERED_POWER                (1u << 17) /* player visited the power room             */
+#define FLAG_ENTERED_SECURITY             (1u << 18) /* player visited the security room          */
+#define FLAG_ARCHIVE_FINGERPRINT_COLLECTED (1u << 19) /* fingerprint picked up in Archive          */
+#define FLAG_ARCHIVE_THERMALFUSE_COLLECTED (1u << 20) /* thermal fuse picked up in Archive         */
+#define FLAG_ARCHIVE_INNER_DOOR_OPENED     (1u << 21) /* tile-2 archive door opened                */
+#define FLAG_ARCHIVE_ENEMY_SPAWNED         (1u << 22) /* archive-room enemy has been activated     */
+#define FLAG_HIBERN_ZONK_INTERACTED        (1u << 23) /* hibern. "nothing here" spot visited once  */
+#define FLAG_HIBERN_PODS_INTERACTED        (1u << 24) /* hibern. pods flavor-text read once        */
+#define FLAG_HALLWAY_NOTHING_INTERACTED    (1u << 25) /* hallway "nothing here" spot visited once  */
+#define FLAG_ARCHIVE_KEYCARD2_COLLECTED    (1u << 26) /* level-2 keycard picked up in Archive      */
+#define FLAG_ARCHIVE_FINGERPRINT2_COLLECTED (1u << 27) /* fingerprint 2 picked up in Archive        */
+#define FLAG_ARCHIVE_FINGERPRINT3_COLLECTED (1u << 28) /* fingerprint 3 picked up in Archive        */
+#define FLAG_HALLWAY_EXIT_MINIGAME_WON      (1u << 29) /* hallway level-2 exit attack survived       */
+#define FLAG_LAB_MEDICINE_MADE             (1u << 30) /* tube-sort minigame completed in lab */
 
 /* ── StoryState ────────────────────────────────────────────────────────── */
 

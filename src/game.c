@@ -11,14 +11,121 @@
 #include "effects.h"
 #include "interactions.h"
 #include "video.h"
+#include "enemy.h"
+
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+
+/* ── Archive book constants ─────────────────────────────────────────────── */
+#define ARCHIVE_BOOK_TRANSITION_DURATION  0.3f  /* seconds for black-screen page turn */
 
 /* -- Lab poisonous-gas constants ------------------------------------------ */
 /* Seconds the player can stay in the lab without a gas mask before dying. */
 #define LAB_GAS_DEATH_DELAY  3.0f
+
+/* Seconds the dizziness bar takes to fully empty after keycard pickup. */
+#define LAB_DIZZINESS_DEATH_DELAY  180.0f
+
+/* ── is_trigger_consumed ───────────────────────────────────────────────────
+ * Returns 1 when a trigger's interaction has been permanently used up so
+ * the interact prompt should no longer appear near it.
+ * Triggers that can be re-used (locker, book, NPCs, monitor) return 0. */
+static int is_trigger_consumed(const Game *game, int trigger_id)
+{
+    const Player *p = game->player;
+    if (!p) return 0;
+    switch (trigger_id) {
+        /* Archive */
+        case 52: return player_check_flag(p, FLAG_ARCHIVE_INNER_DOOR_OPENED);
+        case 53: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+        case 54: return player_check_flag(p, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+        case 57: return player_check_flag(p, FLAG_ARCHIVE_KEYCARD2_COLLECTED);
+        case 58: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED);
+        case 59: return player_check_flag(p, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
+        /* Lab */
+        case 61: return player_check_flag(p, FLAG_KEYCARD_COLLECTED);
+        case 64: return player_check_flag(p, FLAG_LAB_MEDICINE_MADE) ||
+                        !player_check_flag(p, FLAG_KEYCARD_COLLECTED);
+        /* Hallway */
+        case 80: return player_check_flag(p, FLAG_HALLWAY_NOTHING_INTERACTED);
+        case 81: return player_check_flag(p, FLAG_HALLWAY_GASMASK_COLLECTED);
+        case 82: return player_check_flag(p, FLAG_HALLWAY_FLASHLIGHT_COLLECTED);
+        /* Hibernation */
+        case 71: return player_check_flag(p, FLAG_HIBERN_ZONK_INTERACTED);
+        case 72: return player_check_flag(p, FLAG_HIBERN_POWERCELL_COLLECTED);
+        case 73: return player_check_flag(p, FLAG_HIBERN_POWERCELL_PLACED);
+        case 74: return player_check_flag(p, FLAG_HIBERN_PODS_INTERACTED);
+        /* Power room – fuel tank needs 2 pickups; disabled only after both are done */
+        case 101: return player_check_flag(p, FLAG_POWER_FUELTANK2_COLLECTED);
+        case 102: return player_check_flag(p, FLAG_POWER_FUELTANK1_PLACED);
+        case 103: return player_check_flag(p, FLAG_POWER_VALVE1_OPENED);
+        case 104: return player_check_flag(p, FLAG_POWER_GENERATOR_ON);
+        case 106: return player_check_flag(p, FLAG_POWER_FUELTANK2_PLACED);
+        case 107: return player_check_flag(p, FLAG_POWER_VALVE2_OPENED);
+        default:  return 0;
+    }
+}
+
+/* ── Flashlight animation loader ───────────────────────────────────────── */
+/* Loads all flashlight movement frames for each direction into the player.
+ * Frame files are numbered from 1 upward; loading stops at the first missing
+ * file so each folder can have a different number of PNGs. */
+static void load_flashlight_frames(Player *player, SDL_Renderer *renderer)
+{
+    if (!player || !renderer) return;
+    char path[512];
+
+    /* ── South (front) ──────────────────────────────────────────────────── */
+    /* File #1 in the folder is the idle pose; files #2-5 are walk frames.  */
+    player->fl_front_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter1.png");
+
+    player->fl_front_count = 0;
+    for (int i = 1; i < ANIM_MAX_FRAMES+1; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight front/idle campur jalan revisi senter%d.png", i + 1);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_front_frames[player->fl_front_count++] = t;
+    }
+
+    /* ── West (left) ────────────────────────────────────────────────────── */
+    /* manusia kiri1 = idle; manusia kiri2-N = walk frames.                 */
+    player->fl_left_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight left/manusia kiri1.png");
+
+    player->fl_left_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight left/manusia kiri%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_left_frames[player->fl_left_count++] = t;
+    }
+
+    /* ── East (right) ───────────────────────────────────────────────────── */
+    /* manusia kanan1 = idle; manusia kanan2-N = walk frames.               */
+    player->fl_right_idle = render_load_texture(renderer,
+        "assets/flashlight_movement/flashlight right/manusia kanan1.png");
+
+    player->fl_right_count = 0;
+    for (int i = 0; i < ANIM_MAX_FRAMES; i++) {
+        snprintf(path, sizeof(path),
+                 "assets/flashlight_movement/flashlight right/manusia kanan%d.png", i + 2);
+        SDL_Texture *t = render_load_texture(renderer, path);
+        if (!t) break;
+        player->fl_right_frames[player->fl_right_count++] = t;
+    }
+
+    animation_init(&player->fl_anim, 1, 8.0f, 1); /* frame_count is set dynamically per tick based on direction */
+}
 
 /* ── Simon Says constants ──────────────────────────────────────────────── */
 #define SIMON_LIT_DURATION   0.55f  /* seconds a button stays lit        */
@@ -28,7 +135,372 @@
 #define SIMON_JUMPSCARE_ROUND   7   /* round at which the jumpscare fires */
 #define SIMON_JUMPSCARE_DELAY 1.0f  /* seconds to wait before showing it */
 
+/* ── Hallway dodge minigame constants ─────────────────────────────────── */
+#define DODGE_BOX_X         440.0f
+#define DODGE_BOX_Y         170.0f
+#define DODGE_BOX_W         400.0f
+#define DODGE_BOX_H         330.0f
+#define DODGE_HEART_SIZE     18.0f
+#define DODGE_HEART_SPEED   260.0f
+#define DODGE_MAX_HP          6
+#define DODGE_ROUNDS          5
+#define DODGE_ROUND_DURATION 12.0f
+#define DODGE_SPAWN_EVERY     0.28f
+#define DODGE_BULLET_SIZE    14.0f
+#define DODGE_HIT_INVULN      0.9f
+
+/* ── Security cutscene texts ───────────────────────────────────────────── */
+static const char * const security_cutscene_texts[4] = {
+    "The noise is making my head hurt... I have to find a way to silence "
+    "these alarms before something hears them.",
+    "Wait, what is that on the monitor? That's definitely not one of the "
+    "doctors. Is that a monster???",
+    "It's just standing there, watching the camera... please don't let it "
+    "know I'm in here.",
+    "The screen turned green and it's gone--where did it go? "
+    "Wait, isn't that in the hallway?"
+};
+
+/* ── Hibernation opening cutscene texts ─────────────────────────────────── */
+static const char * const hibernation_cutscene_texts[3] = {
+    "Where am I...? What is this???",
+    "I can't breathe, I should try to break the glass",
+    "Ugh... that tasted awful. Besides, why can't I remember anything??"
+};
+
+/* ── Power room cutscene texts ──────────────────────────────────────────── */
+static const char * const power_cutscene_texts[3] = {
+    "Hmm, what's this piece of paper? Maybe I should take a look",
+    "Surely, nothing bad's going to happen right",
+    "well.. too late now."
+};
+
+/* ── Hallway exit cutscene texts ─────────────────────────────────────────── */
+static const char * const hallway_exit_cutscene_texts[2] = {
+    "I need to get out of here... come on, open! ACCESS DENIED?! No no no...",
+    "Wait-- what is that noise?! It's right behind me!"
+    "Well, No more running I guess."
+};
+
 /* ── Helpers ───────────────────────────────────────────────────────────── */
+
+static void decoded_audio_free(DecodedAudio *audio)
+{
+    if (!audio) return;
+    if (audio->stream) {
+        SDL_DestroyAudioStream(audio->stream);
+        audio->stream = NULL;
+    }
+    if (audio->buf) {
+        SDL_free(audio->buf);
+        audio->buf = NULL;
+    }
+    audio->len = 0;
+}
+
+static void game_set_simple_dialogue(Game *game,
+                                     const char *speaker,
+                                     const char *line1,
+                                     const char *line2)
+{
+    if (!game || !line1) return;
+    if (game->dialogue_tree) {
+        dialogue_tree_destroy(game->dialogue_tree);
+        game->dialogue_tree = NULL;
+    }
+
+    DialogueTree *tree = dialogue_tree_create();
+    if (!tree) return;
+
+    DialogueNode *first = dialogue_add_node(tree, 0, speaker ? speaker : "",
+                                            line1, line2 ? 0 : 1);
+    if (line2 && first) {
+        DialogueChoice next;
+        memset(&next, 0, sizeof(next));
+        next.id = 0;
+        next.next_node_id = 1;
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        dialogue_add_choice(first, &next);
+        dialogue_add_node(tree, 1, speaker ? speaker : "", line2, 1);
+    }
+
+    game->dialogue_tree = tree;
+}
+
+static int decoded_audio_append(DecodedAudio *audio,
+                                const Uint8 *data, int bytes)
+{
+    if (!audio || !data || bytes <= 0) return 1;
+    if (audio->len > (Uint32)SDL_MAX_UINT32 - (Uint32)bytes) return 0;
+
+    Uint8 *new_buf = (Uint8 *)SDL_realloc(audio->buf,
+                                          (size_t)audio->len + (size_t)bytes);
+    if (!new_buf) return 0;
+
+    audio->buf = new_buf;
+    SDL_memcpy(audio->buf + audio->len, data, (size_t)bytes);
+    audio->len += (Uint32)bytes;
+    return 1;
+}
+
+static int decoded_audio_load_mp3(DecodedAudio *audio, const char *path)
+{
+    AVFormatContext *fmt_ctx = NULL;
+    AVCodecContext  *codec_ctx = NULL;
+    SwrContext      *swr_ctx = NULL;
+    AVFrame         *frame = NULL;
+    AVPacket        *packet = NULL;
+    int audio_stream = -1;
+    int ok = 0;
+
+    if (!audio || !path) return 0;
+    decoded_audio_free(audio);
+
+    if (avformat_open_input(&fmt_ctx, path, NULL, NULL) < 0) {
+        SDL_Log("audio: cannot open '%s'", path);
+        goto done;
+    }
+    if (avformat_find_stream_info(fmt_ctx, NULL) < 0) {
+        SDL_Log("audio: cannot read stream info for '%s'", path);
+        goto done;
+    }
+
+    audio_stream = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_AUDIO,
+                                       -1, -1, NULL, 0);
+    if (audio_stream < 0) {
+        SDL_Log("audio: no audio stream in '%s'", path);
+        goto done;
+    }
+
+    AVStream *st = fmt_ctx->streams[audio_stream];
+    const AVCodec *decoder = avcodec_find_decoder(st->codecpar->codec_id);
+    if (!decoder) {
+        SDL_Log("audio: no decoder for '%s'", path);
+        goto done;
+    }
+
+    codec_ctx = avcodec_alloc_context3(decoder);
+    if (!codec_ctx) goto done;
+    if (avcodec_parameters_to_context(codec_ctx, st->codecpar) < 0) goto done;
+    if (avcodec_open2(codec_ctx, decoder, NULL) < 0) {
+        SDL_Log("audio: decoder open failed for '%s'", path);
+        goto done;
+    }
+
+    AVChannelLayout stereo = AV_CHANNEL_LAYOUT_STEREO;
+    if (swr_alloc_set_opts2(&swr_ctx,
+                            &stereo, AV_SAMPLE_FMT_FLT, 44100,
+                            &codec_ctx->ch_layout,
+                            codec_ctx->sample_fmt,
+                            codec_ctx->sample_rate,
+                            0, NULL) < 0 || swr_init(swr_ctx) < 0) {
+        SDL_Log("audio: resampler init failed for '%s'", path);
+        goto done;
+    }
+
+    frame = av_frame_alloc();
+    packet = av_packet_alloc();
+    if (!frame || !packet) goto done;
+
+    while (av_read_frame(fmt_ctx, packet) >= 0) {
+        if (packet->stream_index == audio_stream &&
+            avcodec_send_packet(codec_ctx, packet) >= 0) {
+            while (avcodec_receive_frame(codec_ctx, frame) >= 0) {
+                int out_samples = (int)av_rescale_rnd(
+                    swr_get_delay(swr_ctx, codec_ctx->sample_rate) +
+                        frame->nb_samples,
+                    44100, codec_ctx->sample_rate, AV_ROUND_UP);
+                int bytes = out_samples * 2 * (int)sizeof(float);
+                Uint8 *out_buf = (Uint8 *)SDL_malloc((size_t)bytes);
+                if (!out_buf) goto done;
+
+                Uint8 *out_planes[1] = { out_buf };
+                int converted = swr_convert(swr_ctx, out_planes, out_samples,
+                                            (const Uint8 **)frame->data,
+                                            frame->nb_samples);
+                if (converted > 0) {
+                    int converted_bytes = converted * 2 * (int)sizeof(float);
+                    if (!decoded_audio_append(audio, out_buf, converted_bytes)) {
+                        SDL_free(out_buf);
+                        goto done;
+                    }
+                }
+                SDL_free(out_buf);
+                av_frame_unref(frame);
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    avcodec_send_packet(codec_ctx, NULL);
+    while (avcodec_receive_frame(codec_ctx, frame) >= 0) {
+        int out_samples = (int)av_rescale_rnd(
+            swr_get_delay(swr_ctx, codec_ctx->sample_rate) + frame->nb_samples,
+            44100, codec_ctx->sample_rate, AV_ROUND_UP);
+        int bytes = out_samples * 2 * (int)sizeof(float);
+        Uint8 *out_buf = (Uint8 *)SDL_malloc((size_t)bytes);
+        if (!out_buf) goto done;
+
+        Uint8 *out_planes[1] = { out_buf };
+        int converted = swr_convert(swr_ctx, out_planes, out_samples,
+                                    (const Uint8 **)frame->data,
+                                    frame->nb_samples);
+        if (converted > 0) {
+            int converted_bytes = converted * 2 * (int)sizeof(float);
+            if (!decoded_audio_append(audio, out_buf, converted_bytes)) {
+                SDL_free(out_buf);
+                goto done;
+            }
+        }
+        SDL_free(out_buf);
+        av_frame_unref(frame);
+    }
+
+    audio->spec = (SDL_AudioSpec){ SDL_AUDIO_F32, 2, 44100 };
+    audio->stream = SDL_OpenAudioDeviceStream(
+        SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &audio->spec, NULL, NULL);
+    if (!audio->stream) {
+        SDL_Log("audio: failed to open stream for '%s': %s",
+                path, SDL_GetError());
+        goto done;
+    }
+
+    ok = audio->buf && audio->len > 0;
+
+done:
+    if (packet) av_packet_free(&packet);
+    if (frame) av_frame_free(&frame);
+    if (swr_ctx) swr_free(&swr_ctx);
+    if (codec_ctx) avcodec_free_context(&codec_ctx);
+    if (fmt_ctx) avformat_close_input(&fmt_ctx);
+    if (!ok) decoded_audio_free(audio);
+    return ok;
+}
+
+static void decoded_audio_play_once(DecodedAudio *audio)
+{
+    if (!audio || !audio->stream || !audio->buf ||
+        audio->len > (Uint32)SDL_MAX_SINT32) return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+/* Returns the DecodedAudio that should be looping right now, or NULL. */
+static DecodedAudio *music_current_track(Game *game)
+{
+    if (!game) return NULL;
+
+    /* Menu-only screens always use the menu music. */
+    GameState s = game->state;
+    if (s == GAME_STATE_MENU ||
+        s == GAME_STATE_NEW_LOAD_MENU ||
+        s == GAME_STATE_SETTINGS ||
+        s == GAME_STATE_GAME_OVER)
+        return &game->menu_music_audio;
+
+    /* In-game: select by location and story progress. */
+    if (!game->player) return &game->menu_music_audio;
+
+    int loc = game->player->current_location_id;
+    if (loc == LOCATION_ARCHIVE)
+        return &game->ambient_ost_audio;     /* archive room */
+    if (loc == LOCATION_HIBERNATION)
+        return &game->room1_music_audio;     /* chamber room */
+    if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE))
+        return &game->room3_music_audio;     /* after code puzzle solved */
+    return &game->room2_music_audio;         /* after leaving chamber room */
+}
+
+/* Called every frame: loops the correct background music track and silences
+ * all others.  The dodge-minigame monster theme is managed separately. */
+static void music_update(Game *game)
+{
+    if (!game) return;
+
+    DecodedAudio *tracks[] = {
+        &game->menu_music_audio,
+        &game->room1_music_audio,
+        &game->room2_music_audio,
+        &game->room3_music_audio,
+        &game->ambient_ost_audio,
+    };
+    const int n_tracks = (int)(sizeof(tracks) / sizeof(tracks[0]));
+
+    DecodedAudio *active = music_current_track(game);
+    float gain = game->volume / 100.0f;
+
+    /* Pause music when: AM recording is playing, or dodge minigame is active,
+     * or end-credits video is playing */
+    int should_pause = (game->state == GAME_STATE_DODGE) ||
+                       (game->state == GAME_STATE_END_CREDITS) ||
+                       (game->am_audio_pause_timer > 0.0f);
+
+    for (int i = 0; i < n_tracks; i++) {
+        DecodedAudio *a = tracks[i];
+        if (!a->stream || !a->buf || a->len > (Uint32)SDL_MAX_SINT32) continue;
+        if (a == active) {
+            SDL_SetAudioStreamGain(a->stream, gain);
+            if (should_pause) {
+                SDL_PauseAudioStreamDevice(a->stream);
+            } else {
+                if (SDL_GetAudioStreamAvailable(a->stream) < (int)(a->len / 2))
+                    SDL_PutAudioStreamData(a->stream, a->buf, (int)a->len);
+                SDL_ResumeAudioStreamDevice(a->stream);
+            }
+        } else {
+            SDL_ClearAudioStream(a->stream);
+            SDL_PauseAudioStreamDevice(a->stream);
+        }
+    }
+}
+
+static void monster_theme_start(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_stop(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream) return;
+
+    SDL_ClearAudioStream(audio->stream);
+    SDL_PauseAudioStreamDevice(audio->stream);
+}
+
+static void monster_theme_update(Game *game)
+{
+    DecodedAudio *audio = &game->monster_theme_audio;
+    if (!audio->stream || !audio->buf || audio->len > (Uint32)SDL_MAX_SINT32)
+        return;
+
+    if (game->state != GAME_STATE_DODGE) {
+        SDL_PauseAudioStreamDevice(audio->stream);
+        return;
+    }
+
+    SDL_SetAudioStreamGain(audio->stream, game->volume / 100.0f);
+    if (SDL_GetAudioStreamAvailable(audio->stream) < (int)(audio->len / 2))
+        SDL_PutAudioStreamData(audio->stream, audio->buf, (int)audio->len);
+    SDL_ResumeAudioStreamDevice(audio->stream);
+}
+
+static float audio_duration_seconds(const SDL_AudioSpec *spec, Uint32 len)
+{
+    if (!spec || spec->freq <= 0 || spec->channels <= 0) return 0.0f;
+    int bytes_per_sample = SDL_AUDIO_BITSIZE(spec->format) / 8;
+    int bytes_per_second = spec->freq * spec->channels * bytes_per_sample;
+    if (bytes_per_second <= 0) return 0.0f;
+    return (float)len / (float)bytes_per_second;
+}
 
 static Button make_button(float x, float y, float w, float h,
                           const char *text)
@@ -39,6 +511,45 @@ static Button make_button(float x, float y, float w, float h,
     b.text   = text;
     b.is_hovered = 0;
     return b;
+}
+
+static void toggle_fullscreen(Game *game)
+{
+    if (!game) return;
+    game->fullscreen = !game->fullscreen;
+    SDL_SetWindowFullscreen(game->window,
+        game->fullscreen ? SDL_WINDOW_FULLSCREEN : 0);
+}
+
+static void game_start_monster_death_cutscene(Game *game)
+{
+    if (!game) return;
+
+    monster_theme_stop(game);
+    video_player_close(game->monster_death_player);
+    game->monster_death_player =
+        video_player_open(game->renderer, "assets/cutscene/deathbymonster.mov");
+    if (game->monster_death_player) {
+        game->state = GAME_STATE_MONSTER_DEATH_CUTSCENE;
+    } else {
+        SDL_Log("game: deathbymonster.mov could not be opened; showing game over");
+        game->state = GAME_STATE_GAME_OVER;
+    }
+}
+
+static void game_start_end_credits(Game *game)
+{
+    if (!game) return;
+
+    video_player_close(game->end_credits_player);
+    game->end_credits_player =
+        video_player_open(game->renderer, "assets/cutscene/end cred.mov");
+    if (game->end_credits_player) {
+        game->state = GAME_STATE_END_CREDITS;
+    } else {
+        SDL_Log("game: end cred.mov could not be opened; quitting");
+        game->state = GAME_STATE_QUIT;
+    }
 }
 
 /* ── Lifecycle ─────────────────────────────────────────────────────────── */
@@ -55,15 +566,39 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
 
     float bw = 240.0f, bh = 54.0f;
     float bx = (WINDOW_W - bw) / 2.0f;
-    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "New Game");
+    g->buttons[0] = make_button(60.0f, 500.0f, bw, bh, "Start Game");
     g->buttons[1] = make_button(60.0f, 500.0f + (bh + 10.0f), bw, bh, "Settings");
     g->buttons[2] = make_button(60.0f, 500.0f + 2.0f * (bh + 10.0f), bw, bh, "Quit");
-    g->pause_buttons[0] = make_button(bx, 310.0f, bw, bh, "Resume");
-    g->pause_buttons[1] = make_button(bx, 380.0f, bw, bh, "Quit to Menu");
+
+    /* New / Load submenu buttons */
+    float nlx = (WINDOW_W - bw) / 2.0f;
+    float nly = 300.0f;
+    g->new_load_buttons[0] = make_button(nlx, nly,                       bw, bh, "New Game");
+    g->new_load_buttons[1] = make_button(nlx, nly + (bh + 10.0f),       bw, bh, "Load Game");
+    g->new_load_buttons[2] = make_button(nlx, nly + 2.0f * (bh + 10.0f),bw, bh, "Back");
+
+    /* Pause menu (4 buttons) */
+    g->pause_buttons[0] = make_button(bx, 220.0f, bw, bh, "Resume");
+    g->pause_buttons[1] = make_button(bx, 290.0f, bw, bh, "Save Game");
+    g->pause_buttons[2] = make_button(bx, 360.0f, bw, bh, "Load Game");
+    g->pause_buttons[3] = make_button(bx, 430.0f, bw, bh, "Quit to Menu");
+
+    /* Save / Load slot buttons – text points into save_slot_labels[] */
+    float slw = 400.0f, slh = 60.0f;
+    float slx = (WINDOW_W - slw) / 2.0f;
+    for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+        snprintf(g->save_slot_labels[i], sizeof(g->save_slot_labels[i]),
+                 "Slot %d - [Empty]", i + 1);
+        g->save_load_buttons[i] = make_button(slx, 230.0f + (float)i * (slh + 12.0f),
+                                              slw, slh, g->save_slot_labels[i]);
+    }
+    g->save_load_buttons[SAVE_SLOT_COUNT] = make_button(
+        slx, 230.0f + (float)SAVE_SLOT_COUNT * (slh + 12.0f), slw, slh, "Cancel");
 
     /* Settings defaults */
-    g->volume     = 100.0f;
-    g->brightness = 100.0f;
+    g->volume      = 100.0f;
+    g->brightness  = 100.0f;
+    g->fullscreen  = 0;
     g->settings_focus = 0;
     float sw = 400.0f, sh = 24.0f;
     float sx = (WINDOW_W - sw) / 2.0f + 60.0f;   /* offset right to leave room for label */
@@ -71,13 +606,18 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     slider_init(&g->settings_brightness_slider, sx, 380.0f, sw, sh, 0.0f, 100.0f, 100.0f);
     float bbw = 200.0f, bbh = 48.0f;
     g->settings_back_button = make_button(
-        (WINDOW_W - bbw) / 2.0f, 460.0f, bbw, bbh, "Back");
+        (WINDOW_W - bbw) / 2.0f, 530.0f, bbw, bbh, "Back");
 
     g->last_ticks = SDL_GetTicks();
     g->keys       = SDL_GetKeyboardState(NULL);
 
     /* Seed the PRNG once at startup (used by the Simon minigame) */
     srand((unsigned int)SDL_GetTicks());
+
+    /* Rare ambient flicker defaults */
+    g->ambient_flicker_timer    = 7.0f + (float)(rand() % 12); /* 7-18s */
+    g->ambient_flicker_duration = 0.0f;
+    g->ambient_flicker_alpha    = 0;
 
     /* Load the dialogue box background image */
     dialogue_load_texture(&g->dialogue_state, renderer, "assets/dialogue.png");
@@ -88,11 +628,38 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
     /* Load Title Screen*/
     g->title_screen_texture = render_load_texture(renderer, "assets/title_screen.png");
 
+    /* Load archive book page textures */
+    g->archive_pg1_texture = render_load_texture(renderer, "assets/archive_pg1.png");
+    g->archive_pg2_texture = render_load_texture(renderer, "assets/archive_pg2.png");
+
     /* Load locker view */
     g->locker_texture      = render_load_texture(renderer, "assets/locker.png");
     g->note_locker_texture = render_load_texture(renderer, "assets/note_locker.png");
     /* Load monitor zoom texture */
     g->monitor_zoom_texture = render_load_texture(renderer, "assets/monitor_zoom.png");
+    /* Load containment level overlay texture */
+    g->containment_level_texture = render_load_texture(renderer, "assets/containment_level.png");
+
+    /* Load security cutscene images */
+    g->security_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/security_scene_1.png");
+    g->security_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/security_scene_2.png");
+    g->security_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/security_scene_3.png");
+    g->security_cutscene_textures[3] = render_load_texture(renderer, "assets/cutscene/security_scene_4.png");
+    dialogue_load_texture(&g->cutscene_dialogue_state, renderer, "assets/dialogue.png");
+
+    /* Load hibernation opening cutscene images */
+    g->hibernation_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_1.jpg");
+    g->hibernation_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_2.png");
+    g->hibernation_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/hibernation_cut_3.png");
+
+    /* Load power room cutscene images */
+    g->power_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/power_cut_1.jpg");
+    g->power_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/power_cut_2.jpg");
+    g->power_cutscene_textures[2] = render_load_texture(renderer, "assets/cutscene/power_cut_3.jpg");
+
+    /* Load hallway exit cutscene images (access-denied + monster attack) */
+    g->hallway_exit_cutscene_textures[0] = render_load_texture(renderer, "assets/cutscene/end0.png");
+    g->hallway_exit_cutscene_textures[1] = render_load_texture(renderer, "assets/cutscene/end1.png");
 
     /* Load AM recording audio */
     if (SDL_LoadWAV("assets/AM.wav", &g->am_wav_spec,
@@ -105,10 +672,51 @@ Game *game_init(SDL_Window *window, SDL_Renderer *renderer)
         SDL_Log("game_init: failed to load AM.wav: %s", SDL_GetError());
     }
 
+    /* Load glass cracking SFX */
+    if (SDL_LoadWAV("assets/sfx/glass_cracking.wav", &g->glass_crack_wav_spec,
+                    &g->glass_crack_wav_buf, &g->glass_crack_wav_len)) {
+        g->glass_crack_audio_stream = SDL_OpenAudioDeviceStream(
+            SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &g->glass_crack_wav_spec, NULL, NULL);
+        if (!g->glass_crack_audio_stream)
+            SDL_Log("game_init: failed to open glass crack audio stream: %s", SDL_GetError());
+    } else {
+        SDL_Log("game_init: failed to load glass cracking.wav: %s", SDL_GetError());
+    }
+
+    /* Load MP3-backed door SFX and looping hospital atmosphere */
+    if (!decoded_audio_load_mp3(&g->door_open_audio,
+                                "assets/sfx/soundreality-door-opening-2-455061.mp3"))
+        SDL_Log("game_init: failed to load door opening MP3");
+    if (!decoded_audio_load_mp3(&g->ambient_ost_audio,
+                                "assets/OST/OST NTE - Abandoned Hospital.mp3"))
+        SDL_Log("game_init: failed to load abandoned hospital OST");
+    if (!decoded_audio_load_mp3(&g->monster_theme_audio,
+                                "assets/OST/monstertheme.mp3"))
+        SDL_Log("game_init: failed to load monster theme OST");
+    if (!decoded_audio_load_mp3(&g->menu_music_audio,
+                                "assets/OST/OPPhasmophobia music box FULL.mp3"))
+        SDL_Log("game_init: failed to load menu music OST");
+    if (!decoded_audio_load_mp3(&g->room1_music_audio,
+                                "assets/OST/Room1Edge of Eternity.mp3"))
+        SDL_Log("game_init: failed to load room1 OST");
+    if (!decoded_audio_load_mp3(&g->room2_music_audio,
+                                "assets/OST/Room2Phantoms.mp3"))
+        SDL_Log("game_init: failed to load room2 OST");
+    if (!decoded_audio_load_mp3(&g->room3_music_audio,
+                                "assets/OST/Room3Locked Horrors.mp3"))
+        SDL_Log("game_init: failed to load room3 OST");
+
     /* Load inventory item icons */
     g->item_flashlight_texture = render_load_texture(renderer, "assets/flashlight.png");
     g->item_gasmask_texture    = render_load_texture(renderer, "assets/gasmask.png");
     g->item_keycard_texture    = render_load_texture(renderer, "assets/keycard.png");
+    g->item_fingerprint_texture = render_load_texture(renderer, "assets/fingerprint1.png");
+    g->item_fingerprint2_texture = render_load_texture(renderer, "assets/fingerprint2.png");
+    g->item_fingerprint3_texture = render_load_texture(renderer, "assets/fingerprint3.png");
+    g->item_thermalfuse_texture = render_load_texture(renderer, "assets/thermalfuse.png");
+
+    /* Load archive glass overlay */
+    g->glass_texture = render_load_texture(renderer, "assets/glass.png");
 
     /* Create full-screen light-mask render target for archive room darkness */
     g->dark_overlay = SDL_CreateTexture(renderer,
@@ -131,17 +739,53 @@ void game_cleanup(Game *game)
     if (game->dialogue_tree) dialogue_tree_destroy(game->dialogue_tree);
     dialogue_unload_texture(&game->dialogue_state);
     render_texture_destroy(game->title_screen_texture);
+    render_texture_destroy(game->archive_pg1_texture);
+    render_texture_destroy(game->archive_pg2_texture);
     render_texture_destroy(game->locker_texture);
     render_texture_destroy(game->note_locker_texture);
     render_texture_destroy(game->monitor_zoom_texture);
+    render_texture_destroy(game->containment_level_texture);
+    for (int i = 0; i < 4; i++)
+        render_texture_destroy(game->security_cutscene_textures[i]);
+    for (int i = 0; i < 3; i++)
+        render_texture_destroy(game->hibernation_cutscene_textures[i]);
+    for (int i = 0; i < 3; i++)
+        render_texture_destroy(game->power_cutscene_textures[i]);
+    for (int i = 0; i < 2; i++)
+        render_texture_destroy(game->hallway_exit_cutscene_textures[i]);
+    dialogue_unload_texture(&game->cutscene_dialogue_state);
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
     if (game->am_audio_stream) SDL_DestroyAudioStream(game->am_audio_stream);
     if (game->am_wav_buf)      SDL_free(game->am_wav_buf);
+    if (game->glass_crack_audio_stream) SDL_DestroyAudioStream(game->glass_crack_audio_stream);
+    if (game->glass_crack_wav_buf)      SDL_free(game->glass_crack_wav_buf);
+    decoded_audio_free(&game->door_open_audio);
+    decoded_audio_free(&game->ambient_ost_audio);
+    decoded_audio_free(&game->monster_theme_audio);
+    decoded_audio_free(&game->menu_music_audio);
+    decoded_audio_free(&game->room1_music_audio);
+    decoded_audio_free(&game->room2_music_audio);
+    decoded_audio_free(&game->room3_music_audio);
     video_player_close(game->jumpscare_player);
     game->jumpscare_player = NULL;
+    video_player_close(game->monster_death_player);
+    game->monster_death_player = NULL;
+    video_player_close(game->end_credits_player);
+    game->end_credits_player = NULL;
     render_texture_destroy(game->item_flashlight_texture);
     render_texture_destroy(game->item_gasmask_texture);
     render_texture_destroy(game->item_keycard_texture);
+    render_texture_destroy(game->item_fingerprint_texture);
+    render_texture_destroy(game->item_fingerprint2_texture);
+    render_texture_destroy(game->item_fingerprint3_texture);
+    render_texture_destroy(game->item_thermalfuse_texture);
+    render_texture_destroy(game->glass_texture);
     render_texture_destroy(game->dark_overlay);
+    enemy_free(&game->enemy);
+    enemy_free(&game->archive_enemy);
     free(game);
 }
 
@@ -177,8 +821,33 @@ void game_start_new(Game *game)
     game->player->frame_timer       = 0.0f;
     game->player->frame_duration    = 0.15f;
 
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
+
     story_populate_world(game->world, "assets/locations.txt");
     world_setup_rooms(game->world, game->renderer);
+
+    /* Initialise the enemy patrol system (uses hallway room dimensions).
+     * Fallback values match the hallway tile comment in world.c:
+     * tile_w = 1920/60 = 32 px, tile_h = 960/30 = 32 px. */
+    enemy_free(&game->enemy);
+    {
+        Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+        int hw_w = hw ? hw->room_width  : 1920; /* hallway texture width  */
+        int hw_h = hw ? hw->room_height : 960;  /* hallway texture height */
+        enemy_init(&game->enemy, hw_w, hw_h);
+        enemy_load_sprites(&game->enemy, game->renderer);
+    }
+
+    /* Initialise the archive enemy (inactive until player enters archive). */
+    enemy_free(&game->archive_enemy);
+    {
+        Location *ar = world_get_location(game->world, LOCATION_ARCHIVE);
+        int ar_w = ar ? ar->room_width  : 4500;
+        int ar_h = ar ? ar->room_height : 2000;
+        enemy_init_archive(&game->archive_enemy, ar_w, ar_h);
+        enemy_load_sprites(&game->archive_enemy, game->renderer);
+    }
 
     game->player->current_location_id = 3;  /* Start in Room 3 */
 
@@ -200,15 +869,291 @@ void game_start_new(Game *game)
     game->selected_inventory_slot = 0;
     game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered     = 0;
+    game->dizziness_bar           = 1.0f;
+    game->dizziness_death_triggered = 0;
+    game->tube_selected           = -1;
+    game->tube_sort_done          = 0;
+    game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7); /* 5-11s */
+    game->ambient_flicker_duration = 0.0f;
+    game->ambient_flicker_alpha    = 0;
+    game->am_audio_pause_timer     = 0.0f;
 
-    /* Show the opening inner monologue if one is defined */
-    const MonologueSection *open_mono =
-        monologue_find(&game->monologue_file, "game_start");
-    if (open_mono) {
-        game->dialogue_tree = monologue_to_dialogue_tree(open_mono);
-        if (game->dialogue_tree)
-            game_start_dialogue(game, 0);
+    /* Show the hibernation opening cutscene */
+    game_start_hibernation_cutscene(game);
+}
+
+/* ── Save / Load helpers ────────────────────────────────────────────────── */
+
+/* Refresh save_slot_labels[] by reading the label from each save file. */
+static void game_refresh_save_slot_labels(Game *game)
+{
+    for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+        if (savegame_exists(i + 1)) {
+            char lbl[SAVE_LABEL_MAX];
+            if (savegame_read_label(i + 1, lbl, sizeof(lbl)) && lbl[0] != '\0')
+                snprintf(game->save_slot_labels[i],
+                         sizeof(game->save_slot_labels[i]), "%s", lbl);
+            else
+                snprintf(game->save_slot_labels[i],
+                         sizeof(game->save_slot_labels[i]),
+                         "Slot %d - Save File", i + 1);
+        } else {
+            snprintf(game->save_slot_labels[i],
+                     sizeof(game->save_slot_labels[i]),
+                     "Slot %d - [Empty]", i + 1);
+        }
+        /* Button text pointer already points into save_slot_labels[i] */
+        game->save_load_buttons[i].text = game->save_slot_labels[i];
     }
+}
+
+/* Save current game state to a slot (1-based). */
+static void game_do_save(Game *game, int slot)
+{
+    if (!game || !game->player || !game->story) return;
+
+    SaveData data;
+    memset(&data, 0, sizeof(data));
+    memcpy(data.magic, SAVE_MAGIC, 8); /* copies "HGSAVE1\0" (7 chars + NUL) */
+
+    data.player_flags             = game->player->flags;
+    data.player_x                 = game->player->x;
+    data.player_y                 = game->player->y;
+    data.location_id              = game->player->current_location_id;
+    data.inventory_count          = game->player->inventory_count;
+    memcpy(data.inventory, game->player->inventory, sizeof(data.inventory));
+    data.current_chapter          = game->story->current_chapter;
+    data.choices_made             = game->story->choices_made;
+    data.enemy_active             = game->enemy.active;
+    data.flashlight_active        = game->flashlight_active;
+    data.gasmask_active           = game->gasmask_active;
+    data.security_cutscene_played = game->security_cutscene_played;
+
+    /* Build a human-readable label */
+    const char *loc_name = "Unknown";
+    if      (data.location_id == LOCATION_ARCHIVE)     loc_name = "Archive";
+    else if (data.location_id == LOCATION_LAB)         loc_name = "Lab";
+    else if (data.location_id == LOCATION_HALLWAY)     loc_name = "Hallway";
+    else if (data.location_id == LOCATION_HIBERNATION) loc_name = "Chamber Room";
+    else if (data.location_id == LOCATION_POWER)       loc_name = "Power Room";
+    else if (data.location_id == LOCATION_SECURITY)    loc_name = "Security Room";
+    snprintf(data.save_label, sizeof(data.save_label),
+             "Slot %d - %s", slot, loc_name);
+
+    savegame_write(slot, &data);
+}
+
+/* Load a saved game from a slot (1-based) and switch to GAME_STATE_PLAYING. */
+static void game_do_load(Game *game, int slot)
+{
+    if (!game) return;
+
+    SaveData data;
+    if (!savegame_read(slot, &data)) return;
+
+    /* --- Tear down existing game state ---------------------------------- */
+    if (game->player)        { player_destroy(game->player);      game->player        = NULL; }
+    if (game->world)         { world_destroy(game->world);         game->world         = NULL; }
+    if (game->story)         { story_destroy(game->story);         game->story         = NULL; }
+    if (game->dialogue_tree) { dialogue_tree_destroy(game->dialogue_tree);
+                               game->dialogue_tree = NULL; }
+
+    /* --- Re-create subsystems ------------------------------------------- */
+    game->player = player_create("Alex");
+    game->world  = world_create();
+    game->story  = story_create();
+
+    /* Load player textures (same as game_start_new) */
+    game->player->idle_texture_north = render_load_texture(game->renderer, "assets/player/player_idle_north.png");
+    game->player->idle_texture_south = render_load_texture(game->renderer, "assets/player/player_idle_south.png");
+    game->player->idle_texture_east  = render_load_texture(game->renderer, "assets/player/player_idle_east.png");
+    game->player->idle_texture_west  = render_load_texture(game->renderer, "assets/player/player_idle_west.png");
+    game->player->walk_frames_north[0] = render_load_texture(game->renderer, "assets/player/player_walk_north_0.png");
+    game->player->walk_frames_north[1] = render_load_texture(game->renderer, "assets/player/player_walk_north_1.png");
+    game->player->walk_frames_south[0] = render_load_texture(game->renderer, "assets/player/player_walk_south_0.png");
+    game->player->walk_frames_south[1] = render_load_texture(game->renderer, "assets/player/player_walk_south_1.png");
+    game->player->walk_frames_east[0]  = render_load_texture(game->renderer, "assets/player/player_walk_east_0.png");
+    game->player->walk_frames_east[1]  = render_load_texture(game->renderer, "assets/player/player_walk_east_1.png");
+    game->player->walk_frames_west[0]  = render_load_texture(game->renderer, "assets/player/player_walk_west_0.png");
+    game->player->walk_frames_west[1]  = render_load_texture(game->renderer, "assets/player/player_walk_west_1.png");
+
+    game->player->current_direction = DIRECTION_EAST;
+    game->player->frame_index       = 0;
+    game->player->frame_timer       = 0.0f;
+    game->player->frame_duration    = 0.15f;
+
+    /* Load flashlight movement animation frames */
+    load_flashlight_frames(game->player, game->renderer);
+
+    story_populate_world(game->world, "assets/locations.txt");
+    world_setup_rooms(game->world, game->renderer);
+
+    /* --- Apply saved data ----------------------------------------------- */
+    game->player->flags               = data.player_flags;
+    game->player->x                   = data.player_x;
+    game->player->y                   = data.player_y;
+    game->player->current_location_id = data.location_id;
+    /* Clamp inventory_count to valid range */
+    if (data.inventory_count < 0) data.inventory_count = 0;
+    if (data.inventory_count > INVENTORY_CAPACITY) data.inventory_count = INVENTORY_CAPACITY;
+    game->player->inventory_count     = data.inventory_count;
+    memcpy(game->player->inventory, data.inventory, sizeof(game->player->inventory));
+    game->story->current_chapter      = data.current_chapter;
+    game->story->choices_made         = data.choices_made;
+    game->flashlight_active           = data.flashlight_active;
+    game->gasmask_active              = data.gasmask_active;
+    game->security_cutscene_played    = data.security_cutscene_played;
+
+    if (player_check_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_OPENED)) {
+        Location *archive = world_get_location(game->world, LOCATION_ARCHIVE);
+        if (archive && archive->door_collider_count > 0)
+            archive->collider_count = archive->door_collider_start;
+    }
+
+    /* Restore Hibernation room exit-door state.
+     * When FLAG_HIBERN_POWERCELL_PLACED is set the tile-5 door was already
+     * opened at play-time (colliders removed, trigger 75 converted to an exit).
+     * world_setup_rooms() always recreates the door colliders from scratch, so
+     * we must re-apply the same open-door transformation here to prevent the
+     * player from being locked in when they re-enter the room after loading. */
+    if (player_check_flag(game->player, FLAG_HIBERN_POWERCELL_PLACED)) {
+        Location *hibern = world_get_location(game->world, LOCATION_HIBERNATION);
+        if (hibern) {
+            if (hibern->door_collider_count > 0)
+                hibern->collider_count = hibern->door_collider_start;
+            for (int i = 0; i < hibern->trigger_count; i++) {
+                if (hibern->triggers[i].trigger_id == 75)
+                    hibern->triggers[i].target_location_id = LOCATION_HALLWAY;
+            }
+        }
+    }
+
+    /* Restore hallway door states based on saved story flags.
+     * Doors are stacked in the collider array (archive < lab < security),
+     * so they must be removed in reverse unlock order (security first). */
+    {
+        Location *hallway = world_get_location(game->world, LOCATION_HALLWAY);
+        if (hallway) {
+            /* Security door (tile 3, trigger 93): open once generator is on */
+            if (player_check_flag(game->player, FLAG_POWER_GENERATOR_ON) &&
+                hallway->door3_collider_count > 0) {
+                hallway->collider_count = hallway->door3_collider_start;
+                Location *secloc = world_get_location(game->world, LOCATION_SECURITY);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 93) {
+                        hallway->triggers[i].target_location_id = LOCATION_SECURITY;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (secloc) {
+                            hallway->triggers[i].spawn_x = secloc->spawn_x;
+                            hallway->triggers[i].spawn_y = secloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Lab door (tile 4, trigger 94): open once passcode is done */
+            if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE) &&
+                hallway->door2_collider_count > 0) {
+                hallway->collider_count = hallway->door2_collider_start;
+                Location *labloc = world_get_location(game->world, LOCATION_LAB);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 94) {
+                        hallway->triggers[i].target_location_id = LOCATION_LAB;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (labloc) {
+                            hallway->triggers[i].spawn_x = labloc->spawn_x;
+                            hallway->triggers[i].spawn_y = labloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+            /* Archive door (tile 5, trigger 95): open once keycard is used */
+            if (player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
+                hallway->door_collider_count > 0) {
+                hallway->collider_count = hallway->door_collider_start;
+                Location *arcloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                for (int i = 0; i < hallway->trigger_count; i++) {
+                    if (hallway->triggers[i].trigger_id == 95) {
+                        hallway->triggers[i].target_location_id = LOCATION_ARCHIVE;
+                        hallway->triggers[i].trigger_id = -1;
+                        if (arcloc) {
+                            hallway->triggers[i].spawn_x = arcloc->spawn_x;
+                            hallway->triggers[i].spawn_y = arcloc->spawn_y;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /* Re-init enemy */
+    enemy_free(&game->enemy);
+    {
+        Location *hw = world_get_location(game->world, LOCATION_HALLWAY);
+        int hw_w = hw ? hw->room_width  : 1920;
+        int hw_h = hw ? hw->room_height : 960;
+        enemy_init(&game->enemy, hw_w, hw_h);
+        enemy_load_sprites(&game->enemy, game->renderer);
+    }
+    game->enemy.active = data.enemy_active;
+    if (data.enemy_active) game->enemy.state = ENEMY_STATE_PATROL;
+    /* If the player already has the level-2 keycard the hallway encounter is
+     * over, so keep the hallway enemy deactivated regardless of the saved flag. */
+    if (player_has_item(game->player, ITEM_ID_KEYCARD_L2))
+        game->enemy.active = 0;
+
+    /* Re-init archive enemy */
+    enemy_free(&game->archive_enemy);
+    {
+        Location *ar = world_get_location(game->world, LOCATION_ARCHIVE);
+        int ar_w = ar ? ar->room_width  : 4500;
+        int ar_h = ar ? ar->room_height : 2000;
+        enemy_init_archive(&game->archive_enemy, ar_w, ar_h);
+        enemy_load_sprites(&game->archive_enemy, game->renderer);
+    }
+    /* Re-activate archive enemy if it was previously spawned */
+    if (player_check_flag(game->player, FLAG_ARCHIVE_ENEMY_SPAWNED)) {
+        game->archive_enemy.active = 1;
+        game->archive_enemy.state  = ENEMY_STATE_PATROL;
+    }
+
+    /* Camera */
+    Location *loc = world_get_location(game->world, data.location_id);
+    int loc_w = loc ? loc->room_width  : ROOM_W;
+    int loc_h = loc ? loc->room_height : ROOM_H;
+    camera_init(&game->camera, WINDOW_W, WINDOW_H, loc_w, loc_h);
+    camera_snap(&game->camera, data.player_x, data.player_y);
+
+    /* Reset transient state */
+    game->state                   = GAME_STATE_PLAYING;
+    game->near_interactive        = 0;
+    game->interactive_trigger_id  = -1;
+    game->selected_inventory_slot = 0;
+    game->lab_gas_timer           = LAB_GAS_DEATH_DELAY;
+    game->lab_death_triggered     = 0;
+    game->dizziness_bar           = 1.0f;
+    game->dizziness_death_triggered = 0;
+    game->tube_selected           = -1;
+    game->tube_sort_done          = 0;
+    game->ambient_flicker_timer    = 5.0f + (float)(rand() % 7);
+    game->ambient_flicker_duration = 0.0f;
+    game->ambient_flicker_alpha    = 0;
+    game->pickup_notify_timer      = 0.0f;
+    game->save_reminder_timer      = 0.0f;
+    game->pause_return_state       = GAME_STATE_PLAYING;
+    game->show_note_locker        = 0;
+    game->show_monitor_zoom       = 0;
+    game->show_containment_level  = 0;
+    game->passcode_active         = 0;
+    game->passcode_input_len      = 0;
+    game->passcode_input[0]       = '\0';
+    game->passcode_wrong          = 0;
+    game->passcode_correct        = 0;
+    game->simon_death_triggered   = 0;
+    game->simon_jumpscare_played  = 0;
+    game->am_audio_pause_timer    = 0.0f;
 }
 
 void game_change_location(Game *game, int location_id,
@@ -231,6 +1176,17 @@ void game_change_location(Game *game, int location_id,
         player_set_flag(game->player, FLAG_ENTERED_LAB);
     else if (location_id == LOCATION_HALLWAY)
         player_set_flag(game->player, FLAG_ENTERED_HALLWAY);
+    else if (location_id == LOCATION_POWER)
+        player_set_flag(game->player, FLAG_ENTERED_POWER);
+    else if (location_id == LOCATION_SECURITY)
+        player_set_flag(game->player, FLAG_ENTERED_SECURITY);
+
+    /* Activate archive enemy the first time the player enters the archive room */
+    if (location_id == LOCATION_ARCHIVE && !game->archive_enemy.active) {
+        game->archive_enemy.active = 1;
+        game->archive_enemy.state  = ENEMY_STATE_PATROL;
+        player_set_flag(game->player, FLAG_ARCHIVE_ENEMY_SPAWNED);
+    }
 
     Location *next = world_get_location(game->world, location_id);
     if (next) {
@@ -242,6 +1198,7 @@ void game_change_location(Game *game, int location_id,
     game->lab_gas_timer      = LAB_GAS_DEATH_DELAY;
     game->lab_death_triggered = 0;
 
+    decoded_audio_play_once(&game->door_open_audio);
     camera_snap(&game->camera, spawn_x, spawn_y);
 }
 
@@ -275,10 +1232,20 @@ void game_end_dialogue(Game *game)
         game->lab_death_triggered = 0;
         game->lab_gas_timer       = LAB_GAS_DEATH_DELAY;
         game->state               = GAME_STATE_MENU;
+    } else if (game->dizziness_death_triggered) {
+        /* Player died from dizziness — game over */
+        game->dizziness_death_triggered = 0;
+        game->state = GAME_STATE_GAME_OVER;
+    } else if (game->tube_sort_done) {
+        /* Tube-sort minigame completed — apply medicine flag */
+        game->tube_sort_done = 0;
+        player_set_flag(game->player, FLAG_LAB_MEDICINE_MADE);
+        game->dizziness_bar = 1.0f;
+        game->state = GAME_STATE_PLAYING;
     } else if (game->simon_death_triggered) {
-        /* Player failed the Simon game — return to main menu */
+        /* Player failed the Simon game — return to world so they must interact again */
         game->simon_death_triggered = 0;
-        game->state                 = GAME_STATE_MENU;
+        game->state                 = GAME_STATE_PLAYING;
     } else {
         game->state = GAME_STATE_PLAYING;
     }
@@ -289,7 +1256,7 @@ void game_end_dialogue(Game *game)
 void game_start_simon(Game *game)
 {
     if (!game) return;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 8; i++)
         game->simon_sequence[i] = rand() % 4;
     game->simon_length      = 1;
     game->simon_show_pos    = 0;
@@ -302,6 +1269,364 @@ void game_start_simon(Game *game)
     game->state = GAME_STATE_SIMON;
 }
 
+
+/* ── Tube-sort (medicine) minigame ──────────────────────────────────────── */
+
+/* Colors: 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach */
+void game_start_tube_sort(Game *game)
+{
+    if (!game) return;
+
+    /* Clear all tubes */
+    for (int i = 0; i < 7; i++) {
+        game->tube_count[i] = 0;
+        for (int j = 0; j < 4; j++)
+            game->tube_colors[i][j] = 0;
+    }
+
+    /* Starting layout – 4 colours × 4 units = 16 units across 4 mixed tubes.
+     * Slot 0 = bottom, slot 3 = top.  Tubes 4-6 are empty buffer tubes. */
+
+    /* Tube 0: purple, purple, purple, salmon */
+    game->tube_colors[0][0]=1; game->tube_colors[0][1]=1;
+    game->tube_colors[0][2]=1; game->tube_colors[0][3]=4; game->tube_count[0]=4;
+
+    /* Tube 1: purple, teal, yellow, teal */
+    game->tube_colors[1][0]=1; game->tube_colors[1][1]=2;
+    game->tube_colors[1][2]=3; game->tube_colors[1][3]=2; game->tube_count[1]=4;
+
+    /* Tube 2: teal, salmon, salmon, yellow */
+    game->tube_colors[2][0]=2; game->tube_colors[2][1]=4;
+    game->tube_colors[2][2]=4; game->tube_colors[2][3]=3; game->tube_count[2]=4;
+
+    /* Tube 3: salmon, yellow, yellow, teal */
+    game->tube_colors[3][0]=4; game->tube_colors[3][1]=3;
+    game->tube_colors[3][2]=3; game->tube_colors[3][3]=2; game->tube_count[3]=4;
+
+    /* Tubes 4, 5, 6: empty (already zeroed) */
+
+    game->tube_selected = -1;
+    game->tube_sort_done = 0;
+    game->state = GAME_STATE_TUBE_SORT;
+}
+
+static void dodge_clear_bullets(Game *game)
+{
+    if (!game) return;
+    game->dodge_bullet_count = 0;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++)
+        game->dodge_bullet_active[i] = 0;
+}
+
+static void dodge_begin_round(Game *game, int round)
+{
+    if (!game) return;
+    game->dodge_round        = round;
+    game->dodge_hp           = DODGE_MAX_HP;
+    game->dodge_elapsed      = 0.0f;
+    game->dodge_invuln_timer = 0.0f;
+    game->dodge_heart_x      = DODGE_BOX_X + DODGE_BOX_W * 0.5f;
+    game->dodge_heart_y      = DODGE_BOX_Y + DODGE_BOX_H * 0.72f;
+    game->dodge_spawn_timer  = (round == 1) ? 0.20f :
+                               (round == 2) ? 0.12f :
+                               (round == 3) ? 0.16f :
+                               (round == 4) ? 0.10f : 0.25f;
+    dodge_clear_bullets(game);
+}
+
+void game_start_dodge(Game *game)
+{
+    if (!game) return;
+    dodge_begin_round(game, 1);
+    monster_theme_start(game);
+    game->state = GAME_STATE_DODGE;
+}
+
+static void dodge_spawn_bullet_raw(Game *game,
+                                   float x, float y,
+                                   float vx, float vy)
+{
+    if (!game) return;
+
+    int slot = -1;
+    for (int i = 0; i < DODGE_MAX_BULLETS; i++) {
+        if (!game->dodge_bullet_active[i]) {
+            slot = i;
+            break;
+        }
+    }
+    if (slot < 0) return;
+
+    game->dodge_bullet_x[slot] = x;
+    game->dodge_bullet_y[slot] = y;
+    game->dodge_bullet_vx[slot] = vx;
+    game->dodge_bullet_vy[slot] = vy;
+    game->dodge_bullet_active[slot] = 1;
+    if (slot >= game->dodge_bullet_count)
+        game->dodge_bullet_count = slot + 1;
+}
+
+static void dodge_spawn_aimed_bullet(Game *game, int from_corner)
+{
+    if (!game) return;
+
+    int side = rand() % 4;
+    float speed = (from_corner ? 230.0f : 165.0f) + (float)(rand() % 110);
+    float tx = DODGE_BOX_X + 25.0f + (float)(rand() % ((int)DODGE_BOX_W - 50));
+    float ty = DODGE_BOX_Y + 25.0f + (float)(rand() % ((int)DODGE_BOX_H - 50));
+    float x = tx, y = ty;
+
+    if (from_corner) {
+        int corner = rand() % 4;
+        x = (corner == 0 || corner == 2)
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = (corner == 0 || corner == 1)
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        tx = game->dodge_heart_x + (float)((rand() % 81) - 40);
+        ty = game->dodge_heart_y + (float)((rand() % 81) - 40);
+    } else if (side == 0) {
+        x = DODGE_BOX_X - DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 1) {
+        x = DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        y = DODGE_BOX_Y + (float)(rand() % (int)DODGE_BOX_H);
+    } else if (side == 2) {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    } else {
+        x = DODGE_BOX_X + (float)(rand() % (int)DODGE_BOX_W);
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+    }
+
+    float dx = tx - x;
+    float dy = ty - y;
+    float len = sqrtf(dx * dx + dy * dy);
+    if (len < 1.0f) len = 1.0f;
+
+    dodge_spawn_bullet_raw(game, x, y, dx / len * speed, dy / len * speed);
+}
+
+static void dodge_spawn_lane_bullet(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    float speed = 250.0f + (float)(rand() % 80);
+    if (horizontal) {
+        int lane = rand() % 5;
+        float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+        int left_to_right = rand() % 2;
+        float x = left_to_right
+            ? DODGE_BOX_X - DODGE_BULLET_SIZE
+            : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               left_to_right ? speed : -speed, 0.0f);
+    } else {
+        int lane = rand() % 6;
+        float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+        int top_to_bottom = rand() % 2;
+        float y = top_to_bottom
+            ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+            : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        dodge_spawn_bullet_raw(game, x, y,
+                               0.0f, top_to_bottom ? speed : -speed);
+    }
+}
+
+static void dodge_spawn_rain_bullet(Game *game)
+{
+    if (!game) return;
+
+    float x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+    float y = DODGE_BOX_Y - DODGE_BULLET_SIZE;
+    float vx = (float)((rand() % 181) - 90);
+    float vy = 270.0f + (float)(rand() % 90);
+    dodge_spawn_bullet_raw(game, x, y, vx, vy);
+
+    if ((rand() % 4) == 0) {
+        x = DODGE_BOX_X + 18.0f + (float)(rand() % ((int)DODGE_BOX_W - 36));
+        y = DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+        vx = (float)((rand() % 141) - 70);
+        vy = -230.0f - (float)(rand() % 70);
+        dodge_spawn_bullet_raw(game, x, y, vx, vy);
+    }
+}
+
+static void dodge_spawn_wall_attack(Game *game)
+{
+    if (!game) return;
+
+    int horizontal = rand() % 2;
+    int left_or_top = rand() % 2;
+    float speed = 260.0f + (float)(rand() % 80);
+
+    if (horizontal) {
+        int gap = rand() % 5;
+        for (int lane = 0; lane < 5; lane++) {
+            if (lane == gap) continue;
+            float y = DODGE_BOX_Y + 38.0f + (float)lane * 62.0f;
+            float x = left_or_top
+                ? DODGE_BOX_X - DODGE_BULLET_SIZE
+                : DODGE_BOX_X + DODGE_BOX_W + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   left_or_top ? speed : -speed, 0.0f);
+        }
+    } else {
+        int gap = rand() % 6;
+        for (int lane = 0; lane < 6; lane++) {
+            if (lane == gap) continue;
+            float x = DODGE_BOX_X + 34.0f + (float)lane * 66.0f;
+            float y = left_or_top
+                ? DODGE_BOX_Y - DODGE_BULLET_SIZE
+                : DODGE_BOX_Y + DODGE_BOX_H + DODGE_BULLET_SIZE;
+            dodge_spawn_bullet_raw(game, x, y,
+                                   0.0f, left_or_top ? speed : -speed);
+        }
+    }
+}
+
+static void dodge_spawn_round_attack(Game *game)
+{
+    if (!game) return;
+    if (game->dodge_round == 1) {
+        dodge_spawn_aimed_bullet(game, 0);
+    } else if (game->dodge_round == 2) {
+        dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 3) {
+        dodge_spawn_aimed_bullet(game, 1);
+        if ((rand() % 3) == 0)
+            dodge_spawn_lane_bullet(game);
+    } else if (game->dodge_round == 4) {
+        dodge_spawn_rain_bullet(game);
+    } else {
+        dodge_spawn_wall_attack(game);
+        if ((rand() % 2) == 0)
+            dodge_spawn_aimed_bullet(game, 1);
+    }
+}
+
+static float dodge_round_spawn_interval(const Game *game)
+{
+    if (!game) return DODGE_SPAWN_EVERY;
+    switch (game->dodge_round) {
+    case 1: return 0.30f; /* aimed edge shots */
+    case 2: return 0.22f; /* straight lane sweeps */
+    case 3: return 0.24f; /* corner shots with lane pressure */
+    case 4: return 0.16f; /* rain with drifting bullets */
+    case 5: return 0.55f; /* wall waves with a single gap */
+    default: return DODGE_SPAWN_EVERY;
+    }
+
+}
+
+/* ── Security cutscene ─────────────────────────────────────────────────── */
+
+void game_start_security_cutscene(Game *game)
+{
+    if (!game) return;
+
+    /* Tear down any previous cutscene tree */
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index          = 0;
+    game->security_cutscene_played = 1;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      security_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    /* Close the monitor overlay and transition state */
+    game->show_monitor_zoom = 0;
+    game->passcode_active   = 0;
+    game->cutscene_type     = CUTSCENE_SECURITY;
+    game->state             = GAME_STATE_CUTSCENE;
+}
+
+/* ── Hibernation opening cutscene ───────────────────────────────────────── */
+
+void game_start_hibernation_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_HIBERNATION;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      hibernation_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
+/* ── Power room cutscene (after simon says win) ─────────────────────────── */
+
+void game_start_power_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_POWER;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      power_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
+/* ── Hallway exit cutscene (access denied + monster attack) ─────────────── */
+
+void game_start_hallway_exit_cutscene(Game *game)
+{
+    if (!game) return;
+
+    if (game->cutscene_dialogue_tree) {
+        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+        game->cutscene_dialogue_tree = NULL;
+    }
+
+    game->cutscene_index = 0;
+    game->cutscene_type  = CUTSCENE_HALLWAY_EXIT;
+    game->save_reminder_timer = 7.0f;
+
+    game->cutscene_dialogue_tree = dialogue_tree_create();
+    if (!game->cutscene_dialogue_tree) return;
+
+    dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                      hallway_exit_cutscene_texts[0], 1);
+    dialogue_state_init(&game->cutscene_dialogue_state,
+                        game->cutscene_dialogue_tree, 0);
+
+    game->state = GAME_STATE_CUTSCENE;
+}
+
 /* ── Per-frame event handling ──────────────────────────────────────────── */
 
 void game_handle_event(Game *game, SDL_Event *event)
@@ -309,8 +1634,13 @@ void game_handle_event(Game *game, SDL_Event *event)
     if (!game || !event) return;
 
     if (event->type == SDL_EVENT_MOUSE_MOTION) {
-        game->mouse_x = event->motion.x;
-        game->mouse_y = event->motion.y;
+        /* Convert physical window coordinates to logical renderer coordinates.
+           SDL_SetRenderLogicalPresentation creates a mismatch: mouse events
+           report raw physical pixels while all rendering and hit-testing uses
+           the 1280×720 logical canvas, so we must map before storing. */
+        SDL_RenderCoordinatesFromWindow(game->renderer,
+                                        event->motion.x, event->motion.y,
+                                        &game->mouse_x, &game->mouse_y);
     }
     game->mouse_clicked = 0;
     if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN)
@@ -327,7 +1657,7 @@ void game_handle_event(Game *game, SDL_Event *event)
             for (int i = 0; i < 3; i++) {
                 if (button_is_clicked(&game->buttons[i],
                                       game->mouse_x, game->mouse_y)) {
-                    if      (i == 0) game_start_new(game);
+                    if      (i == 0) game->state = GAME_STATE_NEW_LOAD_MENU;
                     else if (i == 1) game->state = GAME_STATE_SETTINGS;
                     else if (i == 2) game->state = GAME_STATE_QUIT;
                 }
@@ -344,9 +1674,56 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->current_menu_choice++;
                 break;
             case SDLK_RETURN:
-                if      (game->current_menu_choice == 0) game_start_new(game);
+                if      (game->current_menu_choice == 0) game->state = GAME_STATE_NEW_LOAD_MENU;
                 else if (game->current_menu_choice == 1) game->state = GAME_STATE_SETTINGS;
                 else if (game->current_menu_choice == 2) game->state = GAME_STATE_QUIT;
+                break;
+            default: break;
+            }
+        }
+        break;
+
+    case GAME_STATE_NEW_LOAD_MENU:
+        for (int i = 0; i < 3; i++)
+            button_update_hover(&game->new_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            if (button_is_clicked(&game->new_load_buttons[0],
+                                  game->mouse_x, game->mouse_y))
+                game_start_new(game);
+            else if (button_is_clicked(&game->new_load_buttons[1],
+                                       game->mouse_x, game->mouse_y)) {
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_NEW_LOAD_MENU;
+                game->state = GAME_STATE_LOAD_MENU;
+            } else if (button_is_clicked(&game->new_load_buttons[2],
+                                         game->mouse_x, game->mouse_y))
+                game->state = GAME_STATE_MENU;
+        }
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            switch (event->key.key) {
+            case SDLK_UP:
+                if (game->new_load_menu_choice > 0)
+                    game->new_load_menu_choice--;
+                break;
+            case SDLK_DOWN:
+                if (game->new_load_menu_choice < 2)
+                    game->new_load_menu_choice++;
+                break;
+            case SDLK_RETURN:
+                if (game->new_load_menu_choice == 0)
+                    game_start_new(game);
+                else if (game->new_load_menu_choice == 1) {
+                    game_refresh_save_slot_labels(game);
+                    game->save_load_prev_state = GAME_STATE_NEW_LOAD_MENU;
+                    game->state = GAME_STATE_LOAD_MENU;
+                } else {
+                    game->state = GAME_STATE_MENU;
+                }
+                break;
+            case SDLK_ESCAPE:
+                game->state = GAME_STATE_MENU;
                 break;
             default: break;
             }
@@ -360,6 +1737,7 @@ void game_handle_event(Game *game, SDL_Event *event)
                 game->state = GAME_STATE_INVENTORY;
                 break;
             case SDLK_ESCAPE:
+                game->pause_return_state = GAME_STATE_PLAYING;
                 game->state = GAME_STATE_PAUSE;
                 break;
             case SDLK_E:
@@ -372,7 +1750,8 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_LOCKER:
-        if (game->show_monitor_zoom && !game->passcode_active) {
+        if (game->show_monitor_zoom && !game->passcode_active &&
+            !game->show_containment_level) {
             /* Check if the invisible monitor panel rect was clicked */
             if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
                 float mx = game->mouse_x, my = game->mouse_y;
@@ -393,7 +1772,17 @@ void game_handle_event(Game *game, SDL_Event *event)
                                                game->am_wav_buf,
                                                (int)game->am_wav_len);
                         SDL_ResumeAudioStreamDevice(game->am_audio_stream);
+                        game->am_audio_pause_timer =
+                            audio_duration_seconds(&game->am_wav_spec,
+                                                   game->am_wav_len);
                     }
+                }
+                /* Check if the containment level rect was clicked */
+                if (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                    mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                    my >= CONTAINMENT_LEVEL_RECT_Y &&
+                    my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H) {
+                    game->show_containment_level = 1;
                 }
             }
         }
@@ -408,6 +1797,9 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->passcode_input_len = 0;
                     game->passcode_input[0]  = '\0';
                     game->passcode_wrong     = 0;
+                    /* Start cutscene the first time the passcode is accepted */
+                    if (!game->security_cutscene_played)
+                        game_start_security_cutscene(game);
                 } else if (k == SDLK_ESCAPE) {
                     /* Close passcode overlay */
                     game->passcode_active    = 0;
@@ -441,6 +1833,15 @@ void game_handle_event(Game *game, SDL_Event *event)
                             if (strcmp(game->passcode_input, PASSCODE_CORRECT) == 0) {
                                 /* Correct – show success message; overlay stays open */
                                 game->passcode_correct = 1;
+                                /* Activate the hallway enemy the first time */
+                                if (game->player &&
+                                    !player_check_flag(game->player,
+                                                       FLAG_SECURITY_PASSCODE_DONE)) {
+                                    player_set_flag(game->player,
+                                                    FLAG_SECURITY_PASSCODE_DONE);
+                                    game->enemy.active = 1;
+                                    game->enemy.state  = ENEMY_STATE_PATROL;
+                                }
                             } else {
                                 game->passcode_wrong = 1;
                             }
@@ -453,14 +1854,114 @@ void game_handle_event(Game *game, SDL_Event *event)
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE ||
                 event->key.key == SDLK_E) {
-                game->show_note_locker  = 0;
-                game->show_monitor_zoom = 0;
-                game->passcode_active    = 0;
-                game->passcode_input_len = 0;
-                game->passcode_input[0]  = '\0';
-                game->passcode_wrong     = 0;
-                game->passcode_correct   = 0;
+                /* If containment level overlay is open, just close it */
+                if (game->show_containment_level) {
+                    game->show_containment_level = 0;
+                } else {
+                    game->show_note_locker       = 0;
+                    game->show_monitor_zoom      = 0;
+                    game->show_containment_level = 0;
+                    game->passcode_active        = 0;
+                    game->passcode_input_len     = 0;
+                    game->passcode_input[0]      = '\0';
+                    game->passcode_wrong         = 0;
+                    game->passcode_correct       = 0;
+                    game->state = GAME_STATE_PLAYING;
+                }
+            }
+        }
+        break;
+
+    case GAME_STATE_ARCHIVE_BOOK:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            /* ESC or E closes the book viewer */
+            if (k == SDLK_ESCAPE || k == SDLK_E) {
+                game->archive_book_trans_timer = 0.0f;
                 game->state = GAME_STATE_PLAYING;
+            }
+            /* Right arrow: go to next page (pg2) */
+            else if (k == SDLK_RIGHT &&
+                     game->archive_book_page == 0 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 1;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+            /* Left arrow: go to previous page (pg1) */
+            else if (k == SDLK_LEFT &&
+                     game->archive_book_page == 1 &&
+                     game->archive_book_trans_timer <= 0.0f) {
+                game->archive_book_next_page  = 0;
+                game->archive_book_trans_timer = ARCHIVE_BOOK_TRANSITION_DURATION;
+            }
+        }
+        break;
+
+    case GAME_STATE_CUTSCENE:
+        if (event->type == SDL_EVENT_KEY_DOWN) {
+            SDL_Keycode k = event->key.key;
+            /* Allow the player to pause (and save) just before the final fight */
+            if (k == SDLK_ESCAPE &&
+                game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                game->pause_return_state = GAME_STATE_CUTSCENE;
+                game->state = GAME_STATE_PAUSE;
+                break;
+            }
+            if (k == SDLK_RETURN || k == SDLK_SPACE || k == SDLK_KP_ENTER) {
+                if (!game->cutscene_dialogue_state.text_complete) {
+                    /* Skip typewriter – show full text immediately */
+                    game->cutscene_dialogue_state.text_complete = 1;
+                    if (game->cutscene_dialogue_tree) {
+                        DialogueNode *n = dialogue_get_node(
+                            game->cutscene_dialogue_tree,
+                            game->cutscene_dialogue_state.current_node_id);
+                        if (n)
+                            game->cutscene_dialogue_state.chars_visible =
+                                (int)strlen(n->text);
+                    }
+                } else {
+                    /* Determine scene count and text array for the active cutscene */
+                    int scene_count;
+                    const char * const *texts;
+                    if (game->cutscene_type == CUTSCENE_HIBERNATION) {
+                        scene_count = 3;
+                        texts = hibernation_cutscene_texts;
+                    } else if (game->cutscene_type == CUTSCENE_POWER) {
+                        scene_count = 3;
+                        texts = power_cutscene_texts;
+                    } else if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                        scene_count = 2;
+                        texts = hallway_exit_cutscene_texts;
+                    } else {
+                        scene_count = 4;
+                        texts = security_cutscene_texts;
+                    }
+
+                    /* Advance to the next scene */
+                    game->cutscene_index++;
+                    if (game->cutscene_dialogue_tree) {
+                        dialogue_tree_destroy(game->cutscene_dialogue_tree);
+                        game->cutscene_dialogue_tree = NULL;
+                    }
+                    if (game->cutscene_index >= scene_count) {
+                        /* All scenes done – transition based on cutscene type */
+                        if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+                            game_start_dodge(game);
+                        } else {
+                            game->state = GAME_STATE_PLAYING;
+                        }
+                    } else {
+                        /* Load next scene */
+                        game->cutscene_dialogue_tree = dialogue_tree_create();
+                        if (game->cutscene_dialogue_tree) {
+                            dialogue_add_node(game->cutscene_dialogue_tree, 0, "",
+                                              texts[game->cutscene_index],
+                                              1);
+                            dialogue_state_init(&game->cutscene_dialogue_state,
+                                                game->cutscene_dialogue_tree, 0);
+                        }
+                    }
+                }
             }
         }
         break;
@@ -555,18 +2056,32 @@ void game_handle_event(Game *game, SDL_Event *event)
         break;
 
     case GAME_STATE_PAUSE:
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 4; i++)
             button_update_hover(&game->pause_buttons[i],
                                 game->mouse_x, game->mouse_y);
         if (event->type == SDL_EVENT_KEY_DOWN) {
             if (event->key.key == SDLK_ESCAPE)
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
         }
         if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
             if (button_is_clicked(&game->pause_buttons[0],
                                   game->mouse_x, game->mouse_y))
-                game->state = GAME_STATE_PLAYING;
+                game->state = game->pause_return_state;
             if (button_is_clicked(&game->pause_buttons[1],
+                                  game->mouse_x, game->mouse_y)) {
+                /* Save Game */
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_PAUSE;
+                game->state = GAME_STATE_SAVE_MENU;
+            }
+            if (button_is_clicked(&game->pause_buttons[2],
+                                  game->mouse_x, game->mouse_y)) {
+                /* Load Game (from in-game) */
+                game_refresh_save_slot_labels(game);
+                game->save_load_prev_state = GAME_STATE_PAUSE;
+                game->state = GAME_STATE_LOAD_MENU;
+            }
+            if (button_is_clicked(&game->pause_buttons[3],
                                   game->mouse_x, game->mouse_y)) {
                 game->state = GAME_STATE_MENU;
             }
@@ -585,14 +2100,14 @@ void game_handle_event(Game *game, SDL_Event *event)
                 if (game->settings_focus > 0) game->settings_focus--;
                 break;
             case SDLK_DOWN:
-                if (game->settings_focus < 1) game->settings_focus++;
+                if (game->settings_focus < 2) game->settings_focus++;
                 break;
             case SDLK_LEFT:
                 if (game->settings_focus == 0) {
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value - 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value - 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
@@ -603,14 +2118,18 @@ void game_handle_event(Game *game, SDL_Event *event)
                     slider_set_value(&game->settings_volume_slider,
                         game->settings_volume_slider.value + 5.0f);
                     game->volume = game->settings_volume_slider.value;
-                } else {
+                } else if (game->settings_focus == 1) {
                     slider_set_value(&game->settings_brightness_slider,
                         game->settings_brightness_slider.value + 5.0f);
                     game->brightness = game->settings_brightness_slider.value;
                 }
                 break;
             case SDLK_RETURN:
-                game->state = GAME_STATE_MENU;
+            case SDLK_SPACE:
+                if (game->settings_focus == 2)
+                    toggle_fullscreen(game);
+                else
+                    game->state = GAME_STATE_MENU;
                 break;
             default: break;
             }
@@ -629,6 +2148,20 @@ void game_handle_event(Game *game, SDL_Event *event)
                                     game->mouse_x, game->mouse_y)) {
                 game->brightness = game->settings_brightness_slider.value;
                 game->settings_focus = 1;
+            }
+            /* Fullscreen toggle row click */
+            {
+                int px = (WINDOW_W - SETTINGS_PANEL_W) / 2;
+                SDL_FRect fs_row = { (float)px, (float)(SETTINGS_FS_ROW_Y - 4),
+                                     (float)SETTINGS_PANEL_W,
+                                     (float)SETTINGS_FS_ROW_H };
+                if (game->mouse_x >= fs_row.x &&
+                    game->mouse_x <= fs_row.x + fs_row.w &&
+                    game->mouse_y >= fs_row.y &&
+                    game->mouse_y <= fs_row.y + fs_row.h) {
+                    toggle_fullscreen(game);
+                    game->settings_focus = 2;
+                }
             }
         }
         break;
@@ -658,13 +2191,11 @@ void game_handle_event(Game *game, SDL_Event *event)
                     game->simon_player_pos++;
                     if (game->simon_player_pos >= game->simon_length) {
                         /* Completed this round */
-                        if (game->simon_length >= 10) {
-                            /* Player won — power the generator */
+                        if (game->simon_length >= 8) {
+                            /* Player won — power the generator, play cutscene */
                             player_set_flag(game->player, FLAG_POWER_GENERATOR_ON);
                             game->simon_lit_button = -1;
-                            game_set_dialogue_tree(game, "power_generator_win", 4);
-                            if (game->dialogue_tree)
-                                game_start_dialogue(game, 0);
+                            game_start_power_cutscene(game);
                         } else {
                             /* Start next round after a brief pause */
                             game->simon_length++;
@@ -686,6 +2217,100 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+
+    case GAME_STATE_TUBE_SORT:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->tube_selected = -1;
+            game->state = GAME_STATE_PLAYING;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            float mx = game->mouse_x, my = game->mouse_y;
+            /* Layout must match game_render_tube_sort (TUBE_X/TUBE_Y/TUBE_W/TUBE_H) */
+            static const int tube_x[7] = { 405, 535, 665, 795,  470, 600, 730 };
+            static const int tube_y[7] = { 100, 100, 100, 100,  390, 390, 390 };
+            int tube_w = 80, tube_h = 260;
+            int clicked_tube = -1;
+            for (int i = 0; i < 7; i++) {
+                if (mx >= tube_x[i] && mx <= tube_x[i] + tube_w &&
+                    my >= tube_y[i] && my <= tube_y[i] + tube_h) {
+                    clicked_tube = i;
+                    break;
+                }
+            }
+            if (clicked_tube >= 0) {
+                if (game->tube_selected == -1) {
+                    if (game->tube_count[clicked_tube] > 0)
+                        game->tube_selected = clicked_tube;
+                } else if (game->tube_selected == clicked_tube) {
+                    game->tube_selected = -1;
+                } else {
+                    int src = game->tube_selected;
+                    int dst = clicked_tube;
+                    if (game->tube_count[src] > 0 && game->tube_count[dst] < 4) {
+                        int src_top = game->tube_colors[src][game->tube_count[src]-1];
+                        int dst_top = game->tube_count[dst] > 0
+                                      ? game->tube_colors[dst][game->tube_count[dst]-1]
+                                      : 0;
+                        if (dst_top == 0 || dst_top == src_top) {
+                            while (game->tube_count[src] > 0 &&
+                                   game->tube_count[dst] < 4 &&
+                                   game->tube_colors[src][game->tube_count[src]-1] == src_top) {
+                                int unit = game->tube_colors[src][game->tube_count[src]-1];
+                                game->tube_colors[src][game->tube_count[src]-1] = 0;
+                                game->tube_count[src]--;
+                                game->tube_colors[dst][game->tube_count[dst]] = unit;
+                                game->tube_count[dst]++;
+                            }
+                        }
+                    }
+                    game->tube_selected = -1;
+
+                    /* Check win condition: each tube is empty or has 4 units of one color */
+                    int won = 1;
+                    for (int i = 0; i < 7 && won; i++) {
+                        if (game->tube_count[i] == 0) continue;
+                        if (game->tube_count[i] != 4) { won = 0; break; }
+                        int first_color = game->tube_colors[i][0];
+                        for (int j = 1; j < 4; j++) {
+                            if (game->tube_colors[i][j] != first_color) { won = 0; break; }
+                        }
+                    }
+                    if (won) {
+                        DialogueTree *tree = dialogue_tree_create();
+                        if (tree) {
+                            DialogueNode *n1 = dialogue_add_node(tree, 0, "Richard",
+                                "The medicine has been made. I don't think it's safe but it's worth the shot.", 0);
+                            if (n1) {
+                                DialogueChoice ch;
+                                memset(&ch, 0, sizeof(ch));
+                                ch.id = 0; ch.next_node_id = 1;
+                                strncpy(ch.text, "...", DIALOGUE_TEXT_MAX - 1);
+                                dialogue_add_choice(n1, &ch);
+                            }
+                            dialogue_add_node(tree, 1, "Richard",
+                                "Oh... I'm no longer dizzy.", 1);
+                            game->dialogue_tree = tree;
+                            game->tube_sort_done = 1;
+                            game->state = GAME_STATE_DIALOGUE;
+                            dialogue_state_init(&game->dialogue_state,
+                                               game->dialogue_tree, 0);
+                        }
+                    }
+                }
+            }
+        }
+        break;
+
+    case GAME_STATE_DODGE:
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            monster_theme_stop(game);
+            game->state = GAME_STATE_PLAYING;
+        }
+
+        break;
+
     case GAME_STATE_JUMPSCARE:
         /* Allow the player to skip the jumpscare by pressing Escape */
         if (event->type == SDL_EVENT_KEY_DOWN &&
@@ -698,7 +2323,70 @@ void game_handle_event(Game *game, SDL_Event *event)
         }
         break;
 
+    case GAME_STATE_SAVE_MENU:
+        for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++)
+            button_update_hover(&game->save_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->state = game->save_load_prev_state;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Slot buttons 0–2 */
+            for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+                if (button_is_clicked(&game->save_load_buttons[i],
+                                      game->mouse_x, game->mouse_y)) {
+                    game_do_save(game, i + 1);
+                    game_refresh_save_slot_labels(game);
+                    game->state = game->save_load_prev_state;
+                }
+            }
+            /* Cancel button */
+            if (button_is_clicked(&game->save_load_buttons[SAVE_SLOT_COUNT],
+                                  game->mouse_x, game->mouse_y)) {
+                game->state = game->save_load_prev_state;
+            }
+        }
+        break;
+
+    case GAME_STATE_LOAD_MENU:
+        for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++)
+            button_update_hover(&game->save_load_buttons[i],
+                                game->mouse_x, game->mouse_y);
+        if (event->type == SDL_EVENT_KEY_DOWN &&
+            event->key.key == SDLK_ESCAPE) {
+            game->state = game->save_load_prev_state;
+        }
+        if (event->type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
+            /* Slot buttons 0–2 */
+            for (int i = 0; i < SAVE_SLOT_COUNT; i++) {
+                if (button_is_clicked(&game->save_load_buttons[i],
+                                      game->mouse_x, game->mouse_y)) {
+                    game_do_load(game, i + 1);
+                    /* game_do_load sets state to PLAYING on success */
+                }
+            }
+            /* Cancel button */
+            if (button_is_clicked(&game->save_load_buttons[SAVE_SLOT_COUNT],
+                                  game->mouse_x, game->mouse_y)) {
+                game->state = game->save_load_prev_state;
+            }
+        }
+        break;
+
     default: break;
+    }
+
+    /* ── Game Over: any key returns to the main menu ── */
+    if (game->state == GAME_STATE_GAME_OVER &&
+        event->type == SDL_EVENT_KEY_DOWN) {
+        game->state = GAME_STATE_MENU;
+    }
+
+    /* ── F11: global fullscreen toggle (works in any state) ── */
+    if (event->type == SDL_EVENT_KEY_DOWN &&
+        event->key.key == SDLK_F11) {
+        toggle_fullscreen(game);
     }
 }
 
@@ -713,6 +2401,14 @@ void game_update(Game *game)
     if (dt > 0.1f) dt = 0.1f;
     game->delta_time = dt;
     game->last_ticks = now;
+
+    if (game->am_audio_pause_timer > 0.0f) {
+        game->am_audio_pause_timer -= dt;
+        if (game->am_audio_pause_timer < 0.0f)
+            game->am_audio_pause_timer = 0.0f;
+    }
+    music_update(game);
+    monster_theme_update(game);
 
     if (game->state == GAME_STATE_PLAYING &&
         game->player && game->world) {
@@ -797,26 +2493,41 @@ void game_update(Game *game)
                         tz->bounds.w + 80.0f, tz->bounds.h + 40.0f
                     };
                     if (rect_overlaps(&pr, &near_zone)) {
-                        game->near_interactive       = 1;
-                        game->interactive_trigger_id = tz->trigger_id;
-                        const char *label;
-                        if (tz->trigger_id == 60)
-                            label = "Press [E] to enter locker";
-                        else if (tz->trigger_id == 61)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 75)
-                            label = "Press [E] to interact";
-                        else if (tz->trigger_id == 91)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 92)
-                            label = "Press [E] to examine";
-                        else if (tz->trigger_id == 95)
-                            label = "Press [E] to interact";
-                        else
-                            label = "Press E to talk";
-                        strncpy(game->interact_label, label,
-                                sizeof(game->interact_label) - 1);
-                        game->interact_label[sizeof(game->interact_label) - 1] = '\0';
+                        if (!is_trigger_consumed(game, tz->trigger_id)) {
+                            game->near_interactive       = 1;
+                            game->interactive_trigger_id = tz->trigger_id;
+                            const char *label;
+                            if (tz->trigger_id == 60)
+                                label = "Press [E] to enter locker";
+                            else if (tz->trigger_id == 61)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 64)
+                                label = "Press [E] to use workbench";
+                            else if (tz->trigger_id == 75)
+                                label = "Press [E] to interact";
+                            else if (tz->trigger_id == 91)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 92)
+                                label = "Press [E] to examine";
+                            else if (tz->trigger_id == 93 ||
+                                     tz->trigger_id == 94)
+                                label = "Press [E] to interact";
+                            else if (tz->trigger_id == 95)
+                                label = "Press [E] to interact";
+                            else if (tz->trigger_id == 52 ||
+                                     tz->trigger_id == 53 ||
+                                     tz->trigger_id == 54 ||
+                                     tz->trigger_id == 57 ||
+                                     tz->trigger_id == 58 ||
+                                     tz->trigger_id == 59 ||
+                                     tz->trigger_id == 96)
+                                label = "Press [E] to interact";
+                            else
+                                label = "Press E to talk";
+                            strncpy(game->interact_label, label,
+                                    sizeof(game->interact_label) - 1);
+                            game->interact_label[sizeof(game->interact_label) - 1] = '\0';
+                        }
                         break;
                     }
                 }
@@ -826,8 +2537,38 @@ void game_update(Game *game)
         /* ── Animate player ── */
         player_update(p, dt);
 
+        /* ── Update flashlight movement animation ── */
+        if (game->flashlight_active && p->is_moving) {
+            int fl_count = 0;
+            if      (p->current_direction == DIRECTION_SOUTH) fl_count = p->fl_front_count;
+            else if (p->current_direction == DIRECTION_WEST)  fl_count = p->fl_left_count;
+            else if (p->current_direction == DIRECTION_EAST)  fl_count = p->fl_right_count;
+            if (fl_count > 0) {
+                p->fl_anim.frame_count = fl_count;
+                animation_update(&p->fl_anim, dt);
+            }
+        } else {
+            animation_reset(&p->fl_anim);
+        }
+
         /* ── Camera follow ── */
         camera_follow(&game->camera, p->x, p->y, dt);
+
+        /* ── Rare subtle ambient flicker ── */
+        if (game->ambient_flicker_duration > 0.0f) {
+            game->ambient_flicker_duration -= dt;
+            if (game->ambient_flicker_duration < 0.0f)
+                game->ambient_flicker_duration = 0.0f;
+        } else {
+            game->ambient_flicker_alpha = 0;
+            game->ambient_flicker_timer -= dt;
+            if (game->ambient_flicker_timer <= 0.0f) {
+                /* Single short pulse, low intensity, and infrequent */
+                game->ambient_flicker_duration = 0.07f + (float)(rand() % 7) / 100.0f; /* 0.07-0.13s */
+                game->ambient_flicker_alpha    = (Uint8)(3 + (rand() % 6));             /* additive 3-8 alpha */
+                game->ambient_flicker_timer    = 7.0f + (float)(rand() % 12);            /* next pulse in 7-18s */
+            }
+        }
 
         /* ── Lab poisonous gas: kill player if in lab without gas mask ── */
         if (p->current_location_id == LOCATION_LAB &&
@@ -849,8 +2590,82 @@ void game_update(Game *game)
             game->lab_gas_timer = LAB_GAS_DEATH_DELAY;
         }
 
+        /* ── Dizziness bar: decrease when keycard obtained and medicine not made ── */
+        if (player_check_flag(game->player, FLAG_KEYCARD_COLLECTED) &&
+            !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE) &&
+            !game->dizziness_death_triggered) {
+            game->dizziness_bar -= dt / LAB_DIZZINESS_DEATH_DELAY;
+            if (game->dizziness_bar < 0.0f) game->dizziness_bar = 0.0f;
+            if (game->dizziness_bar <= 0.0f) {
+                game->dizziness_death_triggered = 1;
+                game_set_dialogue_tree(game, "lab_dizziness_death", LOCATION_LAB);
+                if (game->dialogue_tree)
+                    game_start_dialogue(game, 0);
+            }
+        }
+
+        /* ── Archive glass: disappear when player steps on shard ── */
+        if (p->current_location_id == LOCATION_ARCHIVE) {
+            float px = p->x, py = p->y;
+            for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
+                if (game->archive_glass_collected[i]) continue;
+                float gx = (float)archive_glass_positions[i].x;
+                float gy = (float)archive_glass_positions[i].y;
+                if (px >= gx && px <= gx + ARCHIVE_GLASS_SIZE &&
+                    py >= gy && py <= gy + ARCHIVE_GLASS_SIZE) {
+                    game->archive_glass_collected[i] = 1;
+                    /* Play glass cracking SFX */
+                    if (game->glass_crack_audio_stream) {
+                        SDL_ClearAudioStream(game->glass_crack_audio_stream);
+                        SDL_PutAudioStreamData(game->glass_crack_audio_stream,
+                                               game->glass_crack_wav_buf,
+                                               (int)game->glass_crack_wav_len);
+                        SDL_ResumeAudioStreamDevice(game->glass_crack_audio_stream);
+                    }
+                    /* Alert the archive enemy to investigate the glass location */
+                    enemy_alert_inspect(&game->archive_enemy,
+                                        gx + ARCHIVE_GLASS_SIZE * 0.5f,
+                                        gy + ARCHIVE_GLASS_SIZE * 0.5f);
+                }
+            }
+        }
+
+        /* ── Archive enemy update ── */
+        if (game->archive_enemy.active) {
+            int in_archive = (p->current_location_id == LOCATION_ARCHIVE);
+            enemy_update(&game->archive_enemy, p->x, p->y, in_archive, dt);
+
+            /* Game-over: archive enemy caught the player while in the archive */
+            if (in_archive &&
+                enemy_hits_player(&game->archive_enemy, p->x, p->y)) {
+                game_start_monster_death_cutscene(game);
+            }
+        }
+
+        /* ── Enemy patrol / chase update ── */
+        if (game->enemy.active) {
+            int in_hallway = (p->current_location_id == LOCATION_HALLWAY);
+            enemy_update(&game->enemy, p->x, p->y, in_hallway, dt);
+
+            /* Game-over: enemy caught the player while in the hallway */
+            if (in_hallway &&
+                enemy_hits_player(&game->enemy, p->x, p->y)) {
+                game_start_monster_death_cutscene(game);
+            }
+        }
+
+    } else if (game->state == GAME_STATE_LOCKER && game->player) {
+        /* While hiding in the locker the enemy keeps patrolling.
+         * Pass player_in_room=0 so the enemy can't see the hidden player
+         * and will transition from chase back to patrol if needed. */
+        Player *p = game->player;
+        if (game->enemy.active)
+            enemy_update(&game->enemy, p->x, p->y, 0, dt);
+
     } else if (game->state == GAME_STATE_DIALOGUE && game->player) {
         dialogue_state_update(&game->dialogue_state, dt);
+    } else if (game->state == GAME_STATE_CUTSCENE) {
+        dialogue_state_update(&game->cutscene_dialogue_state, dt);
     } else if (game->state == GAME_STATE_SIMON) {
         /* ── Simon Says update ── */
         game->simon_show_timer -= dt;
@@ -868,8 +2683,9 @@ void game_update(Game *game)
                     game->simon_lit_button = -1;
                     if (game->simon_show_pos + 1 >= game->simon_length) {
                         /* All steps shown for this round */
-                        if (game->simon_length == SIMON_JUMPSCARE_ROUND) {
-                            /* Round 7: wait 1 s then show the jumpscare */
+                        if (game->simon_length == SIMON_JUMPSCARE_ROUND &&
+                            !game->simon_jumpscare_played) {
+                            /* Round 7 (first time only): wait 1 s then show the jumpscare */
                             game->simon_phase      = 3;
                             game->simon_show_timer = SIMON_JUMPSCARE_DELAY;
                         } else {
@@ -900,6 +2716,7 @@ void game_update(Game *game)
                 game->jumpscare_player =
                     video_player_open(game->renderer, "assets/jumpscare.mov");
                 if (game->jumpscare_player) {
+                    game->simon_jumpscare_played = 1;
                     game->state = GAME_STATE_JUMPSCARE;
                 } else {
                     /* File missing or unreadable — skip straight to player input */
@@ -907,6 +2724,93 @@ void game_update(Game *game)
                     game->simon_phase      = 1;
                     game->simon_player_pos = 0;
                 }
+            }
+        }
+    } else if (game->state == GAME_STATE_DODGE) {
+        float move_x = 0.0f;
+        float move_y = 0.0f;
+
+        if (game->keys[SDL_SCANCODE_A] || game->keys[SDL_SCANCODE_LEFT])
+            move_x -= 1.0f;
+        if (game->keys[SDL_SCANCODE_D] || game->keys[SDL_SCANCODE_RIGHT])
+            move_x += 1.0f;
+        if (game->keys[SDL_SCANCODE_W] || game->keys[SDL_SCANCODE_UP])
+            move_y -= 1.0f;
+        if (game->keys[SDL_SCANCODE_S] || game->keys[SDL_SCANCODE_DOWN])
+            move_y += 1.0f;
+
+        if (move_x != 0.0f && move_y != 0.0f) {
+            move_x *= 0.7071f;
+            move_y *= 0.7071f;
+        }
+
+        game->dodge_heart_x += move_x * DODGE_HEART_SPEED * dt;
+        game->dodge_heart_y += move_y * DODGE_HEART_SPEED * dt;
+
+        float min_x = DODGE_BOX_X + DODGE_HEART_SIZE * 0.5f;
+        float max_x = DODGE_BOX_X + DODGE_BOX_W - DODGE_HEART_SIZE * 0.5f;
+        float min_y = DODGE_BOX_Y + DODGE_HEART_SIZE * 0.5f;
+        float max_y = DODGE_BOX_Y + DODGE_BOX_H - DODGE_HEART_SIZE * 0.5f;
+        if (game->dodge_heart_x < min_x) game->dodge_heart_x = min_x;
+        if (game->dodge_heart_x > max_x) game->dodge_heart_x = max_x;
+        if (game->dodge_heart_y < min_y) game->dodge_heart_y = min_y;
+        if (game->dodge_heart_y > max_y) game->dodge_heart_y = max_y;
+
+        game->dodge_elapsed += dt;
+        game->dodge_spawn_timer -= dt;
+        game->dodge_invuln_timer -= dt;
+        if (game->dodge_invuln_timer < 0.0f)
+            game->dodge_invuln_timer = 0.0f;
+
+        while (game->dodge_spawn_timer <= 0.0f) {
+            dodge_spawn_round_attack(game);
+            game->dodge_spawn_timer += dodge_round_spawn_interval(game);
+        }
+
+        float hx = game->dodge_heart_x - DODGE_HEART_SIZE * 0.5f;
+        float hy = game->dodge_heart_y - DODGE_HEART_SIZE * 0.5f;
+        for (int i = 0; i < game->dodge_bullet_count; i++) {
+            if (!game->dodge_bullet_active[i]) continue;
+
+            game->dodge_bullet_x[i] += game->dodge_bullet_vx[i] * dt;
+            game->dodge_bullet_y[i] += game->dodge_bullet_vy[i] * dt;
+
+            float bx = game->dodge_bullet_x[i] - DODGE_BULLET_SIZE * 0.5f;
+            float by = game->dodge_bullet_y[i] - DODGE_BULLET_SIZE * 0.5f;
+            if (bx < DODGE_BOX_X - 80.0f ||
+                bx > DODGE_BOX_X + DODGE_BOX_W + 80.0f ||
+                by < DODGE_BOX_Y - 80.0f ||
+                by > DODGE_BOX_Y + DODGE_BOX_H + 80.0f) {
+                game->dodge_bullet_active[i] = 0;
+                continue;
+            }
+
+            if (game->dodge_invuln_timer <= 0.0f &&
+                hx < bx + DODGE_BULLET_SIZE &&
+                hx + DODGE_HEART_SIZE > bx &&
+                hy < by + DODGE_BULLET_SIZE &&
+                hy + DODGE_HEART_SIZE > by) {
+                game->dodge_hp--;
+                game->dodge_invuln_timer = DODGE_HIT_INVULN;
+                game->dodge_bullet_active[i] = 0;
+                if (game->dodge_hp <= 0) {
+                    dodge_clear_bullets(game);
+                    game_start_monster_death_cutscene(game);
+                    break;
+                }
+            }
+        }
+
+        if (game->state == GAME_STATE_DODGE &&
+            game->dodge_elapsed >= DODGE_ROUND_DURATION) {
+            if (game->dodge_round < DODGE_ROUNDS) {
+                dodge_begin_round(game, game->dodge_round + 1);
+            } else {
+                dodge_clear_bullets(game);
+                monster_theme_stop(game);
+                if (game->player)
+                    player_set_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON);
+                game_start_end_credits(game);
             }
         }
     } else if (game->state == GAME_STATE_JUMPSCARE) {
@@ -919,6 +2823,32 @@ void game_update(Game *game)
             game->simon_player_pos = 0;
             game->state            = GAME_STATE_SIMON;
         }
+    } else if (game->state == GAME_STATE_MONSTER_DEATH_CUTSCENE) {
+        /* ── Monster death video update ── */
+        video_player_update(game->monster_death_player, dt);
+        if (video_player_is_done(game->monster_death_player)) {
+            video_player_close(game->monster_death_player);
+            game->monster_death_player = NULL;
+            game->state = GAME_STATE_GAME_OVER;
+        }
+    } else if (game->state == GAME_STATE_END_CREDITS) {
+        /* ── End-credits video update ── */
+        video_player_update(game->end_credits_player, dt);
+        if (video_player_is_done(game->end_credits_player)) {
+            video_player_close(game->end_credits_player);
+            game->end_credits_player = NULL;
+            game->state = GAME_STATE_QUIT;
+        }
+    }
+
+    /* Tick the archive book page-turn transition */
+    if (game->state == GAME_STATE_ARCHIVE_BOOK &&
+        game->archive_book_trans_timer > 0.0f) {
+        game->archive_book_trans_timer -= dt;
+        if (game->archive_book_trans_timer <= 0.0f) {
+            game->archive_book_trans_timer = 0.0f;
+            game->archive_book_page        = game->archive_book_next_page;
+        }
     }
 
     /* Tick the pickup notification regardless of game state */
@@ -926,6 +2856,13 @@ void game_update(Game *game)
         game->pickup_notify_timer -= dt;
         if (game->pickup_notify_timer < 0.0f)
             game->pickup_notify_timer = 0.0f;
+    }
+
+    /* Tick the save-reminder notification regardless of game state */
+    if (game->save_reminder_timer > 0.0f) {
+        game->save_reminder_timer -= dt;
+        if (game->save_reminder_timer < 0.0f)
+            game->save_reminder_timer = 0.0f;
     }
 }
 
@@ -944,10 +2881,39 @@ void game_render(Game *game)
         break;
     case GAME_STATE_INVENTORY: game_render_inventory(game); break;
     case GAME_STATE_LOCKER:    game_render_locker(game);    break;
+    case GAME_STATE_ARCHIVE_BOOK: game_render_archive_book(game); break;
+    case GAME_STATE_CUTSCENE:  game_render_cutscene(game);  break;
     case GAME_STATE_SIMON:     game_render_simon(game);     break;
+case GAME_STATE_TUBE_SORT: game_render_tube_sort(game); break;
+    case GAME_STATE_DODGE:     game_render_dodge(game);     break;
     case GAME_STATE_JUMPSCARE: game_render_jumpscare(game); break;
-    case GAME_STATE_PAUSE:
+    case GAME_STATE_MONSTER_DEATH_CUTSCENE: game_render_jumpscare(game); break;
+    case GAME_STATE_END_CREDITS: game_render_jumpscare(game); break;
+    case GAME_STATE_GAME_OVER: game_render_game_over(game); break;
+    case GAME_STATE_NEW_LOAD_MENU: game_render_new_load_menu(game); break;
+    case GAME_STATE_SAVE_MENU:
         game_render_playing(game);
+        game_render_save_menu(game);
+        break;
+    case GAME_STATE_LOAD_MENU:
+        if (game->player)
+            game_render_playing(game);
+        else {
+            /* Draw title screen background without menu buttons */
+            if (game->title_screen_texture)
+                render_texture(game->renderer, game->title_screen_texture,
+                               0, 0, WINDOW_W, WINDOW_H);
+            else
+                render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                                   0, 0, 0, 255);
+        }
+        game_render_load_menu(game);
+        break;
+    case GAME_STATE_PAUSE:
+        if (game->pause_return_state == GAME_STATE_CUTSCENE)
+            game_render_cutscene(game);
+        else
+            game_render_playing(game);
         game_render_pause(game);
         break;
     default: break;

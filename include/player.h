@@ -34,6 +34,11 @@
 #define ITEM_ID_GASMASK     13  /* Hallway gas mask */
 #define ITEM_ID_KEYCARD     14  /* Kimia lab keycard */
 #define ITEM_ID_FUELTANK    15  /* Power room fuel tank */
+#define ITEM_ID_FINGERPRINT  16  /* Archive fingerprint 1 */
+#define ITEM_ID_THERMALFUSE  17  /* Archive thermal fuse */
+#define ITEM_ID_KEYCARD_L2   18  /* Archive room level-2 keycard */
+#define ITEM_ID_FINGERPRINT2 19  /* Archive fingerprint 2 */
+#define ITEM_ID_FINGERPRINT3 20  /* Archive fingerprint 3 */
 
 /* ── Item ──────────────────────────────────────────────────────────────── */
 
@@ -88,6 +93,18 @@ typedef struct {
     SDL_Texture *walk_frames_south[2];
     SDL_Texture *walk_frames_east[2];
     SDL_Texture *walk_frames_west[2];
+
+    /* Flashlight movement animation (replaces player sprite when equipped) */
+    Animation     fl_anim;
+    SDL_Texture  *fl_front_idle;                     /* south idle frame        */
+    SDL_Texture  *fl_front_frames[ANIM_MAX_FRAMES];  /* south walk frames       */
+    int           fl_front_count;
+    SDL_Texture  *fl_left_idle;                      /* west idle frame         */
+    SDL_Texture  *fl_left_frames[ANIM_MAX_FRAMES];   /* west walk frames        */
+    int           fl_left_count;
+    SDL_Texture  *fl_right_idle;                     /* east idle frame         */
+    SDL_Texture  *fl_right_frames[ANIM_MAX_FRAMES];  /* east walk frames        */
+    int           fl_right_count;
 
     /* Animation state */
     int   current_direction; /* NORTH=0, SOUTH=1, EAST=2, WEST=3 */

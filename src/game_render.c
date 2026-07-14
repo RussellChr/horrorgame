@@ -8,9 +8,12 @@
 #include "story.h"
 #include "dialogue.h"
 #include "video.h"
+#include "enemy.h"
+#include "savegame.h"
 
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 /* ── Lab overlay alpha ──────────────────────────────────────────────────── */
 /* Alpha of the green gas overlay (0-255). */
@@ -22,6 +25,17 @@
 #define INV_CELL_GAP   10   /* gap between cells               */
 #define INV_ICON_PAD    8   /* padding inside cell to icon box */
 
+/* ── Hallway dodge minigame layout ─────────────────────────────────────── */
+#define DODGE_BOX_X          440
+#define DODGE_BOX_Y          170
+#define DODGE_BOX_W          400
+#define DODGE_BOX_H          330
+#define DODGE_HEART_SIZE      18
+#define DODGE_BULLET_SIZE     14
+#define DODGE_MAX_HP           6
+#define DODGE_ROUNDS           5
+#define DODGE_ROUND_DURATION  12.0f
+
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
@@ -31,7 +45,39 @@ static SDL_Texture *get_item_icon_texture(const Game *game, int item_id)
     case ITEM_ID_FLASHLIGHT: return game->item_flashlight_texture;
     case ITEM_ID_GASMASK:    return game->item_gasmask_texture;
     case ITEM_ID_KEYCARD:    return game->item_keycard_texture;
+    case ITEM_ID_KEYCARD_L2: return game->item_keycard_texture;
+    case ITEM_ID_FINGERPRINT:  return game->item_fingerprint_texture;
+    case ITEM_ID_FINGERPRINT2: return game->item_fingerprint2_texture;
+    case ITEM_ID_FINGERPRINT3: return game->item_fingerprint3_texture;
+    case ITEM_ID_THERMALFUSE: return game->item_thermalfuse_texture;
     default:                 return NULL;
+    }
+}
+
+
+const SDL_Point archive_glass_positions[ARCHIVE_GLASS_COUNT] = {
+    { 4019, 1192 },
+    { 3715,  612 },
+    { 2996,  833 },
+    { 2641, 1473 },
+    { 2186,  962 },
+    { 2482,  628 }
+};
+
+static void render_archive_glass(Game *game, const Location *loc)
+{
+    if (!game || !loc || loc->id != LOCATION_ARCHIVE) return;
+    if (!game->glass_texture) return;
+
+    for (int i = 0; i < ARCHIVE_GLASS_COUNT; i++) {
+        if (game->archive_glass_collected[i]) continue;
+        int screen_x = camera_to_screen_x(&game->camera, (float)archive_glass_positions[i].x);
+        int screen_y = camera_to_screen_y(&game->camera, (float)archive_glass_positions[i].y);
+        if (screen_x >= game->camera.viewport_w || screen_y >= game->camera.viewport_h ||
+            screen_x + ARCHIVE_GLASS_SIZE <= 0 || screen_y + ARCHIVE_GLASS_SIZE <= 0)
+            continue;
+        render_texture(game->renderer, game->glass_texture,
+                       screen_x, screen_y, ARCHIVE_GLASS_SIZE, ARCHIVE_GLASS_SIZE);
     }
 }
 
@@ -80,14 +126,59 @@ void game_render_playing(Game *game)
 
     Location *loc = world_get_location(game->world,
                                        game->player->current_location_id);
-    if (loc) world_render_room(loc, game->renderer, &game->camera);
+    if (loc) {
+        world_render_room(loc, game->renderer, &game->camera);
+    }
 
-    /* Player */
+    /* Player — use flashlight movement sprite when equipped (idle or walking
+     * south/east/west); fall back to normal sprite for north or no flashlight. */
     int sx = camera_to_screen_x(&game->camera, game->player->x)
              - PLAYER_W / 2;
     int sy = camera_to_screen_y(&game->camera, game->player->y)
              - PLAYER_SPRITE_H;
-    player_render(game->player, game->renderer, sx, sy);
+    {
+        SDL_Texture *fl_tex = NULL;
+        if (game->flashlight_active) {
+            Player *p  = game->player;
+            if (p->is_moving) {
+                /* Walking: cycle through directional walk frames */
+                int fr = animation_get_frame(&p->fl_anim);
+                if (p->current_direction == DIRECTION_SOUTH && p->fl_front_count > 0)
+                    fl_tex = p->fl_front_frames[fr % p->fl_front_count];
+                else if (p->current_direction == DIRECTION_WEST && p->fl_left_count > 0)
+                    fl_tex = p->fl_left_frames[fr % p->fl_left_count];
+                else if (p->current_direction == DIRECTION_EAST && p->fl_right_count > 0)
+                    fl_tex = p->fl_right_frames[fr % p->fl_right_count];
+            } else {
+                /* Idle: show directional idle frame */
+                if (p->current_direction == DIRECTION_SOUTH)
+                    fl_tex = p->fl_front_idle;
+                else if (p->current_direction == DIRECTION_WEST)
+                    fl_tex = p->fl_left_idle;
+                else if (p->current_direction == DIRECTION_EAST)
+                    fl_tex = p->fl_right_idle;
+            }
+        }
+        if (fl_tex) {
+            SDL_FRect fl_dst = { (float)sx, (float)sy,
+                                 (float)PLAYER_W, (float)PLAYER_SPRITE_H };
+            SDL_RenderTexture(game->renderer, fl_tex, NULL, &fl_dst);
+        } else {
+            player_render(game->player, game->renderer, sx, sy);
+        }
+    }
+
+    /* Enemy (visible only when active and player is in the hallway) */
+    if (game->enemy.active &&
+        game->player->current_location_id == LOCATION_HALLWAY) {
+        enemy_render(&game->enemy, game->renderer, &game->camera);
+    }
+
+    /* Archive enemy (visible only when active and player is in the archive) */
+    if (game->archive_enemy.active &&
+        game->player->current_location_id == LOCATION_ARCHIVE) {
+        enemy_render(&game->archive_enemy, game->renderer, &game->camera);
+    }
 
     /* Overlay: gas mask vignette takes precedence when active; otherwise
      * the archive room applies its own darkness (location 0 only). */
@@ -96,18 +187,29 @@ void game_render_playing(Game *game)
     else
         render_archive_darkness(game);
 
+    render_archive_glass(game, loc);
+
     /* Lab poisonous gas: green tint overlay when in the lab */
     if (game->player->current_location_id == LOCATION_LAB) {
         render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
                            0, 200, 30, LAB_GAS_OVERLAY_ALPHA);
     }
 
-    /* Ambient darkness: subtle black overlay to give all rooms a dimmer,
-     * more atmospheric look without completely obscuring details. */
-    render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 55);
+    /* Ambient darkness: keep atmosphere but lighter for readability. */
+    {
+        int ambient_alpha = 48;
+        if (game->ambient_flicker_duration > 0.0f)
+            ambient_alpha += game->ambient_flicker_alpha;
+        if (ambient_alpha > 255) ambient_alpha = 255;
+        render_filled_rect(game->renderer, 0, 0, WINDOW_W, WINDOW_H,
+                           0, 0, 0, (Uint8)ambient_alpha);
+    }
 
     /* Flashlight beam (additive warm glow, rendered on top of the darkness) */
     render_flashlight_beam(game);
+
+    /* Edge darkening vignette for stronger horror atmosphere. */
+    render_screen_vignette(game);
 
     /* Stranger NPC: draw a bright yellow exclamation mark above its head
      * when in the Entrance Hall (location 0) so the player can spot it.
@@ -115,7 +217,7 @@ void game_render_playing(Game *game)
      * so we only add the visual indicator here. */
 
     /* Interaction prompt */
-    if (game->near_interactive) {
+    if (game->near_interactive && game->state != GAME_STATE_DIALOGUE) {
         int px = camera_to_screen_x(&game->camera, game->player->x);
         int py = camera_to_screen_y(&game->camera,
                                     game->player->y - PLAYER_SPRITE_H - 8);
@@ -146,8 +248,8 @@ void game_render_playing(Game *game)
                 WINDOW_W - 136, WINDOW_H - 18, 1, 66, 18, 18);
 
     /* ── Item pickup notification ── */
+    /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
     if (game->pickup_notify_timer > 0.0f) {
-        /* Fade in during the first 0.3 s, full for 1.5 s, fade out for 0.7 s */
         float t = game->pickup_notify_timer; /* remaining time */
         float alpha_f;
         if (t > 2.2f)        alpha_f = (2.5f - t) / 0.3f;   /* fade in  */
@@ -177,6 +279,29 @@ void game_render_playing(Game *game)
                     (Uint8)(220 * alpha_f),
                     (Uint8)(140 * alpha_f),
                     (Uint8)(140 * alpha_f));
+    }
+
+    /* ── Dizziness bar (shown after keycard obtained, before medicine made) ── */
+    if (game->player &&
+        player_check_flag(game->player, FLAG_KEYCARD_COLLECTED) &&
+        !player_check_flag(game->player, FLAG_LAB_MEDICINE_MADE)) {
+        SDL_Renderer *r = game->renderer;
+        int bar_w = 400, bar_h = 18;
+        int bar_x = (WINDOW_W - bar_w) / 2;
+        int bar_y = WINDOW_H - 60;  /* above the "I:inv ESC:pause" hint at WINDOW_H-18 */
+        /* Background */
+        render_filled_rect(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 0, 0, 0, 200);
+        render_rect_outline(r, bar_x - 2, bar_y - 2, bar_w + 4, bar_h + 4, 150, 80, 80, 220);
+        /* Fill (green → red based on remaining) */
+        float frac = game->dizziness_bar;
+        if (frac < 0.0f) frac = 0.0f;
+        if (frac > 1.0f) frac = 1.0f;
+        int fill_w = (int)(frac * (float)bar_w);
+        Uint8 bar_r = (Uint8)((1.0f - frac) * 220.0f);
+        Uint8 bar_g = (Uint8)(frac * 180.0f);
+        if (fill_w > 0)
+            render_filled_rect(r, bar_x, bar_y, fill_w, bar_h, bar_r, bar_g, 30, 220);
+        render_text_centered(r, "Dizziness", bar_x + bar_w / 2, bar_y - 14, 1, 200, 160, 160);
     }
 }
 
@@ -373,7 +498,7 @@ void game_render_pause(Game *game)
 
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 145);
 
-    int pw = 320, ph = 200;
+    int pw = 320, ph = 300;
     int qx = (WINDOW_W - pw) / 2, qy = (WINDOW_H - ph) / 2;
 
     render_filled_rect(r, qx, qy, pw, ph, 25, 8, 8, 235);
@@ -381,7 +506,7 @@ void game_render_pause(Game *game)
     render_text_centered(r, "PAUSED", WINDOW_W/2, qy+18, 2, 200,110,110);
     render_filled_rect(r, qx+18, qy+44, pw-36, 2, 70,18,18, 190);
 
-    for (int i = 0; i < 2; i++) draw_button(r, &game->pause_buttons[i]);
+    for (int i = 0; i < 4; i++) draw_button(r, &game->pause_buttons[i]);
     render_text_centered(r, "[ESC] to resume",
                          WINDOW_W/2, qy+ph-20, 1, 78,22,22);
 }
@@ -402,7 +527,7 @@ void game_render_settings(Game *game)
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 160);
 
     /* Panel */
-    int pw = 680, ph = 340;
+    int pw = SETTINGS_PANEL_W, ph = 410;
     int px = (WINDOW_W - pw) / 2, py = 170;
     render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 230);
     render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
@@ -420,13 +545,164 @@ void game_render_settings(Game *game)
     slider_render(r, &game->settings_volume_slider,     "Volume");
     slider_render(r, &game->settings_brightness_slider, "Brightness");
 
+    /* Fullscreen toggle row */
+    {
+        int focused = (game->settings_focus == 2);
+        Uint8 rc = focused ? 255 : 210;
+        Uint8 gc = focused ? 80  : 160;
+        Uint8 bc = focused ? 80  : 160;
+        int row_y = SETTINGS_FS_ROW_Y;
+
+        /* Highlight background when focused */
+        if (focused)
+            render_filled_rect(r, px + 8, row_y - 4, pw - 16,
+                               SETTINGS_FS_ROW_H, 60, 15, 15, 180);
+
+        render_text(r, "Fullscreen", px + 28, row_y, 2, rc, gc, bc);
+        const char *fs_val = game->fullscreen ? "ON" : "OFF";
+        int label_w = render_text_width("Fullscreen", 2);
+        render_text(r, fs_val, px + 28 + label_w + 20, row_y, 2, rc, gc, bc);
+        render_text(r, "[ENTER/SPACE]", px + pw - 120, row_y, 1, rc, gc, bc);
+    }
+
     /* Back button */
     draw_button_menu(r, &game->settings_back_button);
 
     /* Instructions */
     render_text_centered(r,
-        "UP/DOWN: select  |  LEFT/RIGHT: adjust  |  ESC: back",
+        "UP/DOWN: select  |  LEFT/RIGHT: adjust  |  ENTER: toggle  |  ESC: back",
         WINDOW_W/2, WINDOW_H - 28, 1, 78, 25, 25);
+}
+
+/* ── Archive book viewer ─────────────────────────────────────────────────── */
+
+void game_render_archive_book(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* During transition show a full-screen black frame */
+    if (game->archive_book_trans_timer > 0.0f) {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+        return;
+    }
+
+    /* Show the current page */
+    SDL_Texture *tex = (game->archive_book_page == 0)
+                       ? game->archive_pg1_texture
+                       : game->archive_pg2_texture;
+
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Hint bar at top centre */
+    int hint_bar_height = 36;
+    render_filled_rect(r, 0, 0, WINDOW_W, hint_bar_height, 0, 0, 0, 200);
+    render_text_centered(r, "Use keyboard arrow keys to flip pages",
+                         WINDOW_W / 2, hint_bar_height / 2 - 6, 1, 220, 220, 220);
+
+    /* ESC / E hint at bottom */
+    render_text_centered(r, "Press E or ESC to close",
+                         WINDOW_W / 2, WINDOW_H - 20, 1, 200, 200, 200);
+}
+
+/* ── Locker minimap ──────────────────────────────────────────────────────── */
+
+/* Layout of the minimap panel (top-right corner of the locker view). */
+#define MINIMAP_X         (WINDOW_W - 310)
+#define MINIMAP_Y         10
+#define MINIMAP_W         300
+#define MINIMAP_H         150
+/* Fog-of-war: area visible around the player's last known (locker) position. */
+#define MINIMAP_VISION_R  70.0f
+
+/*
+ * Draw a tile-accurate minimap of the hallway on top of the locker background.
+ * The whole panel is pitch-black; tiles are revealed only inside a small
+ * circular vision zone centred on the player's world position (the locker).
+ * The hallway enemy is shown as a red square only when inside that zone.
+ */
+static void render_locker_minimap(Game *game)
+{
+    if (!game || !game->player) return;
+
+    /* The enemy struct owns the hallway grid – nothing to show without it. */
+    const Enemy *e = &game->enemy;
+    if (!e->grid || e->grid_rows <= 0 || e->grid_cols <= 0) return;
+
+    SDL_Renderer *r = game->renderer;
+    int   rows    = e->grid_rows;
+    int   cols    = e->grid_cols;
+    float world_w = e->tile_w * (float)cols;
+    float world_h = e->tile_h * (float)rows;
+
+    /* Tile size in minimap pixels (fractional for accuracy). */
+    float tw = (float)MINIMAP_W / (float)cols;   /* ~5.0 px for 300/60 */
+    float th = (float)MINIMAP_H / (float)rows;   /* ~5.0 px for 150/30 */
+
+    /* Solid black background for the entire panel. */
+    render_filled_rect(r, MINIMAP_X - 2, MINIMAP_Y - 2,
+                       MINIMAP_W + 4, MINIMAP_H + 4, 0, 0, 0, 255);
+
+    /* Vision centre: the player's world position mapped to minimap space.
+     * The player is hiding in the locker so this is their last position. */
+    float vcx = MINIMAP_X + (game->player->x / world_w) * (float)MINIMAP_W;
+    float vcy = MINIMAP_Y + (game->player->y / world_h) * (float)MINIMAP_H;
+
+    /* Draw each tile that falls inside the vision circle. */
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            /* Centre of this tile on the minimap. */
+            float tile_cx = MINIMAP_X + ((float)col + 0.5f) * tw;
+            float tile_cy = MINIMAP_Y + ((float)row + 0.5f) * th;
+            float dx   = tile_cx - vcx;
+            float dy   = tile_cy - vcy;
+            float dist = sqrtf(dx * dx + dy * dy);
+            if (dist >= MINIMAP_VISION_R) continue; /* pitch black outside */
+
+            /* Alpha fades to 0 at the vision boundary for a soft edge. */
+            float fade  = 1.0f - dist / MINIMAP_VISION_R;
+            Uint8 alpha = (Uint8)(fade * 230.0f);
+
+            int tx = MINIMAP_X + (int)((float)col * tw);
+            int ty = MINIMAP_Y + (int)((float)row * th);
+            /* +1 so adjacent tiles share an edge without leaving gaps. */
+            int tw_i = (int)tw + 1;
+            int th_i = (int)th + 1;
+
+            int cell = e->grid[row * cols + col];
+            if (cell == 0) {
+                /* Wall tile: medium grey */
+                render_filled_rect(r, tx, ty, tw_i, th_i, 80, 80, 80, alpha);
+            } else {
+                /* Floor / door / interactive tile: dark grey */
+                render_filled_rect(r, tx, ty, tw_i, th_i, 35, 35, 35, alpha);
+            }
+        }
+    }
+
+    /* Enemy marker: a bright-red square shown only inside the vision radius. */
+    if (e->active && e->state != ENEMY_STATE_INACTIVE) {
+        float ecx = e->x + ENEMY_W * 0.5f;
+        float ecy = e->y + ENEMY_H * 0.5f;
+        float emx = MINIMAP_X + (ecx / world_w) * (float)MINIMAP_W;
+        float emy = MINIMAP_Y + (ecy / world_h) * (float)MINIMAP_H;
+        float edx   = emx - vcx;
+        float edy   = emy - vcy;
+        float edist = sqrtf(edx * edx + edy * edy);
+        if (edist < MINIMAP_VISION_R) {
+            render_filled_rect(r, (int)emx - 4, (int)emy - 4, 8, 8,
+                               220, 30, 30, 255);
+        }
+    }
+
+    /* Panel border and tiny label. */
+    render_rect_outline(r, MINIMAP_X - 2, MINIMAP_Y - 2,
+                        MINIMAP_W + 4, MINIMAP_H + 4, 100, 100, 100, 200);
+    render_text(r, "MAP", MINIMAP_X + 3, MINIMAP_Y + 3, 1, 120, 120, 120);
 }
 
 /* ── Locker view ─────────────────────────────────────────────────────────── */
@@ -449,7 +725,7 @@ void game_render_locker(Game *game)
 
     if (game->show_monitor_zoom) {
         /* Hover indicator on the clickable monitor panel rect */
-        if (!game->passcode_active) {
+        if (!game->passcode_active && !game->show_containment_level) {
             float mx = game->mouse_x, my = game->mouse_y;
             int hovering = (mx >= MONITOR_PANEL_X &&
                             mx <= MONITOR_PANEL_X + MONITOR_PANEL_W &&
@@ -481,6 +757,22 @@ void game_render_locker(Game *game)
                 render_text_centered(r, "experiment recording #1",
                     AM_RECORD_X + AM_RECORD_W / 2,
                     AM_RECORD_Y - 16, 1, 0, 220, 255);
+            }
+
+            /* Containment level interactable outline and description */
+            int cl_hovering = (mx >= CONTAINMENT_LEVEL_RECT_X &&
+                               mx <= CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W &&
+                               my >= CONTAINMENT_LEVEL_RECT_Y &&
+                               my <= CONTAINMENT_LEVEL_RECT_Y + CONTAINMENT_LEVEL_RECT_H);
+            render_rect_outline(r,
+                CONTAINMENT_LEVEL_RECT_X, CONTAINMENT_LEVEL_RECT_Y,
+                CONTAINMENT_LEVEL_RECT_W, CONTAINMENT_LEVEL_RECT_H,
+                0, cl_hovering ? 255 : 160, cl_hovering ? 80 : 0,
+                cl_hovering ? 255 : 140);
+            if (cl_hovering) {
+                render_text_centered(r, "Containment level",
+                    CONTAINMENT_LEVEL_RECT_X + CONTAINMENT_LEVEL_RECT_W / 2,
+                    CONTAINMENT_LEVEL_RECT_Y - 16, 1, 0, 220, 255);
             }
         }
 
@@ -525,9 +817,97 @@ void game_render_locker(Game *game)
                                      WINDOW_W / 2, py + ph - 20, 1, 120, 120, 120);
             }
         }
+        /* Containment level overlay (shown when containment rect is clicked) */
+        if (game->show_containment_level && game->containment_level_texture) {
+            render_texture(r, game->containment_level_texture,
+                           0, 0, WINDOW_W, WINDOW_H);
+            render_text_centered(r, "Press E or ESC to close",
+                                 WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        }
     } else {
         render_text_centered(r, "Press E or ESC to exit",
                              WINDOW_W / 2, WINDOW_H - 28, 1, 200, 200, 200);
+        /* Minimap: only on the base locker view.
+         * show_monitor_zoom=0 is already guaranteed by this else branch;
+         * show_containment_level can only be true when show_monitor_zoom is
+         * true, so we just need to also exclude the note overlay. */
+        if (!game->show_note_locker)
+            render_locker_minimap(game);
+    }
+}
+
+/* ── Security cutscene ───────────────────────────────────────────────────── */
+
+void game_render_cutscene(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Pick the correct texture array and scene count based on cutscene type */
+    SDL_Texture **textures;
+    int scene_count;
+    if (game->cutscene_type == CUTSCENE_HIBERNATION) {
+        textures    = game->hibernation_cutscene_textures;
+        scene_count = 3;
+    } else if (game->cutscene_type == CUTSCENE_POWER) {
+        textures    = game->power_cutscene_textures;
+        scene_count = 3;
+    } else if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT) {
+        textures    = game->hallway_exit_cutscene_textures;
+        scene_count = 2;
+    } else {
+        textures    = game->security_cutscene_textures;
+        scene_count = 4;
+    }
+
+    /* Full-screen scene image */
+    SDL_Texture *tex = (game->cutscene_index >= 0 &&
+                        game->cutscene_index < scene_count)
+                       ? textures[game->cutscene_index]
+                       : NULL;
+    if (tex) {
+        render_texture(r, tex, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+
+    /* Dialogue box with inner-monologue text */
+    dialogue_render(&game->cutscene_dialogue_state, r, WINDOW_W, WINDOW_H);
+
+    /* Save reminder banner shown at the start of the final fight cutscene */
+    if (game->cutscene_type == CUTSCENE_HALLWAY_EXIT &&
+        game->save_reminder_timer > 0.0f) {
+        float t = game->save_reminder_timer;
+        float alpha_f;
+        if (t > 6.5f)      alpha_f = (7.0f - t) / 0.5f;  /* fade in  */
+        else if (t > 0.7f) alpha_f = 1.0f;                /* full     */
+        else               alpha_f = t / 0.7f;            /* fade out */
+        if (alpha_f > 1.0f) alpha_f = 1.0f;
+        Uint8 a = (Uint8)(alpha_f * 255.0f);
+
+        const char *line1 = "!! Final fight ahead !!";
+        const char *line2 = "Save your game now!  (ESC -> Pause -> Save)";
+        int w1 = (int)(strlen(line1) * 8 * 2);
+        int w2 = (int)(strlen(line2) * 8 * 1);
+        int bw = (w1 > w2 ? w1 : w2) + 28;
+        int line1_h = 16;  /* 8px glyph × scale 2 */
+        int line2_h =  8;  /* 8px glyph × scale 1 */
+        int gap     = 10;  /* vertical gap between lines */
+        int bh = line1_h + gap + line2_h;
+        int bx = (WINDOW_W - bw) / 2;
+        int by = 12;
+
+        render_filled_rect(r, bx, by, bw, bh + 12, 60, 10, 10,
+                           (Uint8)(a * 0.88f));
+        render_rect_outline(r, bx, by, bw, bh + 12, 220, 60, 60, a);
+        render_text_centered(r, line1, WINDOW_W / 2, by + 6, 2,
+                             (Uint8)(255 * alpha_f),
+                             (Uint8)(80  * alpha_f),
+                             (Uint8)(80  * alpha_f));
+        render_text_centered(r, line2, WINDOW_W / 2, by + 6 + line1_h + gap, 1,
+                             (Uint8)(220 * alpha_f),
+                             (Uint8)(200 * alpha_f),
+                             (Uint8)(200 * alpha_f));
     }
 }
 
@@ -552,7 +932,7 @@ void game_render_simon(Game *game)
 
     char buf[64];
     if (game->simon_phase == 0 || game->simon_phase == 2) {
-        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 10)",
+        snprintf(buf, sizeof(buf), "Watch the sequence  (round %d / 8)",
                  game->simon_length);
         render_text_centered(r, buf, WINDOW_W / 2, py + 38, 1, 160, 160, 200);
     } else {
@@ -593,9 +973,188 @@ void game_render_simon(Game *game)
                          WINDOW_W / 2, py + ph - 24, 1, 120, 120, 160);
 }
 
+
+/* ── Tube-sort (medicine) minigame ────────────────────────────────────────── */
+
+/* Color palette: index 0=empty, 1=purple, 2=teal, 3=yellow, 4=salmon/peach
+ * Colors are matched to the reference image. */
+static const Uint8 tube_color_r[5] = {  25, 160,  20, 230, 235 };
+static const Uint8 tube_color_g[5] = {  20,  50, 195, 200, 160 };
+static const Uint8 tube_color_b[5] = {  30, 210, 165,  25, 130 };
+
+/* Layout constants – tube rows are centred horizontally in the 1280×720 window.
+ *   Top row : 4 tubes, spacing 130px, starting at x=405
+ *   Bottom row: 3 tubes, spacing 130px, starting at x=470
+ *   tube_h = 260, so bottom row bottoms out at 390+260=650 (hint text at 696) */
+#define TUBE_W         80
+#define TUBE_H        260
+#define TUBE_UNIT_H    58   /* height of one colour layer; 4×58=232 fits in 260 */
+#define TUBE_PAD_X      8   /* inner horizontal padding */
+#define TUBE_CAP_H     14   /* dark cap drawn at tube opening */
+
+static const int TUBE_X[7] = { 405, 535, 665, 795,  470, 600, 730 };
+static const int TUBE_Y[7] = { 100, 100, 100, 100,  390, 390, 390 };
+
+void game_render_tube_sort(Game *game)
+
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+
+    /* Dark background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 10, 10, 20, 255);
+
+    /* Title */
+    render_text_centered(r, "MEDICINE WORKBENCH", WINDOW_W / 2, 24, 2, 200, 200, 255);
+    render_text_centered(r, "Sort each tube so it contains only one color",
+                         WINDOW_W / 2, 54, 1, 160, 160, 200);
+    render_text_centered(r, "Click a tube to select, click another to pour",
+                         WINDOW_W / 2, 68, 1, 140, 140, 180);
+
+    for (int i = 0; i < 7; i++) {
+        int tx = TUBE_X[i];
+        int ty = TUBE_Y[i];
+        int is_sel = (game->tube_selected == i);
+
+        /* Selection highlight: bright yellow outline, else subtle grey */
+        Uint8 ol_r = is_sel ? 255 : 130;
+        Uint8 ol_g = is_sel ? 230 :  90;
+        Uint8 ol_b = is_sel ?  50 :  80;
+
+        /* Tube body */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_H, 25, 20, 35, 245);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_H, ol_r, ol_g, ol_b, 255);
+
+        /* Colour layers (drawn bottom-up, slot 0 = bottom) */
+        for (int j = 0; j < game->tube_count[i]; j++) {
+            int col = game->tube_colors[i][j];
+            if (col == 0) continue;
+            int uy = ty + TUBE_H - (j + 1) * TUBE_UNIT_H;
+            int ux = tx + TUBE_PAD_X;
+            int uw = TUBE_W - TUBE_PAD_X * 2;
+            render_filled_rect(r, ux, uy, uw, TUBE_UNIT_H - 2,
+                               tube_color_r[col], tube_color_g[col],
+                               tube_color_b[col], 230);
+        }
+
+        /* Cap (dark rectangle at the tube opening / top edge) */
+        render_filled_rect(r, tx, ty, TUBE_W, TUBE_CAP_H, 15, 12, 20, 255);
+        render_rect_outline(r, tx, ty, TUBE_W, TUBE_CAP_H, ol_r, ol_g, ol_b, 200);
+
+        /* Selection arrow above the tube */
+        if (is_sel) {
+            render_text_centered(r, "^", tx + TUBE_W / 2, ty - 18, 2, 255, 230, 50);
+        }
+    }
+
+    render_text_centered(r, "ESC: close workbench",
+                         WINDOW_W / 2, WINDOW_H - 24, 1, 120, 120, 160);
+
+}
+
+
+static void render_dodge_heart(SDL_Renderer *r, int cx, int cy, int visible)
+{
+    if (!visible) return;
+
+    int s = DODGE_HEART_SIZE / 6;
+    if (s < 2) s = 2;
+    int x = cx - 3 * s;
+    int y = cy - 3 * s;
+
+    render_filled_rect(r, x + s,     y,         s,     s,     255, 40, 60, 255);
+    render_filled_rect(r, x + 4 * s, y,         s,     s,     255, 40, 60, 255);
+    render_filled_rect(r, x,         y + s,     3 * s, 2 * s, 255, 40, 60, 255);
+    render_filled_rect(r, x + 3 * s, y + s,     3 * s, 2 * s, 255, 40, 60, 255);
+    render_filled_rect(r, x + s,     y + 3 * s, 4 * s, s,     255, 40, 60, 255);
+    render_filled_rect(r, x + 2 * s, y + 4 * s, 2 * s, s,     255, 40, 60, 255);
+    render_filled_rect(r, x + 3 * s, y + 5 * s, s,     s,     255, 40, 60, 255);
+}
+
+/* ── Undertale-style hallway dodge minigame ─────────────────────────────── */
+
+void game_render_dodge(Game *game)
+
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 5, 5, 10, 255);
+
+    render_text_centered(r, "DODGE THE ATTACKS",
+                         WINDOW_W / 2, 74, 3, 220, 220, 230);
+    char round_buf[64];
+    snprintf(round_buf, sizeof(round_buf), "Round %d / %d",
+             game->dodge_round, DODGE_ROUNDS);
+    render_text_centered(r, round_buf,
+                         WINDOW_W / 2, 112, 1, 150, 150, 170);
+
+    render_filled_rect(r, DODGE_BOX_X, DODGE_BOX_Y,
+                       DODGE_BOX_W, DODGE_BOX_H, 0, 0, 0, 255);
+    render_rect_outline(r, DODGE_BOX_X, DODGE_BOX_Y,
+                        DODGE_BOX_W, DODGE_BOX_H, 235, 235, 235, 255);
+    render_rect_outline(r, DODGE_BOX_X + 3, DODGE_BOX_Y + 3,
+                        DODGE_BOX_W - 6, DODGE_BOX_H - 6,
+                        80, 80, 95, 255);
+
+    for (int i = 0; i < game->dodge_bullet_count; i++) {
+        if (!game->dodge_bullet_active[i]) continue;
+        int bx = (int)(game->dodge_bullet_x[i] - DODGE_BULLET_SIZE * 0.5f);
+        int by = (int)(game->dodge_bullet_y[i] - DODGE_BULLET_SIZE * 0.5f);
+        render_filled_rect(r, bx, by, DODGE_BULLET_SIZE, DODGE_BULLET_SIZE,
+                           245, 245, 245, 255);
+        render_rect_outline(r, bx, by, DODGE_BULLET_SIZE, DODGE_BULLET_SIZE,
+                            90, 90, 90, 255);
+    }
+
+    int heart_visible = 1;
+    if (game->dodge_invuln_timer > 0.0f)
+        heart_visible = ((int)(game->dodge_invuln_timer * 20.0f) % 2) == 0;
+    render_dodge_heart(r, (int)game->dodge_heart_x,
+                       (int)game->dodge_heart_y, heart_visible);
+
+    int ui_y = DODGE_BOX_Y + DODGE_BOX_H + 34;
+    char hp_buf[64];
+    snprintf(hp_buf, sizeof(hp_buf), "HP %d / %d",
+             game->dodge_hp, DODGE_MAX_HP);
+    render_text(r, hp_buf, DODGE_BOX_X, ui_y, 2, 255, 220, 80);
+
+    int bar_x = DODGE_BOX_X + 140;
+    int bar_y = ui_y + 5;
+    int bar_w = 260;
+    render_rect_outline(r, bar_x, bar_y, bar_w, 16, 150, 150, 160, 255);
+    float remain = DODGE_ROUND_DURATION - game->dodge_elapsed;
+    if (remain < 0.0f) remain = 0.0f;
+    int fill_w = (int)((remain / DODGE_ROUND_DURATION) * (float)(bar_w - 4));
+    render_filled_rect(r, bar_x + 2, bar_y + 2, fill_w, 12,
+                       160, 210, 255, 255);
+
+    render_text_centered(r, "WASD / ARROWS",
+                         WINDOW_W / 2, ui_y + 38, 1, 115, 115, 130);
+
+}
+
 /* ── Jumpscare video ─────────────────────────────────────────────────────── */
 
 void game_render_jumpscare(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+    VideoPlayer *player = (game->state == GAME_STATE_MONSTER_DEATH_CUTSCENE)
+                          ? game->monster_death_player
+                          : (game->state == GAME_STATE_END_CREDITS)
+                          ? game->end_credits_player
+                          : game->jumpscare_player;
+
+    /* Black background in case the video hasn't decoded its first frame yet */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    video_player_render(player, r);
+}
+/* ── Game Over ───────────────────────────────────────────────────────────── */
+
+void game_render_game_over(Game *game)
 {
     if (!game) return;
     SDL_Renderer *r = game->renderer;
@@ -603,5 +1162,119 @@ void game_render_jumpscare(Game *game)
     /* Black background in case the video hasn't decoded its first frame yet */
     render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
 
-    video_player_render(game->jumpscare_player, r);
+    /* Dark red background */
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 8, 0, 0, 255);
+
+    /* Decorative panel */
+    int pw = 600, ph = 260;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 25, 5, 5, 230);
+    render_rect_outline(r, px, py, pw, ph, 160, 20, 20, 255);
+    render_rect_outline(r, px + 3, py + 3, pw - 6, ph - 6, 80, 10, 10, 180);
+
+    /* Title */
+    render_text_centered(r, "GAME OVER",
+                         WINDOW_W / 2, py + 60, 5, 220, 30, 30);
+
+    /* Separator */
+    render_filled_rect(r, px + 24, py + 130, pw - 48, 2, 100, 15, 15, 200);
+
+    /* Subtitle */
+    render_text_centered(r, "You were caught.",
+                         WINDOW_W / 2, py + 150, 2, 180, 80, 80);
+
+    /* Prompt */
+    render_text_centered(r, "Press any key to return to the menu",
+                         WINDOW_W / 2, py + ph - 28, 1, 110, 40, 40);
+}
+
+/* ── New / Load submenu (title screen) ──────────────────────────────────── */
+
+void game_render_new_load_menu(Game *game)
+{
+    if (!game) return;
+    SDL_Renderer *r = game->renderer;
+
+    /* Reuse the title-screen background */
+    if (game->title_screen_texture) {
+        render_texture(r, game->title_screen_texture, 0, 0, WINDOW_W, WINDOW_H);
+    } else {
+        render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 255);
+    }
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 130);
+
+    /* Panel */
+    int pw = 320, ph = 230;
+    int px = (WINDOW_W - pw) / 2;
+    int py = 240;
+    render_filled_rect(r, px, py, pw, ph, 25, 8, 8, 235);
+    render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
+    render_text_centered(r, "START GAME", WINDOW_W/2, py + 18, 2, 200, 110, 110);
+    render_filled_rect(r, px + 18, py + 44, pw - 36, 2, 70, 18, 18, 190);
+
+    for (int i = 0; i < 3; i++) {
+        Button btn = game->new_load_buttons[i];
+        if (i == game->new_load_menu_choice) btn.is_hovered = 1;
+        draw_button_menu(r, &btn);
+    }
+    render_text_centered(r, "[ESC] back",
+                         WINDOW_W / 2, py + ph - 18, 1, 78, 22, 22);
+}
+
+/* ── Shared helper: draw the save/load slot panel ────────────────────────── */
+
+static void render_save_load_panel(Game *game, const char *title, int is_save)
+{
+    SDL_Renderer *r = game->renderer;
+
+    render_filled_rect(r, 0, 0, WINDOW_W, WINDOW_H, 0, 0, 0, 160);
+
+    int pw = 460, ph = 360;
+    int px = (WINDOW_W - pw) / 2;
+    int py = (WINDOW_H - ph) / 2;
+    render_filled_rect(r, px, py, pw, ph, 20, 6, 6, 240);
+    render_rect_outline(r, px, py, pw, ph, 110, 25, 25, 255);
+    render_rect_outline(r, px+2, py+2, pw-4, ph-4, 55, 15, 15, 160);
+
+    render_text_centered(r, title, WINDOW_W/2, py + 18, 2, 200, 110, 110);
+    render_filled_rect(r, px + 18, py + 44, pw - 36, 2, 70, 18, 18, 190);
+
+    for (int i = 0; i < SAVE_SLOT_COUNT + 1; i++) {
+        Button btn = game->save_load_buttons[i];
+        /* For load menu, grey-out empty slots */
+        if (!is_save && i < SAVE_SLOT_COUNT) {
+            if (!savegame_exists(i + 1)) {
+                /* Render disabled-looking button */
+                int bx = (int)btn.rect.x, button_y = (int)btn.rect.y;
+                int bw = (int)btn.rect.w, bh = (int)btn.rect.h;
+                render_filled_rect(r, bx, button_y, bw, bh, 25, 8, 8, 160);
+                render_rect_outline(r, bx, button_y, bw, bh, 60, 15, 15, 180);
+                if (btn.text)
+                    render_text_centered(r, btn.text,
+                                         bx + bw / 2, button_y + (bh - 16) / 2,
+                                         2, 80, 40, 40);
+                continue;
+            }
+        }
+        draw_button(r, &btn);
+    }
+    render_text_centered(r, "[ESC] cancel",
+                         WINDOW_W / 2, py + ph - 18, 1, 78, 22, 22);
+}
+
+/* ── Save menu ───────────────────────────────────────────────────────────── */
+
+void game_render_save_menu(Game *game)
+{
+    if (!game) return;
+    render_save_load_panel(game, "SAVE GAME", 1);
+}
+
+/* ── Load menu ───────────────────────────────────────────────────────────── */
+
+void game_render_load_menu(Game *game)
+{
+    if (!game) return;
+    render_save_load_panel(game, "LOAD GAME", 0);
 }

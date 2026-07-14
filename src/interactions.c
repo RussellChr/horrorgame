@@ -40,6 +40,43 @@ void game_apply_dialogue_choice_flag(Game *game)
         game->player->flags |= (uint32_t)ch->story_flag;
 }
 
+static void game_set_simple_dialogue(Game *game,
+                                      const char *speaker,
+                                      const char *line1,
+                                      const char *line2)
+{
+    if (!game || !line1) return;
+
+    DialogueTree *tree = dialogue_tree_create();
+    if (!tree) return;
+
+    DialogueNode *first = dialogue_add_node(tree, 0, speaker ? speaker : "",
+                                            line1, line2 ? 0 : 1);
+    if (line2 && first) {
+        DialogueChoice next;
+        memset(&next, 0, sizeof(next));
+        next.id = 0;
+        next.next_node_id = 1;
+        strncpy(next.text, "...", DIALOGUE_TEXT_MAX - 1);
+        dialogue_add_choice(first, &next);
+        dialogue_add_node(tree, 1, speaker ? speaker : "", line2, 1);
+    }
+
+    game->dialogue_tree = tree;
+}
+
+static void game_open_archive_inner_door(Game *game)
+{
+    if (!game || !game->world || !game->player) return;
+
+    player_set_flag(game->player, FLAG_ARCHIVE_INNER_DOOR_OPENED);
+
+    Location *loc = world_get_location(game->world, LOCATION_ARCHIVE);
+    if (loc && loc->door_collider_count > 0) {
+        loc->collider_count = loc->door_collider_start;
+    }
+}
+
 /* ── Interaction handler ─────────────────────────────────────────────────── */
 
 void game_handle_interaction(Game *game)
@@ -51,6 +88,123 @@ void game_handle_interaction(Game *game)
 
     /* Guard: don't open duplicate dialogue */
     if (game->dialogue_tree) return;
+
+    /* ── Archive interactions (loc 0) ─────────────────────────────────── */
+    if (loc_id == LOCATION_ARCHIVE) {
+        if (tid == 52) {
+            if (player_has_item(game->player, ITEM_ID_FINGERPRINT) &&
+                player_has_item(game->player, ITEM_ID_THERMALFUSE)) {
+                game_open_archive_inner_door(game);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Door is now opened", NULL);
+            } else if (player_has_item(game->player, ITEM_ID_FINGERPRINT2) ||
+                       player_has_item(game->player, ITEM_ID_FINGERPRINT3)) {
+                game_set_simple_dialogue(game, "Richard",
+                                         "not the right fingerprint", NULL);
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "Require fingerprint...",
+                                         "It also seems to be malfunctioning, I need some sort of thermal fuse to fix this");
+            }
+        } else if (tid == 53) {
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT_COLLECTED);
+                Item fp;
+                strncpy(fp.name, "Fingerprint", ITEM_NAME_MAX - 1);
+                fp.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp.description, "A lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp.description[ITEM_DESC_MAX - 1] = '\0';
+                fp.id = ITEM_ID_FINGERPRINT;
+                fp.usable = 0;
+                player_add_item(game->player, &fp);
+                game_set_simple_dialogue(game, "Richard",
+                                         "A fingerprint... Perhaps I can use this to open the door to the archive",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 54) {
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_THERMALFUSE_COLLECTED);
+                Item fuse;
+                strncpy(fuse.name, "Thermal Fuse", ITEM_NAME_MAX - 1);
+                fuse.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fuse.description, "A thermal fuse for a malfunctioning archive door.", ITEM_DESC_MAX - 1);
+                fuse.description[ITEM_DESC_MAX - 1] = '\0';
+                fuse.id = ITEM_ID_THERMALFUSE;
+                fuse.usable = 0;
+                player_add_item(game->player, &fuse);
+                game_set_simple_dialogue(game, "Richard",
+                                         "You obtained a thermal fuse.", NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 56) {
+            /* Tile 6: archive document – open the two-page book viewer */
+            game->archive_book_page       = 0;
+            game->archive_book_trans_timer = 0.0f;
+            game->archive_book_next_page  = 0;
+            game->state = GAME_STATE_ARCHIVE_BOOK;
+            return;
+        } else if (tid == 57) {
+            /* Tile 7: level-2 keycard pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_KEYCARD2_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_KEYCARD2_COLLECTED);
+                Item kc2;
+                strncpy(kc2.name, "Level-2 Keycard", ITEM_NAME_MAX - 1);
+                kc2.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(kc2.description, "A level-2 keycard found in the archive.", ITEM_DESC_MAX - 1);
+                kc2.description[ITEM_DESC_MAX - 1] = '\0';
+                kc2.id     = ITEM_ID_KEYCARD_L2;
+                kc2.usable = 0;
+                player_add_item(game->player, &kc2);
+                game_set_simple_dialogue(game, "Richard",
+                                         "A Level-2 Keycard. Maybe it opens something in the hallway.",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 58) {
+            /* Tile 8: fingerprint 2 pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT2_COLLECTED);
+                Item fp2;
+                strncpy(fp2.name, "Fingerprint 2", ITEM_NAME_MAX - 1);
+                fp2.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp2.description, "A second lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp2.description[ITEM_DESC_MAX - 1] = '\0';
+                fp2.id     = ITEM_ID_FINGERPRINT2;
+                fp2.usable = 0;
+                player_add_item(game->player, &fp2);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Another fingerprint. This one looks different...",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        } else if (tid == 59) {
+            /* Tile 9: fingerprint 3 pickup */
+            if (!player_check_flag(game->player, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED)) {
+                player_set_flag(game->player, FLAG_ARCHIVE_FINGERPRINT3_COLLECTED);
+                Item fp3;
+                strncpy(fp3.name, "Fingerprint 3", ITEM_NAME_MAX - 1);
+                fp3.name[ITEM_NAME_MAX - 1] = '\0';
+                strncpy(fp3.description, "A third lifted fingerprint from inside the archive.", ITEM_DESC_MAX - 1);
+                fp3.description[ITEM_DESC_MAX - 1] = '\0';
+                fp3.id     = ITEM_ID_FINGERPRINT3;
+                fp3.usable = 0;
+                player_add_item(game->player, &fp3);
+                game_set_simple_dialogue(game, "Richard",
+                                         "Another fingerprint. This one looks different too...",
+                                         NULL);
+            } else {
+                game_set_dialogue_tree(game, "hallway_nothing", LOCATION_ARCHIVE);
+            }
+        }
+        if (game->dialogue_tree)
+            game_start_dialogue(game, 0);
+        return;
+    }
 
     /* Locker interaction (Hallway, trigger 60) */
     if (tid == 60 && loc_id == 2) {
@@ -77,6 +231,11 @@ void game_handle_interaction(Game *game)
                 game_set_dialogue_tree(game, "hallway_nothing", 1);
             }
         }
+        if (tid == 64) {
+            /* Tile 4: medicine workbench – start tube-sort minigame */
+            game_start_tube_sort(game);
+            return;
+        }
         if (game->dialogue_tree)
             game_start_dialogue(game, 0);
         return;
@@ -84,8 +243,23 @@ void game_handle_interaction(Game *game)
 
     /* ── Hallway interactions (loc 2) ──────────────────────────────────── */
     if (loc_id == 2) {
-        if (tid == 80) {
-            /* Tile 8: interactable – nothing here */
+        if (tid == 96) {
+            /* Tile 6: level-2 keycard exit panel – cutscene then dodge attack */
+            if (player_check_flag(game->player, FLAG_HALLWAY_EXIT_MINIGAME_WON)) {
+                game_set_simple_dialogue(game, "Richard",
+                                         "The Level-2 exit lock is already open.",
+                                         NULL);
+            } else if (player_has_item(game->player, ITEM_ID_KEYCARD_L2)) {
+                game_start_hallway_exit_cutscene(game);
+                return;
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "This exit needs a Level-2 Keycard.",
+                                         NULL);
+            }
+        } else if (tid == 80) {
+            /* Tile 8: interactable – nothing here (one-time) */
+            player_set_flag(game->player, FLAG_HALLWAY_NOTHING_INTERACTED);
             game_set_dialogue_tree(game, "hallway_nothing", 2);
         } else if (tid == 81) {
             /* Tile 9: gas mask pickup */
@@ -119,6 +293,66 @@ void game_handle_interaction(Game *game)
             } else {
                 game_set_dialogue_tree(game, "hallway_nothing", 2);
             }
+        } else if (tid == 93) {
+            /* Security room door: locked until the generator is powered on */
+            if (player_check_flag(game->player, FLAG_POWER_GENERATOR_ON)) {
+                /* Unlock: remove door3 colliders and convert to exit trigger */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc && hwloc->door3_collider_count > 0)
+                    hwloc->collider_count = hwloc->door3_collider_start;
+                Location *secloc = world_get_location(game->world, LOCATION_SECURITY);
+                if (hwloc) {
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 93) {
+                            hwloc->triggers[i].target_location_id = LOCATION_SECURITY;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (secloc) {
+                                hwloc->triggers[i].spawn_x = secloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = secloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (secloc)
+                    game_change_location(game, LOCATION_SECURITY,
+                                         secloc->spawn_x, secloc->spawn_y);
+                return;
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "The security room is locked.",
+                                         "I need to restore power to the facility first.");
+            }
+        } else if (tid == 94) {
+            /* Lab door: locked until the security passcode is entered */
+            if (player_check_flag(game->player, FLAG_SECURITY_PASSCODE_DONE)) {
+                /* Unlock: remove door2 colliders and convert to exit trigger */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc && hwloc->door2_collider_count > 0)
+                    hwloc->collider_count = hwloc->door2_collider_start;
+                Location *labloc = world_get_location(game->world, LOCATION_LAB);
+                if (hwloc) {
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 94) {
+                            hwloc->triggers[i].target_location_id = LOCATION_LAB;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (labloc) {
+                                hwloc->triggers[i].spawn_x = labloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = labloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                if (labloc)
+                    game_change_location(game, LOCATION_LAB,
+                                         labloc->spawn_x, labloc->spawn_y);
+                return;
+            } else {
+                game_set_simple_dialogue(game, "Richard",
+                                         "The lab is sealed.",
+                                         "I need the security access code first.");
+            }
         } else if (tid == 95) {
             /* Tile 5: archive door – locked until player has keycard */
             if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED) &&
@@ -142,7 +376,35 @@ void game_handle_interaction(Game *game)
                 if (aloc)
                     game_change_location(game, 0, aloc->spawn_x, aloc->spawn_y);
                 return;
-            } else if (!player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
+            } else if (player_check_flag(game->player, FLAG_ARCHIVE_UNLOCKED)) {
+                /* Door was already unlocked (e.g. loaded save): re-apply the
+                   open state and teleport (trigger should have been converted
+                   to an exit trigger by game_do_load, but handle it here as a
+                   fallback in case the trigger was not yet converted). */
+                Location *hwloc = world_get_location(game->world, LOCATION_HALLWAY);
+                if (hwloc) {
+                    if (hwloc->door_collider_count > 0 &&
+                        hwloc->collider_count > hwloc->door_collider_start)
+                        hwloc->collider_count = hwloc->door_collider_start;
+                    for (int i = 0; i < hwloc->trigger_count; i++) {
+                        if (hwloc->triggers[i].trigger_id == 95) {
+                            Location *aloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                            hwloc->triggers[i].target_location_id = LOCATION_ARCHIVE;
+                            hwloc->triggers[i].trigger_id = -1;
+                            if (aloc) {
+                                hwloc->triggers[i].spawn_x = aloc->spawn_x;
+                                hwloc->triggers[i].spawn_y = aloc->spawn_y;
+                            }
+                            break;
+                        }
+                    }
+                }
+                Location *aloc = world_get_location(game->world, LOCATION_ARCHIVE);
+                if (aloc)
+                    game_change_location(game, LOCATION_ARCHIVE,
+                                         aloc->spawn_x, aloc->spawn_y);
+                return;
+            } else {
                 game_set_dialogue_tree(game, "archive_door_locked", 2);
             }
         }
@@ -154,7 +416,8 @@ void game_handle_interaction(Game *game)
     /* ── Hibernation room interactions (loc 3) ─────────────────────────── */
     if (loc_id == 3) {
         if (tid == 71) {
-            /* Tile 1: zonk – nothing here */
+            /* Tile 1: zonk – nothing here (one-time) */
+            player_set_flag(game->player, FLAG_HIBERN_ZONK_INTERACTED);
             game_set_dialogue_tree(game, "hibern_zonk", 3);
         } else if (tid == 72) {
             /* Tile 2: power cell pickup */
@@ -200,7 +463,8 @@ void game_handle_interaction(Game *game)
                 game_set_dialogue_tree(game, "hibern_slot_empty", 3);
             }
         } else if (tid == 74) {
-            /* Tile 4: flavor description – accessible any time */
+            /* Tile 4: flavor description – one-time read */
+            player_set_flag(game->player, FLAG_HIBERN_PODS_INTERACTED);
             game_set_dialogue_tree(game, "hibern_pods_opened", 3);
         } else if (tid == 75) {
             /* Tile 5: door – still interactive = still locked */

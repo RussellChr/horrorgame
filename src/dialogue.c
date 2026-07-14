@@ -280,14 +280,16 @@ void dialogue_render(const DialogueState *ds,
             50, 40, 70, 200);
     }
 
-    /* Speaker name background */
-    int name_w = (int)strlen(node->speaker) * 8 * FONT_SCALE + DLGBOX_PAD * 2;
-    render_filled_rect(renderer,
-        DLGBOX_MARGIN, box_y - 28, name_w, 28,
-        30, 20, 50, 220);
-    render_rect_outline(renderer,
-        DLGBOX_MARGIN, box_y - 28, name_w, 28,
-        80, 60, 100, 255);
+    /* Speaker name background (only in procedural fallback mode) */
+    if (!ds->bg_texture) {
+        int name_w = (int)strlen(node->speaker) * 8 * FONT_SCALE + DLGBOX_PAD * 2;
+        render_filled_rect(renderer,
+            DLGBOX_MARGIN, box_y - 28, name_w, 28,
+            30, 20, 50, 220);
+        render_rect_outline(renderer,
+            DLGBOX_MARGIN, box_y - 28, name_w, 28,
+            80, 60, 100, 255);
+    }
 
     /* Speaker name */
     render_text(renderer, node->speaker,
@@ -322,11 +324,13 @@ void dialogue_render(const DialogueState *ds,
             int cy = choice_start_y + i * choice_line_h;
 
             if (i == ds->selected_choice) {
-                /* Highlighted row background */
-                render_filled_rect(renderer,
-                    DLGBOX_MARGIN + 4, cy - 4,
-                    box_w - 8, choice_line_h,
-                    60, 40, 90, 200);
+                /* Highlighted row background (only in procedural fallback mode) */
+                if (!ds->bg_texture) {
+                    render_filled_rect(renderer,
+                        DLGBOX_MARGIN + 4, cy - 4,
+                        box_w - 8, choice_line_h,
+                        60, 40, 90, 200);
+                }
                 /* Arrow indicator */
                 render_text(renderer, ">",
                             DLGBOX_MARGIN + DLGBOX_PAD, cy,

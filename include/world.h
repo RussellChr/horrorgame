@@ -74,9 +74,16 @@ typedef struct {
 
     /* Door collider range (for removable door barriers).
      * door_collider_start is the index of the first door collider;
-     * setting collider_count = door_collider_start removes them all. */
+     * setting collider_count = door_collider_start removes them all.
+     * door2/door3 track secondary and tertiary lockable doors (e.g. lab
+     * and security room doors in the hallway) that are stacked above the
+     * primary door so each can be removed independently by truncation. */
     int   door_collider_start;
     int   door_collider_count;
+    int   door2_collider_start;
+    int   door2_collider_count;
+    int   door3_collider_start;
+    int   door3_collider_count;
 
     /* Interactive trigger zones */
     TriggerZone triggers[MAX_TRIGGER_ZONES];

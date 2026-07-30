@@ -250,6 +250,20 @@ SDL_Texture *render_load_texture(SDL_Renderer *r, const char *path)
 #endif
 }
 
+/* Like render_load_texture but returns NULL silently when the file is absent.
+ * Use this when probing for optional or sequentially-numbered animation frames
+ * where a missing file simply marks the end of the sequence. */
+SDL_Texture *render_probe_texture(SDL_Renderer *r, const char *path)
+{
+    if (!r || !path) return NULL;
+#ifdef HAVE_SDL3_IMAGE
+    return IMG_LoadTexture(r, path);
+#else
+    (void)r; (void)path;
+    return NULL;
+#endif
+}
+
 void render_texture(SDL_Renderer *r, SDL_Texture *texture,
                     int x, int y, int w, int h)
 {
